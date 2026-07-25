@@ -1,0 +1,29 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "dev:infra",
+      "type": "shell",
+      "command": "docker compose up -d postgres redis",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "dev:certs",
+      "type": "shell",
+      "command": "test -f var/certs/ca.crt || ./scripts/generate-dev-certs.sh var/certs worker-1",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "dev:prepare",
+      "dependsOn": ["dev:infra", "dev:certs"],
+      "dependsOrder": "parallel",
+      "problemMatcher": []
+    }
+  ]
+}

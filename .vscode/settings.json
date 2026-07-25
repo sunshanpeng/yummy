@@ -1,0 +1,10 @@
+{
+  "go.toolsEnvVars": {
+    "GOPROXY": "https://goproxy.cn,https://proxy.golang.org,direct",
+    "GOSUMDB": "sum.golang.google.cn"
+  },
+  "go.testEnvVars": {
+    "TEST_DATABASE_URL": "postgres://demo:demo@localhost:5432/demo?sslmode=disable",
+    "TEST_REDIS_ADDR": "localhost:6379"
+  }
+}

@@ -1,0 +1,77 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Go: Platform (all)",
+      "type": "go",
+      "request": "launch",
+      "mode": "auto",
+      "program": "${workspaceFolder}/cmd/platform",
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "dev:prepare",
+      "env": {
+        "GOPROXY": "https://goproxy.cn,https://proxy.golang.org,direct",
+        "DATABASE_URL": "postgres://demo:demo@localhost:5432/demo?sslmode=disable",
+        "REDIS_ADDR": "localhost:6379",
+        "PUBLIC_ADDR": ":8080",
+        "AGENT_ADDR": ":8443",
+        "CERT_DIR": "${workspaceFolder}/var/certs"
+      }
+    },
+    {
+      "name": "Go: Control",
+      "type": "go",
+      "request": "launch",
+      "mode": "auto",
+      "program": "${workspaceFolder}/cmd/control",
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "dev:prepare",
+      "env": {
+        "GOPROXY": "https://goproxy.cn,https://proxy.golang.org,direct",
+        "DATABASE_URL": "postgres://demo:demo@localhost:5432/demo?sslmode=disable",
+        "REDIS_ADDR": "localhost:6379",
+        "PUBLIC_ADDR": ":8080",
+        "AGENT_ADDR": ":8443",
+        "CERT_DIR": "${workspaceFolder}/var/certs"
+      }
+    },
+    {
+      "name": "Go: Worker",
+      "type": "go",
+      "request": "launch",
+      "mode": "auto",
+      "program": "${workspaceFolder}/cmd/worker",
+      "args": ["--worker-id", "worker-1"],
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "dev:prepare",
+      "env": {
+        "GOPROXY": "https://goproxy.cn,https://proxy.golang.org,direct",
+        "CONTROL_URL": "https://localhost:8443",
+        "TLS_SERVER_NAME": "localhost",
+        "WORKER_ID": "worker-1",
+        "CERT_DIR": "${workspaceFolder}/var/certs"
+      }
+    },
+    {
+      "name": "Web: Vite Dev",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "pnpm --dir web dev",
+      "cwd": "${workspaceFolder}"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Go: Control + Worker",
+      "configurations": ["Go: Control", "Go: Worker"],
+      "preLaunchTask": "dev:prepare",
+      "stopAll": true
+    },
+    {
+      "name": "前后端分离 (Control + Vite)",
+      "configurations": ["Go: Control", "Web: Vite Dev"],
+      "preLaunchTask": "dev:prepare",
+      "stopAll": true
+    }
+  ]
+}

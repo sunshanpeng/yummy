@@ -6,3 +6,6 @@
 *.tsbuildinfo
 *.log
 bin
+
+# debug file
+__debug_*
