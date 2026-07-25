@@ -1,5 +1,10 @@
 PROTOC ?= $(shell command -v protoc 2>/dev/null || echo work/protoc/bin/protoc)
 
+# 国内网络可通过 goproxy.cn 加速 Go 模块下载；也可自行覆盖，例如：
+#   GOPROXY=https://proxy.golang.org,direct make build
+export GOPROXY ?= https://goproxy.cn,https://proxy.golang.org,direct
+export GOSUMDB ?= sum.golang.google.cn
+
 .PHONY: install generate web-build build test integration-test certs smoke
 
 install:

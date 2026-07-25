@@ -134,6 +134,18 @@ CERT_DIR=/etc/platform/certs \
 
 ## 开发命令
 
+如 `go mod download` 或 `make build` 访问 `proxy.golang.org` 超时，Makefile 已默认启用国内镜像：
+
+```bash
+# 默认：goproxy.cn → proxy.golang.org → direct
+make build
+
+# 临时改用其他镜像
+GOPROXY=https://goproxy.io,direct make build
+```
+
+也可写入 shell 配置：`export GOPROXY=https://goproxy.cn,direct`。
+
 ```bash
 make test              # Go race 测试 + React 组件测试
 make integration-test  # 使用本机 PostgreSQL/Redis 的存储集成测试

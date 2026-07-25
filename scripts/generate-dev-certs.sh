@@ -29,9 +29,12 @@ openssl req \
   -nodes \
   -keyout "$cert_dir/server.key" \
   -out "$cert_dir/server.csr" \
-  -subj "/CN=localhost" \
-  -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" \
-  -addext "extendedKeyUsage=serverAuth"
+  -subj "/CN=localhost"
+
+cat > "$cert_dir/server.ext" <<EOF
+subjectAltName=DNS:localhost,IP:127.0.0.1
+extendedKeyUsage=serverAuth
+EOF
 
 openssl x509 \
   -req \
@@ -40,7 +43,7 @@ openssl x509 \
   -CA "$cert_dir/ca.crt" \
   -CAkey "$cert_dir/ca.key" \
   -CAcreateserial \
-  -copy_extensions copy \
+  -extfile "$cert_dir/server.ext" \
   -out "$cert_dir/server.crt"
 
 openssl req \
@@ -48,8 +51,11 @@ openssl req \
   -nodes \
   -keyout "$cert_dir/$worker_id.key" \
   -out "$cert_dir/$worker_id.csr" \
-  -subj "/CN=$worker_id" \
-  -addext "extendedKeyUsage=clientAuth"
+  -subj "/CN=$worker_id"
+
+cat > "$cert_dir/$worker_id.ext" <<EOF
+extendedKeyUsage=clientAuth
+EOF
 
 openssl x509 \
   -req \
@@ -58,10 +64,10 @@ openssl x509 \
   -CA "$cert_dir/ca.crt" \
   -CAkey "$cert_dir/ca.key" \
   -CAcreateserial \
-  -copy_extensions copy \
+  -extfile "$cert_dir/$worker_id.ext" \
   -out "$cert_dir/$worker_id.crt"
 
 chmod 600 "$cert_dir"/*.key
-rm "$cert_dir/server.csr" "$cert_dir/$worker_id.csr" "$cert_dir/ca.srl"
+rm "$cert_dir/server.csr" "$cert_dir/$worker_id.csr" "$cert_dir/server.ext" "$cert_dir/$worker_id.ext" "$cert_dir/ca.srl"
 
 echo "开发证书已生成到 $cert_dir"
