@@ -1,0 +1,66 @@
+package bootstrap
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io/fs"
+	"net/http"
+	"time"
+
+	"example.com/multitopology-demo/internal/control"
+	transport "example.com/multitopology-demo/internal/transport/connectrpc"
+)
+
+func newPublicHandler(service *control.Service, assets fs.FS) http.Handler {
+	api := http.NewServeMux()
+	path, handler := transport.NewControlHandler(service)
+	api.Handle(path, handler)
+
+	root := http.NewServeMux()
+	root.Handle("/api/", http.StripPrefix("/api", api))
+	if assets != nil {
+		root.Handle("/", http.FileServer(http.FS(assets)))
+	} else {
+		root.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			_, _ = w.Write([]byte("multi-topology demo control plane\n"))
+		})
+	}
+	return root
+}
+
+type serverProcess struct {
+	server *http.Server
+	serve  func() error
+}
+
+func runServers(ctx context.Context, processes ...serverProcess) error {
+	errorsChannel := make(chan error, len(processes))
+	for _, process := range processes {
+		go func() {
+			errorsChannel <- process.serve()
+		}()
+	}
+
+	var runError error
+	select {
+	case <-ctx.Done():
+	case err := <-errorsChannel:
+		if !errors.Is(err, http.ErrServerClosed) {
+			runError = err
+		}
+	}
+
+	shutdownContext, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	for _, process := range processes {
+		if err := process.server.Shutdown(shutdownContext); err != nil {
+			_ = process.server.Close()
+			if runError == nil {
+				runError = fmt.Errorf("关闭 HTTP 服务: %w", err)
+			}
+		}
+	}
+	return runError
+}

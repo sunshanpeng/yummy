@@ -1,0 +1,21 @@
+package main
+
+import (
+	"context"
+	"errors"
+	"flag"
+	"log"
+	"os"
+	"os/signal"
+	"syscall"
+
+	"example.com/multitopology-demo/internal/bootstrap"
+)
+
+func main() {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if err := bootstrap.Run(ctx, "control", os.Args[1:], nil); err != nil && !errors.Is(err, flag.ErrHelp) {
+		log.Fatal(err)
+	}
+}
