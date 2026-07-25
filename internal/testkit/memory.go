@@ -63,6 +63,7 @@ func (r *MemoryCommandRepository) Transition(
 }
 
 type MemoryPresence struct {
+	mu     sync.Mutex
 	online map[string]domain.WorkerPresence
 }
 
@@ -77,16 +78,22 @@ func NewMemoryPresence(workerIDs ...string) *MemoryPresence {
 }
 
 func (s *MemoryPresence) Upsert(_ context.Context, presence domain.WorkerPresence) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.online[presence.WorkerID] = presence
 	return nil
 }
 
 func (s *MemoryPresence) IsOnline(_ context.Context, workerID string) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	_, ok := s.online[workerID]
 	return ok, nil
 }
 
 func (s *MemoryPresence) ListOnline(_ context.Context) ([]domain.WorkerPresence, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	workers := make([]domain.WorkerPresence, 0, len(s.online))
 	for _, worker := range s.online {
 		workers = append(workers, worker)
