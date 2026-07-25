@@ -1,0 +1,110 @@
+syntax = "proto3";
+
+package demo.v1;
+
+option go_package = "example.com/multitopology-demo/gen/go/demo/v1;demov1";
+
+service ControlService {
+  rpc ListWorkers(ListWorkersRequest) returns (ListWorkersResponse);
+  rpc CreateCommand(CreateCommandRequest) returns (CreateCommandResponse);
+  rpc GetCommand(GetCommandRequest) returns (GetCommandResponse);
+}
+
+service AgentService {
+  rpc Connect(stream AgentMessage) returns (stream ControlMessage);
+}
+
+enum CommandStatus {
+  COMMAND_STATUS_UNSPECIFIED = 0;
+  COMMAND_STATUS_CREATED = 1;
+  COMMAND_STATUS_DISPATCHED = 2;
+  COMMAND_STATUS_RUNNING = 3;
+  COMMAND_STATUS_SUCCEEDED = 4;
+  COMMAND_STATUS_FAILED = 5;
+  COMMAND_STATUS_DISPATCH_FAILED = 6;
+}
+
+message Worker {
+  string id = 1;
+  string version = 2;
+  string last_seen = 3;
+}
+
+message Command {
+  string id = 1;
+  string worker_id = 2;
+  string input = 3;
+  string output = 4;
+  string error = 5;
+  CommandStatus status = 6;
+  string created_at = 7;
+  string updated_at = 8;
+}
+
+message ListWorkersRequest {}
+
+message ListWorkersResponse {
+  repeated Worker workers = 1;
+}
+
+message CreateCommandRequest {
+  string worker_id = 1;
+  string input = 2;
+}
+
+message CreateCommandResponse {
+  Command command = 1;
+}
+
+message GetCommandRequest {
+  string id = 1;
+}
+
+message GetCommandResponse {
+  Command command = 1;
+}
+
+message Hello {
+  string worker_id = 1;
+  string version = 2;
+}
+
+message Heartbeat {
+  int64 unix_millis = 1;
+}
+
+message CommandAccepted {
+  string command_id = 1;
+}
+
+message CommandProgress {
+  string command_id = 1;
+  string message = 2;
+}
+
+message CommandResult {
+  string command_id = 1;
+  string output = 2;
+  string error = 3;
+}
+
+message AgentMessage {
+  oneof payload {
+    Hello hello = 1;
+    Heartbeat heartbeat = 2;
+    CommandAccepted accepted = 3;
+    CommandProgress progress = 4;
+    CommandResult result = 5;
+  }
+}
+
+message Welcome {
+  string worker_id = 1;
+}
+
+message ControlMessage {
+  oneof payload {
+    Welcome welcome = 1;
+    Command command = 2;
+  }
+}
