@@ -45,7 +45,7 @@
 
 仓库提供一个万能入口和两个精简入口：
 
-- `platform`：支持 `all`、`control`、`worker` 三种子命令；
+- `platform`：支持 `all`、`control`、`worker` 三种子命令；未指定子命令时默认执行 `all`；
 - `control`：只装配控制面；
 - `worker`：只装配 worker。
 
@@ -62,6 +62,8 @@
 ```bash
 ./platform all
 ```
+
+`./platform` 与 `./platform all` 等价。
 
 一个 Go 进程包含 React 静态资源、ControlAPI、控制面应用服务、本地 worker、worker runtime 和 `LocalCommandBus`。
 
