@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
+	"path"
+	"strings"
 	"time"
 
 	"example.com/multitopology-demo/internal/control"
@@ -20,7 +22,7 @@ func newPublicHandler(service *control.Service, assets fs.FS) http.Handler {
 	root := http.NewServeMux()
 	root.Handle("/api/", http.StripPrefix("/api", api))
 	if assets != nil {
-		root.Handle("/", http.FileServer(http.FS(assets)))
+		root.Handle("/", spaHandler(assets))
 	} else {
 		root.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -28,6 +30,20 @@ func newPublicHandler(service *control.Service, assets fs.FS) http.Handler {
 		})
 	}
 	return root
+}
+
+func spaHandler(assets fs.FS) http.Handler {
+	fileServer := http.FileServer(http.FS(assets))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		filePath := strings.TrimPrefix(path.Clean(r.URL.Path), "/")
+		if _, err := fs.Stat(assets, filePath); err == nil {
+			fileServer.ServeHTTP(w, r)
+			return
+		}
+		indexRequest := r.Clone(r.Context())
+		indexRequest.URL.Path = "/"
+		fileServer.ServeHTTP(w, indexRequest)
+	})
 }
 
 type serverProcess struct {

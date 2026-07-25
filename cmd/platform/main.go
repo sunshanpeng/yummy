@@ -10,6 +10,7 @@ import (
 	"syscall"
 
 	"example.com/multitopology-demo/internal/bootstrap"
+	"example.com/multitopology-demo/internal/webui"
 )
 
 func main() {
@@ -19,7 +20,7 @@ func main() {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	if err := bootstrap.Run(ctx, mode, args, nil); err != nil && !errors.Is(err, flag.ErrHelp) {
+	if err := bootstrap.Run(ctx, mode, args, webui.FS()); err != nil && !errors.Is(err, flag.ErrHelp) {
 		log.Fatal(err)
 	}
 }
