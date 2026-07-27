@@ -6,12 +6,12 @@ import (
 	"net/http"
 	"time"
 
-	"example.com/multitopology-demo/internal/commandbus"
-	"example.com/multitopology-demo/internal/control"
-	"example.com/multitopology-demo/internal/domain"
-	"example.com/multitopology-demo/internal/ports"
-	"example.com/multitopology-demo/internal/storage"
-	"example.com/multitopology-demo/internal/worker"
+	"github.com/sunshanpeng/yummy/internal/commandbus"
+	"github.com/sunshanpeng/yummy/internal/control"
+	"github.com/sunshanpeng/yummy/internal/domain"
+	"github.com/sunshanpeng/yummy/internal/ports"
+	"github.com/sunshanpeng/yummy/internal/storage"
+	"github.com/sunshanpeng/yummy/internal/worker"
 )
 
 const localWorkerID = "local-worker"

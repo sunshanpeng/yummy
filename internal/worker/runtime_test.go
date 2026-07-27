@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"example.com/multitopology-demo/internal/domain"
+	"github.com/sunshanpeng/yummy/internal/domain"
 )
 
 func TestRuntimeUppercase(t *testing.T) {

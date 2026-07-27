@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"example.com/multitopology-demo/internal/domain"
-	"example.com/multitopology-demo/internal/ports"
-	"example.com/multitopology-demo/internal/worker"
+	"github.com/sunshanpeng/yummy/internal/domain"
+	"github.com/sunshanpeng/yummy/internal/ports"
+	"github.com/sunshanpeng/yummy/internal/worker"
 )
 
 func TestLocalBusProducesUppercaseResult(t *testing.T) {

@@ -558,7 +558,7 @@ syntax = "proto3";
 
 package demo.v1;
 
-option go_package = "example.com/multitopology-demo/gen/go/demo/v1;demov1";
+option go_package = "github.com/sunshanpeng/yummy/gen/go/demo/v1;demov1";
 
 service ControlService {
   rpc ListWorkers(ListWorkersRequest) returns (ListWorkersResponse);

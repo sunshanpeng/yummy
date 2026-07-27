@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"time"
 
-	"example.com/multitopology-demo/internal/control"
-	"example.com/multitopology-demo/internal/storage"
-	transport "example.com/multitopology-demo/internal/transport/connectrpc"
+	"github.com/sunshanpeng/yummy/internal/control"
+	"github.com/sunshanpeng/yummy/internal/storage"
+	transport "github.com/sunshanpeng/yummy/internal/transport/connectrpc"
 )
 
 func RunControl(ctx context.Context, config Config, assets fs.FS) error {

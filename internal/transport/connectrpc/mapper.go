@@ -3,8 +3,8 @@ package connectrpc
 import (
 	"time"
 
-	demov1 "example.com/multitopology-demo/gen/go/demo/v1"
-	"example.com/multitopology-demo/internal/domain"
+	demov1 "github.com/sunshanpeng/yummy/gen/go/demo/v1"
+	"github.com/sunshanpeng/yummy/internal/domain"
 )
 
 func commandToProto(command domain.Command) *demov1.Command {

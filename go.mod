@@ -1,4 +1,4 @@
-module example.com/multitopology-demo
+module github.com/sunshanpeng/yummy
 
 go 1.25.0
 

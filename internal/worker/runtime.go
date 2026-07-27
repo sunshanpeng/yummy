@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"example.com/multitopology-demo/internal/domain"
+	"github.com/sunshanpeng/yummy/internal/domain"
 )
 
 type Runtime struct{}

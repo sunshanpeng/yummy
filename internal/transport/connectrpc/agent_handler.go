@@ -9,10 +9,10 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	demov1 "example.com/multitopology-demo/gen/go/demo/v1"
-	"example.com/multitopology-demo/gen/go/demo/v1/demov1connect"
-	"example.com/multitopology-demo/internal/domain"
-	"example.com/multitopology-demo/internal/ports"
+	demov1 "github.com/sunshanpeng/yummy/gen/go/demo/v1"
+	"github.com/sunshanpeng/yummy/gen/go/demo/v1/demov1connect"
+	"github.com/sunshanpeng/yummy/internal/domain"
+	"github.com/sunshanpeng/yummy/internal/ports"
 )
 
 type agentHandler struct {

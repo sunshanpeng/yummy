@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"example.com/multitopology-demo/internal/domain"
+	"github.com/sunshanpeng/yummy/internal/domain"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )

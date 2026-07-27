@@ -7,7 +7,7 @@ import (
 	"sort"
 	"time"
 
-	"example.com/multitopology-demo/internal/domain"
+	"github.com/sunshanpeng/yummy/internal/domain"
 	goredis "github.com/redis/go-redis/v9"
 )
 

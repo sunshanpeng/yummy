@@ -9,7 +9,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"example.com/multitopology-demo/internal/bootstrap"
+	"github.com/sunshanpeng/yummy/internal/bootstrap"
 )
 
 func main() {

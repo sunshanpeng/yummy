@@ -4,8 +4,8 @@ import (
 	"context"
 	"net/http"
 
-	transport "example.com/multitopology-demo/internal/transport/connectrpc"
-	"example.com/multitopology-demo/internal/worker"
+	transport "github.com/sunshanpeng/yummy/internal/transport/connectrpc"
+	"github.com/sunshanpeng/yummy/internal/worker"
 )
 
 func runWorker(ctx context.Context, config Config) error {

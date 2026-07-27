@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"example.com/multitopology-demo/internal/domain"
-	"example.com/multitopology-demo/internal/testkit"
+	"github.com/sunshanpeng/yummy/internal/domain"
+	"github.com/sunshanpeng/yummy/internal/testkit"
 )
 
 func TestCreateCommandTransitionsBeforeDispatch(t *testing.T) {

@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"example.com/multitopology-demo/internal/domain"
-	"example.com/multitopology-demo/internal/ports"
+	"github.com/sunshanpeng/yummy/internal/domain"
+	"github.com/sunshanpeng/yummy/internal/ports"
 )
 
 var ErrInvalidInput = errors.New("输入不能为空")

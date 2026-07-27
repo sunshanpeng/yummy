@@ -6,10 +6,10 @@ import (
 	"net/http"
 
 	"connectrpc.com/connect"
-	demov1 "example.com/multitopology-demo/gen/go/demo/v1"
-	"example.com/multitopology-demo/gen/go/demo/v1/demov1connect"
-	"example.com/multitopology-demo/internal/control"
-	"example.com/multitopology-demo/internal/domain"
+	demov1 "github.com/sunshanpeng/yummy/gen/go/demo/v1"
+	"github.com/sunshanpeng/yummy/gen/go/demo/v1/demov1connect"
+	"github.com/sunshanpeng/yummy/internal/control"
+	"github.com/sunshanpeng/yummy/internal/domain"
 )
 
 type controlHandler struct {

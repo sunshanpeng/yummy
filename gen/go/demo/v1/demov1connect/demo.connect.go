@@ -8,7 +8,7 @@ import (
 	connect "connectrpc.com/connect"
 	context "context"
 	errors "errors"
-	v1 "example.com/multitopology-demo/gen/go/demo/v1"
+	v1 "github.com/sunshanpeng/yummy/gen/go/demo/v1"
 	http "net/http"
 	strings "strings"
 )

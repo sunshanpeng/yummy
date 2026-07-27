@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"time"
 
-	"example.com/multitopology-demo/internal/presence/redis"
-	"example.com/multitopology-demo/internal/repository/postgres"
-	"example.com/multitopology-demo/migrations"
+	"github.com/sunshanpeng/yummy/internal/presence/redis"
+	"github.com/sunshanpeng/yummy/internal/repository/postgres"
+	"github.com/sunshanpeng/yummy/migrations"
 	"github.com/jackc/pgx/v5/pgxpool"
 	goredis "github.com/redis/go-redis/v9"
 )

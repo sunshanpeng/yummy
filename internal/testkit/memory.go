@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"example.com/multitopology-demo/internal/domain"
+	"github.com/sunshanpeng/yummy/internal/domain"
 )
 
 type MemoryCommandRepository struct {

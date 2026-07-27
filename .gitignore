@@ -5,7 +5,8 @@
 /web/node_modules/
 *.tsbuildinfo
 *.log
-bin
+# binary file
+bin/
 
 # debug file
 __debug_*

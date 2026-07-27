@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"example.com/multitopology-demo/internal/control"
-	transport "example.com/multitopology-demo/internal/transport/connectrpc"
+	"github.com/sunshanpeng/yummy/internal/control"
+	transport "github.com/sunshanpeng/yummy/internal/transport/connectrpc"
 )
 
 func newPublicHandler(service *control.Service, assets fs.FS) http.Handler {
