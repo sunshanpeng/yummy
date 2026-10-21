@@ -26,8 +26,8 @@ flowchart LR
 
 ## 前置条件
 
-- Go 1.25 或更高版本；
-- Node.js 20 或更高版本、pnpm 10；
+- Go 1.26 或更高版本；`go.mod` 指定了 `toolchain go1.27.3`，默认的 `GOTOOLCHAIN=auto` 会自动下载并使用该版本；
+- Node.js 22.13+、24 或 26+（推荐 24 LTS）、pnpm 10；
 - Docker Compose；
 - OpenSSL；
 - rsync；
@@ -42,6 +42,8 @@ make certs build
 ```
 
 开发证书会写入 `var/certs`，只用于本地演示。生产或公网部署应由正式 CA 签发证书，并妥善保护 worker 私钥。
+
+compose 使用 PostgreSQL 18 和 Redis 8。PostgreSQL 18 镜像的数据目录与 17 不兼容，如果本机还留着旧版本创建的容器，先执行 `docker compose down -v` 删除旧容器和演示数据，再重新启动。
 
 ## 方式一：单二进制、单进程
 
