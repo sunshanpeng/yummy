@@ -24,7 +24,7 @@ func TestConfigFromEnvironmentUsesDemoDefaults(t *testing.T) {
 	if config.RedisAddr != "localhost:6379" {
 		t.Fatalf("RedisAddr = %q", config.RedisAddr)
 	}
-	if config.PublicAddr != ":8080" || config.AgentAddr != ":8443" {
+	if config.PublicAddr != "127.0.0.1:8080" || config.AgentAddr != ":8443" {
 		t.Fatalf("addresses = %q, %q", config.PublicAddr, config.AgentAddr)
 	}
 	if config.ControlURL != "https://localhost:8443" || config.WorkerID != "worker-1" {

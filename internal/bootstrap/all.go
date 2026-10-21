@@ -52,11 +52,7 @@ func runAll(ctx context.Context, config Config, publicHandlerFactory func(*contr
 	}
 	go refreshLocalPresence(ctx, dependencies.Presence, presence, config.HeartbeatInterval)
 
-	publicServer := &http.Server{
-		Addr:              config.PublicAddr,
-		Handler:           publicHandlerFactory(service),
-		ReadHeaderTimeout: 5 * time.Second,
-	}
+	publicServer := newPublicServer(config.PublicAddr, publicHandlerFactory(service))
 	return runServers(
 		ctx,
 		serverProcess{server: publicServer, serve: publicServer.ListenAndServe},

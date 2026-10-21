@@ -42,6 +42,9 @@ type Event struct {
 	Message   string
 	Output    string
 	Error     string
+	// WorkerID 是上报事件的 worker 身份。远程模式取自 mTLS 客户端证书，
+	// 不能取自 worker 发送的消息内容。
+	WorkerID string
 }
 
 var (

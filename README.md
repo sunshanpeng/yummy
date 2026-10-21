@@ -41,7 +41,7 @@ docker compose up -d postgres redis
 make certs build
 ```
 
-开发证书会写入 `var/certs`，只用于本地演示。生产或公网部署应由正式 CA 签发证书，并妥善保护 worker 私钥。
+开发证书会写入 `var/certs`，只用于本地演示。生产或公网部署应由正式 CA 签发证书，并妥善保护 worker 私钥。worker 证书的 CN 即 worker ID，只能包含字母、数字、点、下划线和连字符，最长 128 个字符。
 
 compose 使用 PostgreSQL 18 和 Redis 8。PostgreSQL 18 镜像的数据目录与 17 不兼容，如果本机还留着旧版本创建的容器，先执行 `docker compose down -v` 删除旧容器和演示数据，再重新启动。
 
@@ -57,7 +57,7 @@ compose 使用 PostgreSQL 18 和 Redis 8。PostgreSQL 18 镜像的数据目录�
 ./bin/platform all
 ```
 
-打开 <http://localhost:8080>。页面、公共 API、控制面和 `local-worker` 都在同一个 Go 进程中。
+打开 <http://localhost:8080>。页面、公共 API、控制面和 `local-worker` 都在同一个 Go 进程中。公共端口默认只监听 `127.0.0.1`。
 
 ## 方式二：前后端分离
 
@@ -73,13 +73,13 @@ compose 使用 PostgreSQL 18 和 Redis 8。PostgreSQL 18 镜像的数据目录�
 pnpm --dir web dev
 ```
 
-打开 <http://localhost:5173>。Vite 将 `/api` 代理到 `http://localhost:8080`。如后端使用其他地址：
+打开 <http://localhost:5173>。Vite 将 `/api` 代理到 `http://127.0.0.1:8080`。如后端使用其他地址：
 
 ```bash
 VITE_CONTROL_PROXY=http://127.0.0.1:19081 pnpm --dir web dev
 ```
 
-生产环境可以将 `web/dist` 放到 Nginx、对象存储或 CDN，并参考 `deploy/nginx.conf` 将 `/api/` 转发给 Go 后端。`platform` 自带的嵌入页面在这种拓扑下可以不使用。
+生产环境可以将 `web/dist` 放到 Nginx、对象存储或 CDN，并参考 `deploy/nginx.conf` 将 `/api/` 转发给 Go 后端。此时 Go 后端需要用 `PUBLIC_ADDR=:8080`（或具体内网地址）监听反向代理可达的地址。`platform` 自带的嵌入页面在这种拓扑下可以不使用。
 
 ## 方式三：控制面和 worker 分离
 
@@ -102,18 +102,19 @@ VITE_CONTROL_PROXY=http://127.0.0.1:19081 pnpm --dir web dev
 ./bin/platform worker --worker-id worker-1
 ```
 
-公共控制台/API 默认监听 `:8080`；只供 worker 使用的 mTLS HTTP/2 端口默认监听 `:8443`。worker 主动建立长连接，因此部署在客户网络时通常只需允许它访问控制面的公网 `8443` 端口。
+公共控制台/API 默认只监听 `127.0.0.1:8080`；只供 worker 使用的 mTLS HTTP/2 端口默认监听所有网卡的 `:8443`。worker 主动建立长连接，因此部署在客户网络时通常只需允许它访问控制面的公网 `8443` 端口。
 
 ## 常用配置
 
 | 环境变量 / 参数 | 默认值 | 用途 |
 |---|---|---|
 | `DATABASE_URL` / `--database-url` | `postgres://demo:demo@localhost:5432/demo?sslmode=disable` | PostgreSQL |
-| `REDIS_ADDR` / `--redis-addr` | `localhost:6379` | Redis |
-| `PUBLIC_ADDR` / `--public-addr` | `:8080` | 页面与公共 ConnectRPC API |
+| `REDIS_ADDR` / `--redis-addr` | `localhost:6379` | Redis；也支持 `redis://` / `rediss://` URL，可携带用户名、密码并启用 TLS |
+| `PUBLIC_ADDR` / `--public-addr` | `127.0.0.1:8080` | 页面与公共 ConnectRPC API；公共 API 暂无认证，默认只监听本机 |
 | `AGENT_ADDR` / `--agent-addr` | `:8443` | worker mTLS 双向流 |
 | `CONTROL_URL` / `--control-url` | `https://localhost:8443` | worker 回连地址 |
-| `WORKER_ID` / `--worker-id` | `worker-1` | worker ID，必须与客户端证书 CN 一致 |
+| `WORKER_ID` / `--worker-id` | `worker-1` | worker ID，必须与客户端证书 CN 一致；只能包含字母、数字、点、下划线和连字符，最长 128 个字符 |
+| `WORKER_VERSION` / `--worker-version` | `demo` | worker 版本号，最长 128 字节 |
 | `CERT_DIR` / `--cert-dir` | `var/certs` | CA、服务端和 worker 证书目录 |
 | `TLS_SERVER_NAME` / `--tls-server-name` | `localhost` | worker 校验的服务端证书名称 |
 
@@ -169,6 +170,8 @@ docker compose exec redis redis-cli --scan --pattern 'demo:worker:*'
 
 ## 当前边界与后续 HA
 
+- 公共 API 还没有用户认证和授权。默认只监听本机只能缩小暴露面，挡不住浏览器 DNS rebinding 这类本机访问；对外提供前必须先补上认证，或放在带认证的入口之后，`deploy/nginx.conf` 只是转发示例。
+- 任务文本上限为 16 KiB；worker 只能上报属于自己的任务事件，身份以 mTLS 客户端证书为准。
 - 当前控制面是单实例；同一个进程内的 registry 保存它所连接的 worker。
 - 未来多控制面实例需要给 worker 连接增加 owner/租约，并让任务路由到持有该连接的控制面实例，可使用 PostgreSQL/Redis 协调或引入消息系统。
 - PostgreSQL 已是唯一任务事实来源，后续可增加 outbox、重试与幂等键；接入 AI 时也便于使用 `pgvector` 等扩展。

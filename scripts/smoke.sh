@@ -82,9 +82,12 @@ echo "PASS 单进程：platform 默认 all"
 cleanup
 
 start_process env PUBLIC_ADDR=127.0.0.1:19081 ./bin/platform all
+# 直接运行 Vite 的 bin（内部 exec node），cleanup 才能结束真正的服务进程；
+# 经 pnpm/Volta 包装启动时，kill 只会结束外层进程，Vite 会残留并占住端口。
+# --strictPort 让端口被占用时直接失败，避免测到残留的旧服务。
 start_process env \
   VITE_CONTROL_PROXY=http://127.0.0.1:19081 \
-  pnpm --dir web exec vite --host 127.0.0.1 --port 15173
+  ./web/node_modules/.bin/vite web --host 127.0.0.1 --port 15173 --strictPort
 wait_for_text \
   "http://127.0.0.1:15173/api/demo.v1.ControlService/ListWorkers" \
   "{}" \

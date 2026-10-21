@@ -13,7 +13,7 @@
         "GOPROXY": "https://goproxy.cn,https://proxy.golang.org,direct",
         "DATABASE_URL": "postgres://demo:demo@localhost:5432/demo?sslmode=disable",
         "REDIS_ADDR": "localhost:6379",
-        "PUBLIC_ADDR": ":8080",
+        "PUBLIC_ADDR": "127.0.0.1:8080",
         "AGENT_ADDR": ":8443",
         "CERT_DIR": "${workspaceFolder}/var/certs"
       }
@@ -30,7 +30,7 @@
         "GOPROXY": "https://goproxy.cn,https://proxy.golang.org,direct",
         "DATABASE_URL": "postgres://demo:demo@localhost:5432/demo?sslmode=disable",
         "REDIS_ADDR": "localhost:6379",
-        "PUBLIC_ADDR": ":8080",
+        "PUBLIC_ADDR": "127.0.0.1:8080",
         "AGENT_ADDR": ":8443",
         "CERT_DIR": "${workspaceFolder}/var/certs"
       }

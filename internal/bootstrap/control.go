@@ -47,17 +47,8 @@ func runControl(ctx context.Context, config Config, publicHandlerFactory func(*c
 	if err != nil {
 		return err
 	}
-	publicServer := &http.Server{
-		Addr:              config.PublicAddr,
-		Handler:           publicHandlerFactory(service),
-		ReadHeaderTimeout: 5 * time.Second,
-	}
-	agentServer := &http.Server{
-		Addr:              config.AgentAddr,
-		Handler:           agentMux,
-		TLSConfig:         tlsConfig,
-		ReadHeaderTimeout: 5 * time.Second,
-	}
+	publicServer := newPublicServer(config.PublicAddr, publicHandlerFactory(service))
+	agentServer := newAgentServer(config.AgentAddr, agentMux, tlsConfig)
 	return runServers(
 		ctx,
 		serverProcess{server: publicServer, serve: publicServer.ListenAndServe},

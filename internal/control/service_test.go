@@ -75,12 +75,14 @@ func TestHandleEventCompletesCommand(t *testing.T) {
 
 	if err := service.HandleEvent(ctx, domain.Event{
 		CommandID: "cmd-1",
+		WorkerID:  "worker-1",
 		Type:      domain.EventAccepted,
 	}); err != nil {
 		t.Fatal(err)
 	}
 	if err := service.HandleEvent(ctx, domain.Event{
 		CommandID: "cmd-1",
+		WorkerID:  "worker-1",
 		Type:      domain.EventProgress,
 		Message:   "正在转换文本",
 	}); err != nil {
@@ -88,6 +90,7 @@ func TestHandleEventCompletesCommand(t *testing.T) {
 	}
 	if err := service.HandleEvent(ctx, domain.Event{
 		CommandID: "cmd-1",
+		WorkerID:  "worker-1",
 		Type:      domain.EventSucceeded,
 		Output:    "HELLO",
 	}); err != nil {

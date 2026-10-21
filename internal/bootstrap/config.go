@@ -23,11 +23,15 @@ type Config struct {
 	HeartbeatInterval time.Duration
 }
 
+// defaultPublicAddr 只监听本机：公共 API 尚无用户认证，
+// 对外提供时需显式配置 PUBLIC_ADDR，并放在受保护的入口之后。
+const defaultPublicAddr = "127.0.0.1:8080"
+
 func ConfigFromEnvironment() Config {
 	return Config{
 		DatabaseURL:       environmentOrDefault("DATABASE_URL", "postgres://demo:demo@localhost:5432/demo?sslmode=disable"),
 		RedisAddr:         environmentOrDefault("REDIS_ADDR", "localhost:6379"),
-		PublicAddr:        environmentOrDefault("PUBLIC_ADDR", ":8080"),
+		PublicAddr:        environmentOrDefault("PUBLIC_ADDR", defaultPublicAddr),
 		AgentAddr:         environmentOrDefault("AGENT_ADDR", ":8443"),
 		ControlURL:        environmentOrDefault("CONTROL_URL", "https://localhost:8443"),
 		WorkerID:          environmentOrDefault("WORKER_ID", "worker-1"),
@@ -44,7 +48,7 @@ func ParseFlags(base Config, args []string, output io.Writer) (Config, error) {
 	flags := flag.NewFlagSet("platform", flag.ContinueOnError)
 	flags.SetOutput(output)
 	flags.StringVar(&config.DatabaseURL, "database-url", config.DatabaseURL, "PostgreSQL 连接地址")
-	flags.StringVar(&config.RedisAddr, "redis-addr", config.RedisAddr, "Redis 地址")
+	flags.StringVar(&config.RedisAddr, "redis-addr", config.RedisAddr, "Redis 地址，支持 host:port 或 redis:// / rediss:// URL")
 	flags.StringVar(&config.PublicAddr, "public-addr", config.PublicAddr, "控制台和公共 API 监听地址")
 	flags.StringVar(&config.AgentAddr, "agent-addr", config.AgentAddr, "worker mTLS 监听地址")
 	flags.StringVar(&config.ControlURL, "control-url", config.ControlURL, "worker 连接的控制面地址")

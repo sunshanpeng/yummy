@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"time"
 
 	"connectrpc.com/connect"
@@ -55,10 +56,12 @@ func (c *WorkerClient) Run(ctx context.Context) error {
 
 	delay := c.config.ReconnectMinDelay
 	for {
-		_ = c.runOnce(ctx)
+		err := c.runOnce(ctx)
 		if ctx.Err() != nil {
 			return nil
 		}
+		// 记录断线原因，避免证书身份不符等配置错误表现为没有任何输出的重连循环。
+		slog.WarnContext(ctx, "与控制面的连接已断开，稍后重连", "error", err, "retry_in", delay)
 
 		timer := time.NewTimer(delay)
 		select {
@@ -126,15 +129,17 @@ func (c *WorkerClient) runOnce(ctx context.Context) error {
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
+			// 优先返回接收错误：它带有控制面返回的错误码和原因（例如证书身份不符），
+			// 而连接关闭后的发送错误通常只是 EOF。
+			if !errors.Is(err, io.EOF) {
+				return err
+			}
 			select {
 			case sendErr := <-sendErrors:
 				return sendErr
 			default:
 			}
-			if errors.Is(err, io.EOF) {
-				return io.EOF
-			}
-			return err
+			return io.EOF
 		}
 		if welcome := message.GetWelcome(); welcome != nil {
 			if welcome.GetWorkerId() != c.config.WorkerID {

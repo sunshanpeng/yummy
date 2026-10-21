@@ -4,13 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+	goredis "github.com/redis/go-redis/v9"
 	"github.com/sunshanpeng/yummy/internal/presence/redis"
 	"github.com/sunshanpeng/yummy/internal/repository/postgres"
 	"github.com/sunshanpeng/yummy/migrations"
-	"github.com/jackc/pgx/v5/pgxpool"
-	goredis "github.com/redis/go-redis/v9"
 )
 
 type Config struct {
@@ -44,7 +45,12 @@ func Open(ctx context.Context, config Config) (*Dependencies, error) {
 		return nil, err
 	}
 
-	redisClient := goredis.NewClient(&goredis.Options{Addr: config.RedisAddr})
+	redisOptions, err := parseRedisOptions(config.RedisAddr)
+	if err != nil {
+		pool.Close()
+		return nil, err
+	}
+	redisClient := goredis.NewClient(redisOptions)
 	if err := redisClient.Ping(ctx).Err(); err != nil {
 		pool.Close()
 		_ = redisClient.Close()
@@ -57,6 +63,20 @@ func Open(ctx context.Context, config Config) (*Dependencies, error) {
 		Commands: postgres.New(pool),
 		Presence: redis.New(redisClient, config.PresenceTTL),
 	}, nil
+}
+
+// parseRedisOptions 兼容 host:port 和 redis:// / rediss:// URL，
+// 后者可以携带用户名、密码、数据库编号并启用 TLS。
+func parseRedisOptions(address string) (*goredis.Options, error) {
+	if !strings.Contains(address, "://") {
+		return &goredis.Options{Addr: address}, nil
+	}
+	options, err := goredis.ParseURL(address)
+	if err != nil {
+		// 解析错误可能带出 URL 片段（例如密码中未编码的 / # ?），因此不返回底层错误。
+		return nil, errors.New("解析 Redis URL 失败：请检查格式，用户名和密码中的保留字符需要百分号编码")
+	}
+	return options, nil
 }
 
 func (d *Dependencies) Close() {
