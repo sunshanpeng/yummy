@@ -4,7 +4,7 @@
 
 ## 打开方式
 
-直接用浏览器打开 [index.html](index.html)。默认进入工作空间应用列表，顶部无应用/构建页签。点击应用进入独立详情页，概览、部署、构建、运行日志、基础监控、变量和配置都在应用内。工作空间菜单进入管理；账户菜单进入个人 Agent、PAT 或角色预览。“使用示例源码包”可演示提交，所有操作仅改变内存，刷新后重置。
+直接用浏览器打开 [index.html](index.html)。默认进入工作空间应用列表，顶部无应用/构建页签。点击应用进入独立详情页，概览、发布、构建、运行日志、基础监控、变量和配置都在应用内。工作空间菜单进入管理；账户菜单进入个人 Agent、PAT 或角色预览。“使用示例源码包”可演示提交，所有操作仅改变内存，刷新后重置。
 
 如浏览器限制本地脚本，可在本目录执行 `python3 -m http.server 8765 --bind 127.0.0.1`，再打开 `http://127.0.0.1:8765`。不需要安装前端依赖。
 
@@ -162,3 +162,52 @@
 | JavaScript 与运行 | app.js、runtime.js、application-settings.js 均通过 node --check；检查流程后 agent-browser errors 无输出 |
 
 个人账户属于当前实例的用户身份，不承诺跨独立实例统一身份。真实 user_id 所有者校验、撤销后权限计算、秘密加密存储与 BuildKit 注入均尚未实现；本轮仅验证静态原型的内存行为。正式方案允许应用维护者管理本应用构建密钥，但本原型没有独立维护者身份预览，未验证该角色组合。个人资料只读展示，不宣称已实现账户编辑或安全设置。本轮未生成截图。
+
+## 命名、集群与最小 CLI 复核（2026-10-26）
+
+设计依据：[命名、集群与最小 CLI](../../superpowers/specs/2026-10-26-naming-cluster-and-minimal-cli-design.md)。检查前用 `ui-ux-pro-max` 检索了表单校验规则：采用失焦校验、可见标签，以及用 aria-describedby 把就地错误关联到字段。只读字段的检索两次都没有返回匹配规则，因此只读值沿用原型现有的托管值样式。
+
+| 检查 | 实际结果 |
+|---|---|
+| JavaScript 语法 | app.js、runtime.js、application-settings.js 均通过 node --check |
+| 命名规则 | `a`、30 位名称、`ab-1`、`payment-api` 通过；31 位、`Payment`、`pay_api`、`1api`、`pay-`、`pay--api` 分别得到对应错误；创建应用和创建工作空间的输入框 maxlength 均为 30 |
+| 失焦校验 | 输入 `pay--api` 后失焦，就地显示“不能有连续的中划线”并设置 aria-invalid，对话框没有重新渲染；改成合法值后，输入时错误清除 |
+| 重名 | 创建 `gateway-api` 被拒绝，应用数量仍为 4；创建工作空间 `acme-studio` 被拒绝 |
+| 默认地址 | 新应用 payment-api 得到 6 位小写字母和数字的后缀，地址形如 `payment-api-hegp9o.example.net`；示例应用为 `gateway-api-k7m2x9.example.net` |
+| 应用根域名 | 改为 `apps.example.com` 时就地报错（与控制台 build.example.com 同属一个可注册域名），设置不变；改为 `example.org` 后保存成功，gateway-api 的地址仍是 example.net |
+| 创建工作空间 | `Data_Team` 因字符不合规被拒绝；`data-team`（显示名称“数据团队”）创建后，列表显示命名空间 `prod-data-team` 与 `build-data-team` |
+| 显示名称 | 空间设置中空间名只读；显示名称改为“Acme 团队”后顶部空间切换同步更新，空间名仍为 acme-studio；清空显示名称后显示 acme-studio |
+| 集群页 | `#/nodes`、`#/platform/nodes` 跳转到 `#/platform/clusters`；集群 main 显示 worker、网络策略与默认环境；三台机器只读展示，离线的 server-03 诊断说明有 1 个状态未知的构建 |
+| 运行位置 | gateway-api 概览“就绪实例 1 / 1 · server-01”；发布详情与托管配置显示 `prod-acme-studio / gateway-api-default`；日志实例为 `gateway-api-default-7f9b` |
+| 发布页签 | 应用页签“部署”改为“发布”；旧地址 `#/apps/gateway-api/deployments` 跳转到 `releases`；添加变量后检查更改显示 v7 → v8，确认后进入 `releases/rel_gateway-api_13`，模拟就绪后生效 v8 |
+| 首次部署 | payment-api 确认配置后提交 bld_1043（server-01），模拟成功后创建 rel_payment-api_1，部署记录冻结为 `main / prod-acme-studio / payment-api-default`；模拟就绪后为运行中，集群页 server-01 列出 payment-api |
+| 构建 | 离线构建 bld_1036 提示机器 server-03 已离线、不会自动重复构建；构建日志工具栏为 `build-acme-studio / bld_1036` |
+| 最小 CLI | 创建构建页的 Agent / CLI 显示 `yummy use acme-studio/gateway-api`、`yummy deploy --dry-run`、`yummy deploy`；取消自动部署后最后一行为 `yummy deploy --build-only` |
+| 连接 Agent | 应用标题的“连接 Agent”弹出含 `yummy login` 的命令；点“前往 Agent 接入”后跳转并关闭对话框 |
+| Agent 接入页 | 本地 CLI 卡片标为第一版；远程 MCP 卡片、已授权连接页签和 OAuth 同意页标为后续版本；查看者看到的命令只包含有权访问的 gateway-api |
+| 权限 | 工作空间管理员访问 `#/platform/clusters`、`#/platform/workspaces` 被拒绝，直接触发创建工作空间被拦截，空间设置可改显示名称；查看者不能进入空间设置 |
+| 响应式 | 19 个页面在 375 / 768 / 1024 / 1440 px 下无整页横向溢出 |
+| 浏览器错误 | 以上流程结束后 agent-browser errors 无输出 |
+
+实现中修正了一处问题：Agent 接入页原先用最近访问的应用拼示例命令，查看者可能看到无权访问的应用名；现在只用其可见应用。自查时临时截取了集群页和 Agent 接入页，查看后已删除，没有保留截图。
+
+原型 JS 保持原有的紧凑格式。编辑器开启了保存时 Prettier 格式化，会把整个文件重排成多行，本轮改动没有引入这类格式化差异。
+
+仍未验证：真实的命名校验接口、后缀唯一约束、公共后缀列表判断、k3s 网络策略效果、worker 集群接入与 CLI 二进制，均待后端实现阶段按设计文档第 8 节验收。
+
+## 提交前审查与回归（2026-11-04）
+
+审查本轮全部设计文档与原型差异，修正三处文档问题：统一首期网络策略范围；按空间、应用与实例区分 K8s 对象归属，避免共享 Namespace 被绑定到单个应用；补充 worker 管理 Namespace、读取 Node 与更新构建资格标签所需的最小集群级权限。release/generation 明确为可更新版本标记，并补充共享资源与正常发布的验收要求。
+
+| 检查 | 实际结果 |
+|---|---|
+| 静态检查 | 三个原型 JS 的 `node --check` 与 `git diff --check` 通过 |
+| 文档链接 | 本轮变更文档的 89 个相对文件链接目标均存在；不代表已验证外部链接或段落锚点 |
+| 名称与创建 | 1/30 位与 `ab-1` 通过；31 位、大写、下划线、数字开头、尾部中划线、连续中划线被拒绝；页面拒绝 `pay--api`，应用数保持 4 |
+| 首次发布 | 创建 review-api 后进入配置，构建与发布均为 0；确认配置、提交示例构建、模拟成功并就绪后，发布为 rel_review-api_1，运行位置为 main / prod-acme-studio / review-api-default |
+| 旧路由 | nodes、platform/nodes 均转到 platform/clusters；应用的 deployments 列表及详情均转到 releases |
+| 权限页面 | 空间管理员无法访问全局集群和空间列表；查看者也无法访问空间设置，个人 Agent 接入命令仅显示其有权访问的 gateway-api |
+| 窄屏 | 13 个应用、全局管理、空间设置与个人页面在 375 px 下均无整页横向溢出 |
+| 浏览器错误 | 本轮交互后 `agent-browser errors` 无输出；未生成截图 |
+
+以上仅验证静态原型与文档一致性；真实后端、CLI 和集群行为仍按前述待验证范围处理。

@@ -2,6 +2,8 @@
 
 状态：待评审设计。日期：2026-10-23。本文补充[产品方案](2026-10-22-agent-first-build-product-design.md)、[技术方案](2026-10-22-agent-first-build-technical-design.md)和[前端方案](2026-10-22-agent-first-build-frontend-design.md)，不表示认证后端已经实现。
 
+2026-10-26 决定：第一版不实现本文的授权服务器与远程 HTTP MCP，CLI 与本地 stdio MCP 使用 PAT（见 [命名、集群与最小 CLI](2026-10-26-naming-cluster-and-minimal-cli-design.md)）；本文作为第一版之后的设计保留。
+
 ## 1. 进程约束与选型
 
 产品只有控制面和 worker 两类常驻应用进程。授权服务器是控制面的逻辑角色，与网页、API、HTTP MCP 共用现有 Go 进程、数据库和部署包；不新增身份服务、OAuth 网关或后台任务服务。约束已写入项目 [AGENTS.md](../../../AGENTS.md)。
@@ -22,7 +24,7 @@ Fosite 不附带生产数据库实现，也不替项目完成用户登录、授�
 | 使用方式 | 用户体验 | 控制面处理 |
 |---|---|---|
 | 网页登录 | 本地账号密码；可选已配置的团队 OIDC 登录 | 建立现有服务端 Cookie 会话 |
-| CLI / 本地 stdio MCP | `platform auth login` 打开浏览器授权；无浏览器环境可输入限定 PAT | CLI 使用 API 令牌，本地 stdio MCP 复用 CLI 凭证 |
+| CLI / 本地 stdio MCP | 第一版：`yummy login` 粘贴限定 PAT；之后：打开浏览器授权 | CLI 使用 API 令牌，本地 stdio MCP 复用 CLI 凭证 |
 | 远程 HTTP MCP | 客户端发现授权配置，打开浏览器登录与确认权限 | 同一控制面签发面向该应用 MCP 的 OAuth 令牌 |
 
 OAuth 用于委托访问，OIDC 用于确认外部登录身份。MCP 接入不要求 Yummy 自己成为完整 OIDC 身份平台。外部登录如启用，使用配置的 issuer、client ID 与回调地址，通过成熟客户端验证身份后映射本地用户；按 issuer + subject 唯一绑定，不仅凭邮箱自动合并账号，不自动授予工作空间成员资格。企业身份源管理、SCIM 和复杂 SSO 策略后置。
@@ -116,6 +118,6 @@ OAuth 状态存现有 PostgreSQL，使用 Fosite 存储接口的 GORM adapter；
 
 个人账户独立于工作空间，使用 /account/connections 与 /account/tokens；账户菜单提供“Agent 接入”页面，普通成员同样可用；页面不继承当前空间的导航与所有权。连接/PAT 的 owner 为 user_id，resource/scope 可以限定有权访问的空间与应用；空间管理员不能管理他人的个人凭证。空间菜单的管理入口只面向管理员。Agent 页面提供本地目录方式、远程 MCP 应用地址、浏览器授权说明和已授权连接；PAT 保持在“访问令牌”页。OAuth 确认页显示客户端名称/来源、当前账号、工作空间/应用、具体权限、离线访问与拒绝/允许按钮。完成页提示返回客户端，不显示或复制 token。
 
-M0 先在现有控制面路由中验证 Fosite + PostgreSQL、授权码/PKCE、资源绑定、发现与目标客户端；M1 交付本地登录及 CLI 浏览器授权；M2 交付远程 HTTP MCP、CIMD 和授权管理。每个阶段都执行相同业务权限，不能先发布无认证的 MCP。
+第一版之后分阶段实施：先在现有控制面路由中验证 Fosite + PostgreSQL、授权码/PKCE、资源绑定、发现与目标客户端；再交付 CLI 浏览器授权；最后交付远程 HTTP MCP、CIMD 和授权管理。每个阶段都执行相同业务权限，不能先发布无认证的 MCP。
 
 正式实现须验证：缺失/错误 PKCE、授权码重放、回调/issuer 篡改、跨应用/audience 拒绝、scope 扩大拒绝、刷新竞争与重用、即时撤销、第三方登录身份绑定、CIMD SSRF 防护，以及本地打包→上传→远程查询的真实流程。本轮仅验证静态原型，未安装 Fosite、未实现 OAuth handler、未验证真实客户端兼容性。

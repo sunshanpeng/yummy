@@ -2,7 +2,7 @@
 
 2026-10-24 交付模型修订：基础设施由实例管理员统一管理，工作空间不能自定义；以 [交付方式与实例边界](2026-10-24-delivery-model-and-instance-boundaries-design.md) 为准。
 
-状态：待评审草案。初稿：2026-10-22；更新：2026-10-23（两层资源模型、管理入口及内嵌 OAuth）。配套：[产品方案](2026-10-22-agent-first-build-product-design.md)、[前端方案](2026-10-22-agent-first-build-frontend-design.md)。2026-10-24 的资源与字段边界以 [创建与配置边界复核](2026-10-24-application-configuration-boundaries-design.md) 为准。本次只进行设计与界面原型，不表示后端功能或集群环境已经验证。
+状态：待评审草案。初稿：2026-10-22；更新：2026-10-23（两层资源模型、管理入口及内嵌 OAuth）。配套：[产品方案](2026-10-22-agent-first-build-product-design.md)、[前端方案](2026-10-22-agent-first-build-frontend-design.md)。2026-10-24 的资源与字段边界以 [创建与配置边界复核](2026-10-24-application-configuration-boundaries-design.md) 为准。2026-10-26 修订集群/环境/部署、命名与最小 CLI，细则见 [命名、集群与最小 CLI](2026-10-26-naming-cluster-and-minimal-cli-design.md)。本次只进行设计与界面原型，不表示后端功能或集群环境已经验证。
 
 本稿保留构建基础细节；首发运行、变量、域名、日志、监控和回滚的完整补充见 [首期运行方案](2026-10-23-paas-v1-runtime-design.md)，属于第一期范围而非后续选配。
 
@@ -14,7 +14,7 @@
 |---|---|---|
 | [bootstrap/control.go](../../../internal/bootstrap/control.go:20) 装配单控制面与远程连接表 | 保留业务与装配分层 | 身份、资源、构建应用服务和后台恢复循环 |
 | [bootstrap/all.go](../../../internal/bootstrap/all.go:25) 组合本地 runtime | 保留单进程开发形态 | 本地调用同样需要业务授权；构建仍在隔离执行环境运行 |
-| [agent_handler.go](../../../internal/transport/connectrpc/agent_handler.go:53) 校验证书身份、Hello 和事件来源 | 复用 mTLS 与主动回连 | 节点登记、证书生命周期、实例归属/受限分配和撤销检查 |
+| [agent_handler.go](../../../internal/transport/connectrpc/agent_handler.go:53) 校验证书身份、Hello 和事件来源 | 复用 mTLS 与主动回连 | 集群登记、证书生命周期和撤销检查 |
 | [worker_client.go](../../../internal/transport/connectrpc/worker_client.go:80) 建立流并回传事件 | 保留传输适配器 | 当前接收循环同步执行任务，需拆出执行管理器以接收取消/恢复消息 |
 | [control/service.go](../../../internal/control/service.go:130) 进度事件直接返回 | 保留事件推进的业务边界 | 构建日志与阶段必须持久化，不能复用当前忽略进度的实现 |
 | [commands.go](../../../internal/repository/postgres/commands.go:69) 按预期状态更新 | 延续条件更新语义 | 构建、执行记录、事件幂等和恢复状态 |
@@ -38,14 +38,14 @@
 | 日志 | Zap + gin-contrib/zap | 统一 JSON 与字段；demo 的 slog 通过适配或逐步替换进入同一日志出口 |
 | 浏览器会话 | gin-contrib/sessions 的 Redis store | 复用会话框架；库适配层必须验证 Cookie 仅保存不透明会话标识，业务身份保存在服务端 |
 | CSRF | gorilla/csrf + 同源检查 | Cookie 会话的写请求与 Connect POST 均需防护；纯 Bearer 路径不读取浏览器 Cookie |
-| OAuth | Ory Fosite，嵌入控制面 | 授权码 + PKCE、刷新、撤销；现有 PostgreSQL 存储适配，详见 [认证方案](2026-10-23-oauth-mcp-auth-design.md) |
+| OAuth（第一版之后） | Ory Fosite，嵌入控制面 | 第一版 CLI 与本地 stdio MCP 用 PAT；之后的授权码 + PKCE、刷新、撤销使用现有 PostgreSQL 存储适配，详见 [认证方案](2026-10-23-oauth-mcp-auth-design.md) |
 | 授权 | Casbin，固定角色与领域隔离 | 角色计算交给成熟策略引擎，成员归属和资源查询由业务数据库约束 |
 | 构建 | BuildKit，固定版本/镜像 digest | 不自研 Dockerfile 引擎，不通过宿主 Docker socket 构建 |
 | 执行编排 | Kubernetes client-go | 构建使用 Job，应用运行使用 Deployment/Service/Ingress/配置/卷；共用现有 worker |
 | 业务入口 | k3s Traefik + ACME 或预置证书 | 单入口实例和持久证书存储；见运行方案 |
 | 运行采集 | worker 内嵌采集与日志循环 | Kubelet `/metrics/resource` + Pod 状态/日志 + 有界 PostgreSQL 历史，不新增采集进程 |
-| 源码与节点暂存 | 控制面持久文件卷 + worker 持久卷 | 首版单控制面，无强制 MinIO/S3 服务；以后再增加对象存储适配 |
-| Agent | Cobra CLI + 官方 Go MCP SDK | 本地 stdio 复用打包/凭证；HTTP MCP handler 嵌入控制面，不新增 MCP 服务进程 |
+| 源码与 worker 暂存 | 控制面持久文件卷 + worker 持久卷 | 首版单控制面，无强制 MinIO/S3 服务；以后再增加对象存储适配 |
+| Agent | Cobra CLI + 官方 Go MCP SDK | 第一版只有最小 CLI 与本地 stdio MCP，复用打包与凭证；之后的 HTTP MCP handler 嵌入控制面，不新增 MCP 服务进程 |
 | 可观测 | OpenTelemetry + Prometheus 兼容指标 | 平台自身观测，加 worker 内嵌 Kubelet 资源采集、运行日志和访问探测；首期不建设完整 APM |
 
 采用 Gin 不要求将已有 Connect handler 改写成 Gin JSON handler。采用 GORM Gen 也不要求用 ORM 隐藏所有 SQL：领取任务、条件更新和组合唯一约束需明确表达并做 PostgreSQL 集成测试。
@@ -64,7 +64,7 @@ Gin 的会话/请求中间件把身份写入标准 request context，Connect int
 | [Sa-Token-Go](https://github.com/sa-tokens/sa-token-go) | 集成登录、会话、踢下线、角色/权限检查 | 可选；官方当前提供这些能力，但不是 Go 官方标准组件。本文不把其宣称的功能等同于本项目的隔离验证 |
 | [OpenFGA](https://openfga.dev/docs/getting-started) | 对象共享、嵌套关系、跨组织关系授权 | 暂缓；关系服务与数据同步增加首版运维和一致性成本 |
 
-推荐组合为 Gin 会话组件负责网页登录状态、Fosite 负责 OAuth 协议、Casbin 负责业务授权。第一版不同时引入 Sa-Token-Go 和另一套会话组件，也不部署 Casdoor/Keycloak/Hydra 等独立身份服务。可选的外部 OIDC 登录由控制面作为客户端对接；平台自身授权端点仍在控制面内。详见 [OAuth 与 MCP 方案](2026-10-23-oauth-mcp-auth-design.md)。
+推荐组合为 Gin 会话组件负责网页登录状态、Fosite 负责第一版之后的 OAuth 协议、Casbin 负责业务授权。第一版不同时引入 Sa-Token-Go 和另一套会话组件，也不部署 Casdoor/Keycloak/Hydra 等独立身份服务。可选的外部 OIDC 登录由控制面作为客户端对接；平台自身授权端点仍在控制面内。详见 [OAuth 与 MCP 方案](2026-10-23-oauth-mcp-auth-design.md)。
 
 ### 3.2 Casbin 的具体用法
 
@@ -116,7 +116,7 @@ PostgreSQL 的成员/角色字段是唯一事实来源。固定 `p` 策略随版
 
 ### 3.4 两层归属与管理边界
 
-应用直接关联 workspace_id，成员授权使用 application 域。节点和输出仓库由 instance admin 在 InstanceExecutionPolicy 统一配置，应用只能查看解析后的摘要；构建密钥直接归属 application_id，只允许当前应用引用自己的密钥版本。创建应用不要求选择节点/仓库或建立资源授权。空间管理员和应用角色都不拥有实例资源策略管理权；平台资源接口仅检查 instance 域权限，不回退到 workspace admin 的通配授权。应用 maintainer 只能修改业务参数。
+应用直接关联 workspace_id，成员授权使用 application 域。集群、环境和输出仓库由 instance admin 统一配置（InstanceExecutionPolicy 与 Environment），应用只能查看解析后的摘要；构建密钥直接归属 application_id，只允许当前应用引用自己的密钥版本。创建应用不要求选择集群/仓库或建立资源授权。空间管理员和应用角色都不拥有实例资源策略管理权；平台资源接口仅检查 instance 域权限，不回退到 workspace admin 的通配授权。应用 maintainer 只能修改业务参数。
 
 个人账户接口使用 /account 路由与当前认证 user_id，不从当前工作空间推断凭证所有者。用户列表、个人 PAT/授权连接和空间成员表分开；个人资源 owner 校验不能被 workspace admin 的业务管理权限替代。
 
@@ -149,7 +149,7 @@ flowchart LR
   Services --> PG[(PostgreSQL)]
   Services --> Redis[(Redis 会话与在线状态)]
   Transfer --> Sources[(源码持久卷)]
-  Worker[构建 worker\n主动回连] -->|HTTP/2 + mTLS| Gateway
+  Worker[worker（集群内 Deployment）\n主动回连] -->|HTTP/2 + mTLS| Gateway
   Scheduler --> Gateway
   Worker --> Kube[k3s API]
   Kube --> Runtime[应用 Deployment / Service / Ingress]
@@ -162,13 +162,13 @@ flowchart LR
   Services -->|读取 manifest 验证| Registry
 ```
 
-- 产品仅控制面与 worker 两类常驻应用进程；OAuth、HTTP MCP、调度、恢复、清理均作为控制面内模块。除非存在必要限制，不增加独立服务；新增进程须说明理由与代价，遵循 [AGENTS.md](../../../AGENTS.md)。
-- 首版正式拓扑为一个控制面、一个或多个由实例管理员管理和受限分配的构建节点。每个节点对应单节点 k3s 环境与一个 worker；不建设跨集群调度平台。
-- worker 可在其 k3s 内运行，固定调度到登记的节点；只为本节点管理受管构建 Job 与应用运行资源。节点登记包含集群节点 UID，防止同名节点替换被误认为原资产。
-- 采用每空间独立构建命名空间及专用 worker 身份。首期可继续采用空间独占节点作为受限分配策略；这是实例管理员配置的隔离边界，不是工作空间拥有节点或可以自行修改。未来全托管共享执行需另做隔离验证。
+- 产品仅控制面与 worker 两类常驻应用进程；调度、恢复、清理以及第一版之后的 OAuth、HTTP MCP 均作为控制面内模块（图中 OAuth 与 HTTP MCP 部分属于第一版之后）。除非存在必要限制，不增加独立服务；新增进程须说明理由与代价，遵循 [AGENTS.md](../../../AGENTS.md)。
+- 首版正式拓扑为一个控制面和一个由实例管理员接入的 k3s 集群（集群内可以有多台机器），构建和应用都在这个集群中运行；不建设跨集群调度平台。
+- worker 以 Deployment 运行在集群的 `yummy-system` 命名空间，只管理带平台标签的构建 Job 与应用运行资源。集群登记记录 `kube-system` 命名空间的 UID 作为集群标识，防止换了集群仍被当作原集群；机器的加入和移除由 k3s 负责，平台只读展示。
+- 每个工作空间一个构建命名空间 `build-<空间名>` 和一个运行命名空间 `<环境>-<空间名>`（第一版为 `prod-<空间名>`），运行命名空间下发空间隔离网络策略；worker 身份按集群，不按工作空间。命名与策略见 [命名、集群与最小 CLI](2026-10-26-naming-cluster-and-minimal-cli-design.md)。未来全托管共享执行需另做隔离验证。
 - 保留 `platform all/control/worker` 装配方式；`all` 只是控制面与 worker 同进程，不允许在控制面进程里直接执行 Dockerfile Shell。
 - PostgreSQL 保存任务事实、元数据、日志块及审计；Redis 保存会话与在线 TTL，不作为构建队列。
-- 源码持久卷和 worker 日志暂存卷必须显式配置，安装时校验空间和持久性，不默认把构建数据放到节点根盘。
+- 源码持久卷和 worker 日志暂存卷必须显式配置，安装时校验空间和持久性，不默认把构建数据放到机器根盘。
 
 ### 4.1 构建运行方式的取舍
 
@@ -180,11 +180,12 @@ flowchart LR
 
 ## 5. 登录、会话与凭证
 
-OAuth 授权码 + PKCE S256、令牌刷新/撤销、客户端与授权连接管理集成在控制面内，推荐 Fosite 协议核心。HTTP MCP 使用应用资源绑定的 OAuth token；CLI 默认浏览器授权，本地 stdio MCP 使用 CLI 的 API 凭证，PAT 为兼容路径。OAuth token 与 Cookie/PAT 分开校验，不接受不同 audience 的令牌混用。端点、存储、CIMD 和验收详见 [OAuth 与 MCP 方案](2026-10-23-oauth-mcp-auth-design.md)。
+第一版 CLI 与本地 stdio MCP 使用 PAT，浏览器会话只用于网页。OAuth 授权码 + PKCE S256、令牌刷新/撤销、客户端与授权连接管理放到第一版之后，届时集成在控制面内，推荐 Fosite 协议核心，HTTP MCP 使用应用资源绑定的 OAuth token。OAuth token 与 Cookie/PAT 分开校验，不接受不同 audience 的令牌混用。端点、存储、CIMD 和验收详见 [OAuth 与 MCP 方案](2026-10-23-oauth-mcp-auth-design.md)。
 
 - 首位管理员通过本地 Cobra 管理命令创建，密码通过 TTY/标准输入接收；事务锁保证只初始化一次。没有匿名初始化后门。
 - 密码使用现成 Argon2id 实现；按 OWASP 建议选择参数并在目标硬件测量，不存明文，不自写散列算法。登录失败统一提示并限流。
-- 浏览器使用 `HttpOnly; Secure; SameSite=Lax` Cookie、服务端会话和 CSRF token；生产通过同源 HTTPS 入口访问。登录轮换会话标识，退出销毁服务端状态。
+- 浏览器使用 `__Host-` 前缀的 `HttpOnly; Secure; SameSite=Lax` Cookie（`Path=/`，不带 `Domain`）、服务端会话和 CSRF token；生产通过同源 HTTPS 入口访问，Origin 检查严格等于 `PUBLIC_BASE_URL`。登录轮换会话标识，退出销毁服务端状态。
+- 应用根域名必须与控制台 `PUBLIC_BASE_URL` 分属不同的可注册域名，保存时按公共后缀列表校验；否则应用页面与控制台同站，SameSite 不再起隔离作用，应用还能向父域写 Cookie。
 - 会话默认空闲 12 小时、绝对 7 天。Redis 故障时受影响身份请求失败关闭；用户停用与密码重设同时递增数据库的 `auth_version`，每次认证校验该版本，避免依赖 Redis 删除成功才生效。
 - 邀请、密码重设与访问令牌使用密码学随机值，数据库仅存其摘要。邀请默认 24 小时单次使用，密码重设默认 30 分钟；管理员不能从后台读取已有密码。
 - PAT 默认 30 天、最长 90 天，只显示一次；支持 read/build/deploy/runtime/config 固定动作组及应用白名单；写动作受当前角色限制。MCP/CLI 不自动得到空间管理权。
@@ -193,27 +194,28 @@ OAuth 授权码 + PKCE S256、令牌刷新/撤销、客户端与授权连接管�
 
 ## 6. 数据模型与约束
 
-各业务 ID 使用统一生成方案。空间业务资源带 `workspace_id`，节点/输出仓库等平台资源带实例归属与受限分配关系；应用直接归属工作空间，其构建、源码与产物携带 `application_id`。没有 Project 表、project_id 或项目中间层。跨表引用用组合外键或同一事务中的归属校验，禁止只凭单个可猜 ID 建立跨空间关联。
+各业务 ID 使用统一生成方案。空间业务资源带 `workspace_id`，集群、环境、输出仓库等平台资源带实例归属；应用直接归属工作空间，其构建、源码与产物携带 `application_id`。没有 Project 表、project_id 或项目中间层。跨表引用用组合外键或同一事务中的归属校验，禁止只凭单个可猜 ID 建立跨空间关联。
 
 | 表/对象 | 关键字段与约束 |
 |---|---|
 | users | username 唯一、密码散列、状态、auth_version、实例管理员标识 |
 | workspace_members / application_members | 用户、领域、角色、状态；领域内用户唯一；应用访问成员必须是有效空间成员；只有空间管理员可以变更授权，主要入口在对应应用中 |
-| workspaces | 名称、slug、状态、配置；归档不硬删除历史 |
+| workspaces | name（命名规范，实例内唯一，不可改）、display_name（可改）、状态、配置；只归档不删除，归档后名称继续占用 |
 | invitations / access_tokens | 摘要、用户/空间/应用范围、有效期、撤销；邀请消费用条件更新 |
 | oauth_clients / oauth_requests / oauth_grants / oauth_codes / oauth_access_tokens / oauth_refresh_tokens | 现有 PostgreSQL 内保存协议状态、请求单次消费、资源/scope、授权和刷新族；按协议库存储接口适配，不另建认证数据库服务 |
-| applications | workspace_id、名称/slug（空间内唯一）、状态、业务构建默认值、config_revision；不接受 node/registry/repository/platform 应用覆盖 |
-| instance_execution_policies | 实例、revision、构建/运行目标、输出仓库连接/前缀、默认资源与限额；仅实例管理员维护，历史版本可追踪 |
-| workspace_allocations / entitlements | 平台分配给空间的执行范围与套餐额度；系统/实例管理员维护，空间管理员只读 |
-| application_placements | 应用首次运行分配的节点/集群身份；系统状态，不属于可编辑 RuntimeConfigRevision；现有应用不因默认策略变更迁移 |
-| build_nodes | worker_id、实例、受限空间分配、节点 UID、架构、状态、容量、证书序列号；worker_id 唯一 |
-| registries / build_secrets | 空间、加密凭证、版本、目标前缀或密钥名称、检测状态 |
+| applications | workspace_id、name（命名规范，空间内唯一，不可改）、host_suffix（6 位，创建时生成，不变；`<name>-<host_suffix>` 实例内唯一）、状态、业务构建默认值；不接受 cluster/node/registry/repository/platform 应用覆盖 |
+| instance_execution_policies | 实例、revision、构建集群、输出仓库连接/前缀、默认资源与限额；仅实例管理员维护，历史版本可追踪 |
+| workspace_allocations / entitlements | 平台分配给空间的套餐额度（第一版不按空间分配集群）；系统/实例管理员维护，空间管理员只读 |
+| clusters | 实例、名称、worker_id（唯一）、集群标识（kube-system UID）、能力（build/runtime）、状态、证书序列号；第一版每个实例一个 |
+| environments | 标识（小写字母和数字，最长 10 位，保留词除外）、显示名称、运行 cluster_id、应用根域名；第一版只有 prod |
+| application_deployments | application_id、environment_id、name（第一版 default）、首次部署时冻结的 cluster_id 与命名空间、K8s 名称、当前配置版本；替代原 application_placements，属于系统状态，不因环境改绑或策略变更迁移 |
+| registries | 实例、加密凭证、版本、仓库前缀、检测状态 |
 | application_build_secrets / application_build_secret_versions | 构建密钥直接绑定 workspace_id/application_id；应用内名称唯一、加密值按版本存储；第一版不建空间共享密钥与授权关联表 |
 | source_uploads / source_snapshots | 应用归属、上传者、状态、随机存储键、sha256、字节/文件统计、到期时间 |
 | builds | 应用、来源快照、发起人/令牌、配置快照、状态/阶段、desired_state、时间、retry_of |
-| build_attempts | build_id 唯一、attempt_id、分配节点、Job 名与 UID、发送/确认/恢复时间；本版每个 build 仅一个执行身份 |
+| build_attempts | build_id 唯一、attempt_id、执行集群与机器、Job 名与 UID、发送/确认/恢复时间；本版每个 build 仅一个执行身份 |
 | build_events / build_log_chunks | attempt_id、递增 seq、事件或日志块；各自按 attempt+seq 唯一，支持重放确认 |
-| runtime_config_revisions / releases / deployment_operations | 运行配置与秘密引用版本、镜像 digest、前一版本、operation/generation、期望与观察状态；定义见首期运行方案 |
+| runtime_config_revisions / releases / deployment_operations | 归属 application_deployment；运行配置与秘密引用版本、镜像 digest、前一版本、operation/generation、期望与观察状态；定义见首期运行方案 |
 | runtime_metric_samples / runtime_log_chunks / runtime_events | application/release/Pod 身份、时间、去重、保留期与缺测/截断；与构建日志分开 |
 | artifacts | 构建、仓库、repository、tag、digest、目标平台、验证状态；失败残留另记，不冒充成功产物 |
 | audit_events | 用户/令牌/worker、动作、领域、资源、结果、request_id、时间；无凭证明文 |
@@ -279,12 +281,12 @@ stateDiagram-v2
 
 ### 8.2 领取与投递
 
-- `CreateBuild` 在同一事务中校验源码、密钥授权、应用配置及预览的实例策略版本，冻结节点/仓库/平台快照、写入 QUEUED 和审计。创建成功后与 HTTP 请求生命周期分离。
-- PostgreSQL 队列表每秒扫描，按创建时间领取，使用行锁与指定策略节点的容量锁防止超额分配。节点繁忙则排队并给出原因，失效时不自动改派到另一节点。
-- 领取时建立唯一 attempt，冻结节点与 Job 名，并将 STARTING 持久化。网络投递可重试，但所有重投使用同一 attempt ID。
+- `CreateBuild` 在同一事务中校验源码、密钥授权、应用配置及预览的实例策略版本，冻结集群/仓库/平台快照、写入 QUEUED 和审计。创建成功后与 HTTP 请求生命周期分离。
+- PostgreSQL 队列表每秒扫描，按创建时间领取，使用行锁与集群构建并发锁防止超额分配。集群繁忙则排队并给出原因。
+- 领取时建立唯一 attempt，冻结集群与 Job 名，并将 STARTING 持久化。网络投递可重试，但所有重投使用同一 attempt ID。
 - worker 对 attempt 计算确定的 Job 名；先查询，再创建，AlreadyExists 时核对 UID/标签并接管。Kubernetes 返回不明确时先查询，不能换名称重建。
 - 已确认执行过的 Job 若消失，标为失败/未知并要求显式重新构建；不在相同 attempt 下补跑。
-- 节点失联后不自动迁到另一节点。第一版不承诺 exactly-once；通过稳定执行 ID、唯一约束和远端对象核对避免通常的重复创建。
+- worker 失联后不在其他集群补跑。第一版不承诺 exactly-once；通过稳定执行 ID、唯一约束和远端对象核对避免通常的重复创建。
 
 ### 8.3 事件、断线与取消
 
@@ -296,7 +298,7 @@ worker 上报带 attempt、worker 身份、递增 seq 的事件；控制面校�
 
 取消将 `desired_state=CANCEL` 持久化，再要求删除 Job 及其 Pod。排队任务可直接取消；运行任务在停止确认后才终结。提交成功与取消并发时，以数据库串行化结果为准：成功已提交则取消返回已结束；取消先提交则后到的成功不能改为成功，可能已经推送的镜像记录为残留。
 
-失联任务进入 RECONCILING，默认 5 分钟未恢复后标记 LOST，节点在未确认停止前保留占用/隔离状态。执行超时同样先停止，再确认 TIMED_OUT；网络分区时不能声称截止时间一定已经杀死远端进程。排队超时可直接终结。
+失联任务进入 RECONCILING，默认 5 分钟未恢复后标记 LOST，集群在未确认停止前保留该任务的并发占用。执行超时同样先停止，再确认 TIMED_OUT；网络分区时不能声称截止时间一定已经杀死远端进程。排队超时可直接终结。
 
 用户或应用资格在分配前再次检查；账号停用取消未执行任务并请求停止运行任务。令牌自然到期不取消已合法开始的构建，后续 API 调用仍需新的有效身份。
 
@@ -304,11 +306,11 @@ worker 上报带 attempt、worker 身份、递增 seq 的事件；控制面校�
 
 ### 9.1 资格验证是发布前置条件
 
-首发目标为 AMD64 Linux，优先验证 Ubuntu 24.04 与一组固定 k3s/内核/BuildKit 版本。所有系统组件镜像以发布版本和 digest 固定，M0 产出实际兼容记录后才启用节点构建。
+首发目标为 AMD64 Linux，优先验证 Ubuntu 24.04 与一组固定 k3s/内核/BuildKit 版本。所有系统组件镜像以发布版本和 digest 固定，M0 产出实际兼容记录后才启用集群构建。
 
 [BuildKit 官方 rootless 文档](https://github.com/moby/buildkit/blob/master/docs/rootless.md)和[官方 Kubernetes Job 示例](https://github.com/moby/buildkit/blob/master/examples/kubernetes/job.rootless.yaml)表明，容器内 rootless 可能需要放宽 seccomp/AppArmor，示例还使用 no-process-sandbox。它不是“无额外权限、可安全执行任意陌生租户”的承诺。
 
-M0 必须验证用户命名空间、内核/LSM、snapshotter、实际安全上下文、网络与资源限制。需要放宽配置时由安装者明确配置并记录影响，不自动关闭宿主安全策略；不兼容则节点保持未就绪，不静默退回 privileged 或宿主 Docker socket。
+M0 必须验证用户命名空间、内核/LSM、snapshotter、实际安全上下文、网络与资源限制。需要放宽配置时由安装者明确配置并记录影响，不自动关闭宿主安全策略；不兼容的机器不接收构建 Job，没有可用构建机器时集群保持构建未就绪，不静默退回 privileged 或宿主 Docker socket。
 
 ### 9.2 Job 约束
 
@@ -316,24 +318,24 @@ M0 必须验证用户命名空间、内核/LSM、snapshotter、实际安全上�
 - 每次构建独立 Job，`backoffLimit=0`、`restartPolicy=Never`、有界 `activeDeadlineSeconds`。平台不依赖 Kubernetes 自动重试 Dockerfile 副作用。
 - 准备容器下载并验证源码到有界 emptyDir；构建容器通过 BuildKit 构建并推送，产生小型结果元数据。
 - Job 不挂载宿主路径、Docker/containerd socket 或 worker 私钥；不启用 hostNetwork、hostPID。构建 Pod 禁用 ServiceAccount token 自动挂载。
-- worker 的构建角色只管理本空间构建命名空间中的 Job、Pod/日志及必要临时 Secret；同一 worker 的运行角色另限定在运行命名空间管理应用资源，无集群管理员权限；限制命名空间的资源配额。
+- worker 的构建角色只管理构建命名空间（`build-<空间名>`）中的 Job、Pod/日志及必要临时 Secret；运行角色另限定在运行命名空间（`<环境>-<空间名>`）管理应用资源与网络策略，无集群管理员权限。命名空间资源配额以后按需添加，第一版靠 Job 资源限制和集群构建并发上限控制占用。
 - 建议请求 1 CPU / 1 GiB，限制 2 CPU / 4 GiB，临时存储上限 10 GiB；这些是初始配置，M0 根据样例实测调整。
 - 构建参数由类型化字段生成参数数组，不拼接 Shell。禁止用户提供任意 buildctl flags、host network entitlement 或自定义执行器。
 - 第一版不共享可写构建缓存，先保证资源与权限边界；性能测量后再设计应用级缓存与清理。
 
 ### 9.3 架构与构建配置
 
-节点报告实际 OS/架构，由服务端就绪检查核实。首期平台认证范围固定为 `linux/amd64`，不是应用可编辑默认值，调度必须找到原生匹配节点；设置 BuildKit 目标平台，并在最终 manifest/config 中再次校验。
+worker 报告集群内各机器的实际 OS/架构（`kubernetes.io/arch`），由服务端就绪检查核实。首期平台认证范围固定为 `linux/amd64`，不是应用可编辑默认值；构建 Job 用节点选择器只调度到通过构建检查的 amd64 机器；设置 BuildKit 目标平台，并在最终 manifest/config 中再次校验。
 
-Dockerfile 中硬编码其他架构、基础镜像没有目标架构、或 COPY 了本机预编译 Mach-O/ARM 二进制，仍可能导致构建或运行失败。源码上传不会自动修复这些内容；Agent 根据证据调整 Dockerfile。控制面/CLI 可以运行于 ARM Mac，不意味着构建节点也被认证为 ARM。
+Dockerfile 中硬编码其他架构、基础镜像没有目标架构、或 COPY 了本机预编译 Mach-O/ARM 二进制，仍可能导致构建或运行失败。源码上传不会自动修复这些内容；Agent 根据证据调整 Dockerfile。控制面/CLI 可以运行于 ARM Mac，不意味着构建机器也被认证为 ARM。
 
 ## 10. 仓库、构建密钥与产物
 
 平台输出仓库凭证属于实例级基础设施。私有依赖构建密钥默认归属应用，不再先建立空间共享池；Build 的 secret_refs 必须校验 application_id 并固定版本，由服务端映射为 Dockerfile secret mount 使用的名称。应用配置 API 和审计不返回已有明文。应用成员授权仍由空间管理员校验，使用同一份 application_members 数据；入口在应用并不将该动作并入普通 config:write 或默认 MCP 写权限。
 
-管理员接入现有支持 OCI 的 HTTPS 仓库，在实例执行策略中统一引用。仓库连接包括地址、仓库前缀、推送/读取能力与凭证版本；检测明确区分网络、认证、仓库权限和构建节点侧访问。
+管理员接入现有支持 OCI 的 HTTPS 仓库，在实例执行策略中统一引用。仓库连接包括地址、仓库前缀、推送/读取能力与凭证版本；检测明确区分网络、认证、仓库权限和构建集群侧访问。
 
-镜像路径由空间仓库前缀与不可变 application ID 自动生成（每应用独立 repository），标签使用不可变 build ID，不默认覆盖 `latest`。客户端不能传入或覆盖推送地址、节点或目标架构。历史 Artifact 保留原连接/路径/digest，策略变更不改写历史引用。检测若需要临时推送，仅写入明确的探测 repository，并说明仓库清理责任。
+镜像路径由实例仓库前缀与不可变 application ID 自动生成（每应用独立 repository），标签使用不可变 build ID，不默认覆盖 `latest`。客户端不能传入或覆盖推送地址、集群或目标架构。历史 Artifact 保留原连接/路径/digest，策略变更不改写历史引用。检测若需要临时推送，仅写入明确的探测 repository，并说明仓库清理责任。
 
 凭证只按当前构建所需范围下发给 worker，并通过临时 Kubernetes Secret 或 BuildKit session 提供；不放在源码、Build ARG、进程参数或结果中。私有基础镜像的拉取凭证与输出仓库凭证分别匹配 registry host；非敏感参数与密钥引用在 API 上分开。构建密钥使用 BuildKit secret mount，不使用 ARG/ENV 传秘密。
 
@@ -351,11 +353,11 @@ worker 增量读取 Pod 日志，合并为有序日志块写入自身持久卷�
 
 页面使用带 cursor 的短轮询，默认 2 秒、不可见页面减速，进入终态且尾部同步结束后停止。日志按纯文本渲染，不执行 HTML/终端控制序列；保留行号、阶段、时间、截断与缺失标记。首版不强制引入 xterm 或 WebSocket。
 
-日志默认单构建 20 MiB；截断后仍上报关键状态。Pod 日志轮转、节点磁盘故障可能导致未采集部分丢失，需要 `logs_complete=false`，不能承诺分布式日志永不丢失。Job 只在终态与必要结果确认后清理，失联时不由短 TTL 提前删除唯一恢复证据。
+日志默认单构建 20 MiB；截断后仍上报关键状态。Pod 日志轮转、机器磁盘故障可能导致未采集部分丢失，需要 `logs_complete=false`，不能承诺分布式日志永不丢失。Job 只在终态与必要结果确认后清理，失联时不由短 TTL 提前删除唯一恢复证据。
 
-构建网络需要访问基础镜像和依赖仓库，同时限制控制面数据库、Redis、Kubernetes API、宿主服务和云元数据地址。按目标 CNI 验证 NetworkPolicy 真正执行；标准 NetworkPolicy 不提供任意 FQDN 白名单，不在产品上作此承诺。内网仓库/控制面传输地址由管理员添加最小例外。
+第一版只限制运行命名空间的入站流量，放行同命名空间与 Traefik；构建命名空间不加 NetworkPolicy，构建与运行的出站均不受限，不宣称已隔离其对内网服务的访问。PostgreSQL、Redis 仍须只监听本机或内网，并由主机防火墙限制访问。M0 验证运行命名空间策略实际生效、跨空间连接被拒绝、Traefik 转发与健康探针正常；出站限制以后按需设计，细则见 [命名、集群与最小 CLI 第 6 节](2026-10-26-naming-cluster-and-minimal-cli-design.md#6-网络隔离)。
 
-定时清理仅处理终态且没有活动引用的数据。源快照被活动构建引用时延后删除；worker 暂存收到确认后清理；配额不足在入队前和执行前检查。数据库、源码卷、主密钥、CA 和节点配置提供一致的备份/恢复说明，Redis 在线状态可重建、会话丢失要求重登。
+定时清理仅处理终态且没有活动引用的数据。源快照被活动构建引用时延后删除；worker 暂存收到确认后清理；配额不足在入队前和执行前检查。数据库、源码卷、主密钥、CA 和集群接入配置提供一致的备份/恢复说明，Redis 在线状态可重建、会话丢失要求重登。
 
 ## 12. API、CLI 与错误契约
 
@@ -363,15 +365,15 @@ worker 增量读取 Pod 日志，合并为有序日志块写入自身持久卷�
 
 | 服务 | 关键操作 |
 |---|---|
-| 身份 | Login、Logout、GetCurrentUser、AcceptInvitation、ChangePassword、Create/RevokeAccessToken、List/RevokeOAuthGrant |
-| OAuth / HTTP MCP | 标准 HTTP 端点，挂载在同一控制面；不使用 Connect RPC 包装授权/换取令牌协议 |
-| 资源 | 工作空间/应用、成员角色、构建节点、仓库、密钥的受限管理与读取 |
+| 身份 | Login、Logout、GetCurrentUser、AcceptInvitation、ChangePassword、Create/RevokeAccessToken；第一版之后加 List/RevokeOAuthGrant |
+| OAuth / HTTP MCP（第一版之后） | 标准 HTTP 端点，挂载在同一控制面；不使用 Connect RPC 包装授权/换取令牌协议 |
+| 资源 | 工作空间（name、display_name）/应用、成员角色、集群、环境、仓库、密钥的受限管理与读取 |
 | 源码 | CreateSourceUpload、CompleteSourceUpload、GetSourceSnapshot；文件体走传输入口 |
 | 构建 | CreateBuild、GetBuild、ListBuilds、ReadBuildLogs、CancelBuild、RetryBuild |
 | 运行 | GetApplicationStatus、List/Get/CreateDeployment、RollbackDeployment、Restart/Start/StopApplication、Get/SaveRuntimeConfig、ReadRuntimeLogs、QueryRuntimeMetrics |
 | worker | RegisterWorker、Connect；Run/Cancel/Reconcile、状态事件、日志块及 ack |
 
-`CreateApplication` 的用户字段只有 name 与 idempotency_key，空间来自上下文；创建成功返回完整应用与配置 URL，不执行构建或部署。`CreateBuild` 包含 application_id、source_snapshot_id、config_revision、expected_policy_revision、允许的业务 overrides、idempotency_key。registry/repository、节点与平台从实例策略解析并固化；node/registry/repository/platform 等用户覆盖字段明确拒绝。应用或策略版本过期返回冲突，不悄悄使用新配置。
+`CreateApplication` 的用户字段只有 name 与 idempotency_key，空间来自上下文；name 按命名规范校验，创建后不能修改，服务端同时生成 host_suffix 与默认部署记录。创建成功返回完整应用与配置 URL，不执行构建或部署。`CreateWorkspace` 由实例管理员调用，字段为 name 与可选 display_name，name 同样按命名规范校验。`CreateBuild` 包含 application_id、source_snapshot_id、config_revision、expected_policy_revision、允许的业务 overrides、idempotency_key。registry/repository、集群与平台从实例策略解析并固化；cluster/node/registry/repository/platform 等用户覆盖字段明确拒绝。应用或策略版本过期返回冲突，不悄悄使用新配置。
 
 ```json
 {
@@ -390,27 +392,29 @@ worker 增量读取 Pod 日志，合并为有序日志块写入自身持久卷�
 }
 ```
 
-错误类别包括 UNAUTHENTICATED、PERMISSION_DENIED、CONFIG_CHANGED、SOURCE_INVALID、SOURCE_EXPIRED、QUOTA_EXCEEDED、NO_MATCHING_NODE、NODE_NOT_READY、DOCKERFILE_BUILD_FAILED、REGISTRY_AUTH_FAILED、ARTIFACT_VERIFICATION_FAILED、EXECUTION_UNKNOWN。区分用户修复、管理员处理、可安全重试三种下一步，避免把任意网络错误都建议重新构建。
+错误类别包括 UNAUTHENTICATED、PERMISSION_DENIED、NAME_INVALID、NAME_TAKEN、CONFIG_CHANGED、SOURCE_INVALID、SOURCE_EXPIRED、QUOTA_EXCEEDED、NO_BUILD_MACHINE、CLUSTER_NOT_READY、DOCKERFILE_BUILD_FAILED、REGISTRY_AUTH_FAILED、ARTIFACT_VERIFICATION_FAILED、EXECUTION_UNKNOWN。区分用户修复、管理员处理、可安全重试三种下一步，避免把任意网络错误都建议重新构建。
 
 CLI 示例是拟议产品接口：
 
 ```bash
-platform auth login --server https://build.example.com  # 打开浏览器进行 PKCE 授权
-platform context use --workspace demo --application gateway-api
-platform build preview . --dockerfile Dockerfile
-platform build submit . --dockerfile Dockerfile --output json
-platform build logs bld_example --follow
-platform build get bld_example --output json
-platform mcp --stdio --allow-root /path/to/source
+yummy login --server https://build.example.com   # 粘贴在网页创建的 PAT，保存到系统凭证库
+yummy use acme-studio/gateway-api                # 当前目录关联到应用
+yummy deploy . --dry-run                         # 只预览上传文件与目标
+yummy deploy . --output json                     # 打包、上传、构建、部署并等待结果
+yummy logs --build bld_example --follow
+yummy status --output json
+yummy mcp --allow-root /path/to/source           # 本地 stdio MCP
 ```
+
+命令范围与第一版不做的内容见 [命名、集群与最小 CLI](2026-10-26-naming-cluster-and-minimal-cli-design.md#7-最小-cli)。
 
 stdio MCP 使用相同打包器、凭证与 SDK，stdout 只输出协议消息、诊断写 stderr，工具结果限制长度。取消调用和取消后台构建分开：客户端等待被取消时，后台任务默认继续，必须显式 CancelBuild 才停止。
 
 ## 13. worker 登记与证书
 
-管理员创建节点后生成 15 分钟一次性注册码，服务端存摘要；worker 本地产生私钥与 CSR，经 HTTPS 换取证书。证书默认 30 天、提前 7 天轮换；服务端数据库关联序列号、worker ID 与工作空间，节点身份不接受自己声明的空间。
+管理员接入集群时生成 15 分钟一次性注册码，服务端存摘要；worker 在集群内产生私钥与 CSR，经 HTTPS 换取证书。证书默认 30 天、提前 7 天轮换；服务端数据库关联序列号、worker ID 与集群标识，worker 不能自行声明所属集群或空间。
 
-连接必须同时通过 CA 校验、数据库登记、序列号与节点状态检查。节点停用关闭现有流并撤销下载/任务授权；每次后续事件也检查有效身份。CA 私钥与主密钥独立保护，不复用开发证书脚本作为正式证书后台。
+连接必须同时通过 CA 校验、数据库登记、序列号与集群状态检查。集群停用关闭现有流并撤销下载/任务授权；每次后续事件也检查有效身份。CA 私钥与主密钥独立保护，不复用开发证书脚本作为正式证书后台。
 
 ## 14. 代码演进与验证
 
@@ -423,11 +427,12 @@ stdio MCP 使用相同打包器、凭证与 SDK，stdout 只输出协议消息�
 1. 权限矩阵、跨空间/应用、令牌交集、撤权即时性、原始源码读取范围、最后管理员保护。
 2. 归档路径逃逸、链接、压缩炸弹、重复路径、哈希不匹配、超配额与中断重试。
 3. 真实 PostgreSQL 的幂等键、领取锁、状态条件更新与事件去重，不能只用内存仓库代替。
-4. 节点注册/吊销/轮换、断线重连、同一 attempt 重投、控制面/worker 重启和日志补传。
+4. 集群注册/吊销/轮换、断线重连、同一 attempt 重投、控制面/worker 重启和日志补传。
 5. 取消与成功竞态、仓库已推送但确认丢失、Job 消失、超时和网络分区，禁止误报停止。
 6. 三个真实 Dockerfile 的上传、AMD64 原生构建、推送、manifest 校验和受控启动冒烟。
-7. Playwright 验证登录、OAuth 同意/拒绝与授权连接撤销、成员授权、创建构建、失败详情、复制镜像、权限不足及移动端主要流程。
-8. OAuth 协议负向用例、资源/scope 绑定、刷新竞争/重用、即时撤权、CIMD 网络限制及明确版本 MCP 客户端兼容性，见认证方案。
+7. Playwright 验证登录、PAT 创建与撤销、命名校验、成员授权、创建构建、失败详情、复制镜像、权限不足及移动端主要流程。
+8. 命名规范边界用例在页面、API、CLI 中结果一致；默认地址后缀不变且唯一；应用根域名与控制台同属一个可注册域名时拒绝保存；空间隔离网络策略按 [命名、集群与最小 CLI](2026-10-26-naming-cluster-and-minimal-cli-design.md) 第 6 节验证。
+9. 第一版之后：OAuth 协议负向用例、资源/scope 绑定、刷新竞争/重用、即时撤权、CIMD 网络限制及明确版本 MCP 客户端兼容性，见认证方案。
 
 以上是后续实现验收要求，本次设计任务没有执行这些后端或集群测试。
 
@@ -441,15 +446,15 @@ Build 产生经过验证的 Artifact，Release 绑定 artifact digest + RuntimeC
 
 ### 15.2 运行观测
 
-统一身份包含 workspace/application/build/attempt/release/deployment-operation/node/Pod/容器启动身份与时间。worker 直接采集 Kubelet 资源端点，不能把 Metrics Server 当历史监控；日志和固定资源快照经现有通道写入有界 PostgreSQL 表，后续再适配长期指标/日志后端。首期不构造自研通用 TSDB、PromQL 或 APM。
+统一身份包含 workspace/application/build/attempt/deployment/release/deployment-operation/集群/机器/Pod/容器启动身份与时间。worker 直接采集 Kubelet 资源端点，不能把 Metrics Server 当历史监控；日志和固定资源快照经现有通道写入有界 PostgreSQL 表，后续再适配长期指标/日志后端。首期不构造自研通用 TSDB、PromQL 或 APM。
 
 ### 15.3 数据库与存储
 
-首期提供配置文件与基础 PVC，应用可以通过变量连接外部数据库；local-path 不承诺共享存储、跨节点恢复或备份。以后托管 DatabaseInstance、专用备份恢复、APM/Trace、复杂告警和多副本再单独设计，不混进普通发布回滚。
+首期提供配置文件与基础 PVC，应用可以通过变量连接外部数据库；local-path 不承诺共享存储、跨机器恢复或备份。以后托管 DatabaseInstance、专用备份恢复、APM/Trace、复杂告警和多副本再单独设计，不混进普通发布回滚。
 
 ### 15.4 页面和协议
 
-工作空间首页只有应用，管理员入口继续收起。应用详情的概览、部署、构建、日志、监控、变量、配置均为首期真实模块；所有查询和动作都验证 application_id。worker 扩展类型化操作与能力协商，旧节点不支持运行/采集时明确不就绪，不降级任意 Shell 或静默伪造监控值。
+工作空间首页只有应用，管理员入口继续收起。应用详情的概览、发布、构建、日志、监控、变量、配置均为首期真实模块；所有查询和动作都验证 application_id。worker 扩展类型化操作与能力协商，旧版本 worker 不支持运行/采集时集群明确不就绪，不降级任意 Shell 或静默伪造监控值。
 
 ## 16. 官方参考与核查范围
 
