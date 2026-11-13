@@ -1,0 +1,111 @@
+syntax = "proto3";
+package platform.v1;
+option go_package = "github.com/sunshanpeng/yummy/gen/go/platform/v1;platformv1";
+service InventoryService {
+  rpc ListNodes(ListNodesRequest) returns (ListNodesResponse);
+  rpc GetNode(GetNodeRequest) returns (GetNodeResponse);
+  rpc CreateNode(CreateNodeRequest) returns (CreateNodeResponse);
+  rpc UpdateNode(UpdateNodeRequest) returns (UpdateNodeResponse);
+  rpc ListRegistries(ListRegistriesRequest) returns (ListRegistriesResponse);
+  rpc GetRegistry(GetRegistryRequest) returns (GetRegistryResponse);
+  rpc CreateRegistry(CreateRegistryRequest) returns (CreateRegistryResponse);
+  rpc UpdateRegistry(UpdateRegistryRequest) returns (UpdateRegistryResponse);
+  rpc GetExecutionPolicy(GetExecutionPolicyRequest) returns (GetExecutionPolicyResponse);
+  rpc SaveExecutionPolicy(SaveExecutionPolicyRequest) returns (SaveExecutionPolicyResponse);
+  rpc GetWorkspaceAllocation(GetWorkspaceAllocationRequest) returns (GetWorkspaceAllocationResponse);
+  rpc SetWorkspaceAllocation(SetWorkspaceAllocationRequest) returns (SetWorkspaceAllocationResponse);
+  rpc ResolveExecution(ResolveExecutionRequest) returns (ResolveExecutionResponse);
+  // 登记只记录安装者线下验收事实，不把节点置为就绪；就绪仍由worker连接核验产生。
+  rpc RegisterNodeQualification(RegisterNodeQualificationRequest) returns (RegisterNodeQualificationResponse);
+  rpc RevokeNodeQualification(RevokeNodeQualificationRequest) returns (RevokeNodeQualificationResponse);
+  rpc ListNodeQualifications(ListNodeQualificationsRequest) returns (ListNodeQualificationsResponse);
+  // 域名 TLS 绑定属实例级证书管理：secret_name 为空串即解除绑定，不删除 Secret 本身。
+  rpc SetDomainTLSSecret(SetDomainTLSSecretRequest) returns (SetDomainTLSSecretResponse);
+  rpc GetDomainTLSSecret(GetDomainTLSSecretRequest) returns (GetDomainTLSSecretResponse);
+  // 验证输出仓库当前凭据版本：真实执行网络/认证探测（可选校验指定引用的读取），
+  // 全部通过才标记 verified_at/verified_revision，构建与部署以该标记为准；失败关闭不标记。
+  rpc VerifyRegistry(VerifyRegistryRequest) returns (VerifyRegistryResponse);
+}
+message ExecutionNode {
+  string id = 1; string name = 2; string worker_id = 3; string status = 4; string cluster_node_uid = 5;
+  string os = 6; string arch = 7; string connected_at = 8; string last_seen = 9;
+  bool build_ready = 10; bool runtime_ready = 11; bool ingress_ready = 12; bool metrics_ready = 13;
+  string readiness_reason = 14; int32 capacity = 15; int64 revision = 16;
+}
+message RegistryConnection {
+  string id = 1; string name = 2; string url = 3; string repository_prefix = 4; string status = 5;
+  bool credential_configured = 6; int64 credential_version = 7; int64 revision = 8; string verified_at = 9;
+}
+message ExecutionResources { int64 cpu_millis = 1; int64 memory_mib = 2; }
+message ExecutionPolicy {
+  string instance_id = 1; int64 revision = 2; string build_node_id = 3; string runtime_node_id = 4;
+  string registry_id = 5; string repository_prefix = 6; string base_domain = 7;
+  ExecutionResources resource_default = 8; ExecutionResources resource_limits = 9;
+  bool auto_recovery_enabled = 10; string created_at = 11;
+}
+message WorkspaceAllocation {
+  string workspace_id = 1; repeated string allowed_node_ids = 2; int32 max_applications = 3;
+  int32 build_concurrency = 4; int64 cpu_millis = 5; int64 memory_mib = 6; int64 revision = 7;
+}
+message ExecutionSummary {
+  int64 policy_revision = 1; string platform = 2; string node_id = 3; string node_name = 4;
+  string image_repository = 5; string default_domain = 6; ExecutionResources resource_default = 7;
+  ExecutionResources resource_limits = 8; bool auto_recovery_enabled = 9; bool ready = 10; string reason = 11;
+}
+message ListNodesRequest { int32 limit = 1; string cursor = 2; }
+message ListNodesResponse { repeated ExecutionNode nodes = 1; string next_cursor = 2; }
+message GetNodeRequest { string node_id = 1; }
+message GetNodeResponse { ExecutionNode node = 1; }
+message CreateNodeRequest { string name = 1; string worker_id = 2; int32 capacity = 3; }
+message CreateNodeResponse { ExecutionNode node = 1; }
+message UpdateNodeRequest { string node_id = 1; string name = 2; string status = 3; int32 capacity = 4; int64 expected_revision = 5; }
+message UpdateNodeResponse { ExecutionNode node = 1; }
+message ListRegistriesRequest { int32 limit = 1; string cursor = 2; }
+message ListRegistriesResponse { repeated RegistryConnection registries = 1; string next_cursor = 2; }
+message GetRegistryRequest { string registry_id = 1; }
+message GetRegistryResponse { RegistryConnection registry = 1; }
+message CreateRegistryRequest { string name = 1; string url = 2; string repository_prefix = 3; string username = 4; string password = 5; }
+message CreateRegistryResponse { RegistryConnection registry = 1; }
+message UpdateRegistryRequest { string registry_id = 1; string name = 2; string url = 3; string repository_prefix = 4; string status = 5; int64 expected_revision = 6; optional string username = 7; optional string password = 8; }
+message UpdateRegistryResponse { RegistryConnection registry = 1; }
+message GetExecutionPolicyRequest { int64 revision = 1; }
+message GetExecutionPolicyResponse { ExecutionPolicy policy = 1; }
+message SaveExecutionPolicyRequest {
+  string build_node_id = 1; string runtime_node_id = 2; string registry_id = 3; string repository_prefix = 4; string base_domain = 5;
+  ExecutionResources resource_default = 6; ExecutionResources resource_limits = 7; bool auto_recovery_enabled = 8; int64 expected_revision = 9;
+}
+message SaveExecutionPolicyResponse { ExecutionPolicy policy = 1; }
+message GetWorkspaceAllocationRequest { string workspace_id = 1; }
+message GetWorkspaceAllocationResponse { WorkspaceAllocation allocation = 1; }
+message SetWorkspaceAllocationRequest { string workspace_id = 1; repeated string allowed_node_ids = 2; int32 max_applications = 3; int32 build_concurrency = 4; int64 cpu_millis = 5; int64 memory_mib = 6; int64 expected_revision = 7; }
+message SetWorkspaceAllocationResponse { WorkspaceAllocation allocation = 1; }
+message ResolveExecutionRequest { string workspace_id = 1; string application_id = 2; int64 expected_policy_revision = 3; bool runtime = 4; }
+message ResolveExecutionResponse { ExecutionSummary summary = 1; }
+message NodeQualification {
+  string id = 1; string node_id = 2; string worker_id = 3; string cluster_node_uid = 4; string os = 5; string arch = 6;
+  bool build_ready = 7; bool runtime_ready = 8; bool ingress_ready = 9; bool metrics_ready = 10;
+  string qualification_id = 11; string status = 12; string created_by = 13; string created_at = 14; string revoked_at = 15;
+}
+message RegisterNodeQualificationRequest {
+  string node_id = 1; string worker_id = 2; string cluster_node_uid = 3; string os = 4; string arch = 5;
+  bool build_ready = 6; bool runtime_ready = 7; bool ingress_ready = 8; bool metrics_ready = 9;
+  string qualification_id = 10; map<string, string> evidence = 11;
+}
+message RegisterNodeQualificationResponse { NodeQualification qualification = 1; }
+// id 为登记记录主键，不是worker上报的 qualification_id。
+message RevokeNodeQualificationRequest { string id = 1; }
+message RevokeNodeQualificationResponse { NodeQualification qualification = 1; }
+message ListNodeQualificationsRequest { int32 limit = 1; string cursor = 2; }
+message ListNodeQualificationsResponse { repeated NodeQualification qualifications = 1; string next_cursor = 2; }
+message DomainTLSSecret { string domain = 1; string secret_name = 2; }
+// 域必须已由发布声明占用；secret_name 合法 DNS1123 子域，空串解除绑定。
+message SetDomainTLSSecretRequest { string domain = 1; string secret_name = 2; }
+message SetDomainTLSSecretResponse { DomainTLSSecret binding = 1; }
+message GetDomainTLSSecretRequest { string domain = 1; }
+message GetDomainTLSSecretResponse { DomainTLSSecret binding = 1; }
+
+message VerifyRegistryRequest { string registry_id = 1; int64 expected_revision = 2; string read_reference = 3; }
+message VerifyRegistryResponse {
+  RegistryConnection registry = 1; bool ok = 2; string checked_at = 3; string message = 4;
+  bool network_reachable = 5; bool authentication_accepted = 6; bool read_verified = 7;
+}

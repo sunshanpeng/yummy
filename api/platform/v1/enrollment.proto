@@ -1,0 +1,17 @@
+syntax = "proto3";
+package platform.v1;
+option go_package = "github.com/sunshanpeng/yummy/gen/go/platform/v1;platformv1";
+service EnrollmentService {
+  rpc CreateNodeRegistration(CreateNodeRegistrationRequest) returns (CreateNodeRegistrationResponse);
+  rpc RevokeWorkerCertificate(RevokeWorkerCertificateRequest) returns (RevokeWorkerCertificateResponse);
+  rpc DisableExecutionNode(DisableExecutionNodeRequest) returns (DisableExecutionNodeResponse);
+  rpc EnableExecutionNode(EnableExecutionNodeRequest) returns (EnableExecutionNodeResponse);
+}
+message CreateNodeRegistrationRequest { string node_id = 1; }
+message CreateNodeRegistrationResponse { string id = 1; string node_id = 2; string token = 3; string expires_at = 4; }
+message RevokeWorkerCertificateRequest { string serial = 1; }
+message RevokeWorkerCertificateResponse {}
+message DisableExecutionNodeRequest { string node_id = 1; }
+message DisableExecutionNodeResponse {}
+message EnableExecutionNodeRequest { string node_id = 1; }
+message EnableExecutionNodeResponse {}

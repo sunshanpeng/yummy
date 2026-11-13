@@ -1,0 +1,75 @@
+syntax = "proto3";
+package platform.v1;
+option go_package = "github.com/sunshanpeng/yummy/gen/go/platform/v1;platformv1";
+
+service WorkspaceService {
+  rpc ListWorkspaces(ListWorkspacesRequest) returns (ListWorkspacesResponse);
+  rpc GetWorkspace(GetWorkspaceRequest) returns (GetWorkspaceResponse);
+  rpc CreateWorkspace(CreateWorkspaceRequest) returns (CreateWorkspaceResponse);
+  rpc UpdateWorkspace(UpdateWorkspaceRequest) returns (UpdateWorkspaceResponse);
+  rpc ArchiveWorkspace(ArchiveWorkspaceRequest) returns (ArchiveWorkspaceResponse);
+  rpc ListWorkspaceMembers(ListWorkspaceMembersRequest) returns (ListWorkspaceMembersResponse);
+  rpc ChangeWorkspaceMemberRole(ChangeWorkspaceMemberRoleRequest) returns (ChangeWorkspaceMemberRoleResponse);
+  rpc RemoveWorkspaceMember(RemoveWorkspaceMemberRequest) returns (RemoveWorkspaceMemberResponse);
+}
+service ApplicationService {
+  rpc ListApplications(ListApplicationsRequest) returns (ListApplicationsResponse);
+  rpc GetApplication(GetApplicationRequest) returns (GetApplicationResponse);
+  rpc CreateApplication(CreateApplicationRequest) returns (CreateApplicationResponse);
+  rpc UpdateApplication(UpdateApplicationRequest) returns (UpdateApplicationResponse);
+  rpc ArchiveApplication(ArchiveApplicationRequest) returns (ArchiveApplicationResponse);
+  rpc ListApplicationMembers(ListApplicationMembersRequest) returns (ListApplicationMembersResponse);
+  rpc SetApplicationMember(SetApplicationMemberRequest) returns (SetApplicationMemberResponse);
+  rpc RemoveApplicationMember(RemoveApplicationMemberRequest) returns (RemoveApplicationMemberResponse);
+}
+message Workspace {
+  string id = 1; string name = 2; string slug = 3; string description = 4;
+  string status = 5; int64 revision = 6; string role = 7; repeated string capabilities = 8;
+  string created_at = 9; string updated_at = 10;
+}
+message Application {
+  string id = 1; string workspace_id = 2; string name = 3; string description = 4;
+  string status = 5; int64 revision = 6; repeated string capabilities = 7;
+  string created_at = 8; string updated_at = 9;
+}
+message ApplicationGrant { string application_id = 1; string application_name = 2; string role = 3; }
+message WorkspaceMember {
+  string user_id = 1; string username = 2; string user_status = 3; string role = 4;
+  repeated ApplicationGrant applications = 5; bool inherits_all_applications = 6; bool applications_truncated = 7;
+}
+message ApplicationMember {
+  string user_id = 1; string username = 2; string user_status = 3; string role = 4; bool inherited = 5;
+}
+message ListWorkspacesRequest { int32 limit = 1; string cursor = 2; }
+message ListWorkspacesResponse { repeated Workspace workspaces = 1; string next_cursor = 2; }
+message GetWorkspaceRequest { string workspace_id = 1; }
+message GetWorkspaceResponse { Workspace workspace = 1; }
+message CreateWorkspaceRequest { string name = 1; string slug = 2; string description = 3; }
+message CreateWorkspaceResponse { Workspace workspace = 1; }
+message UpdateWorkspaceRequest { string workspace_id = 1; string name = 2; string slug = 3; string description = 4; int64 expected_revision = 5; }
+message UpdateWorkspaceResponse { Workspace workspace = 1; }
+message ArchiveWorkspaceRequest { string workspace_id = 1; int64 expected_revision = 2; }
+message ArchiveWorkspaceResponse {}
+message ListWorkspaceMembersRequest { string workspace_id = 1; int32 limit = 2; string cursor = 3; }
+message ListWorkspaceMembersResponse { repeated WorkspaceMember members = 1; string next_cursor = 2; }
+message ChangeWorkspaceMemberRoleRequest { string workspace_id = 1; string user_id = 2; string role = 3; }
+message ChangeWorkspaceMemberRoleResponse {}
+message RemoveWorkspaceMemberRequest { string workspace_id = 1; string user_id = 2; }
+message RemoveWorkspaceMemberResponse {}
+message ListApplicationsRequest { string workspace_id = 1; int32 limit = 2; string cursor = 3; }
+message ListApplicationsResponse { repeated Application applications = 1; string next_cursor = 2; }
+message GetApplicationRequest { string workspace_id = 1; string application_id = 2; }
+message GetApplicationResponse { Application application = 1; }
+// 创建只接收名称和幂等键；工作空间是上下文身份，不接收节点、镜像地址或平台覆盖。
+message CreateApplicationRequest { string workspace_id = 1; string name = 2; string idempotency_key = 3; }
+message CreateApplicationResponse { Application application = 1; string configuration_path = 2; }
+message UpdateApplicationRequest { string workspace_id = 1; string application_id = 2; string name = 3; string description = 4; int64 expected_revision = 5; }
+message UpdateApplicationResponse { Application application = 1; }
+message ArchiveApplicationRequest { string workspace_id = 1; string application_id = 2; int64 expected_revision = 3; }
+message ArchiveApplicationResponse {}
+message ListApplicationMembersRequest { string workspace_id = 1; string application_id = 2; int32 limit = 3; string cursor = 4; }
+message ListApplicationMembersResponse { repeated ApplicationMember members = 1; string next_cursor = 2; }
+message SetApplicationMemberRequest { string workspace_id = 1; string application_id = 2; string user_id = 3; string role = 4; }
+message SetApplicationMemberResponse {}
+message RemoveApplicationMemberRequest { string workspace_id = 1; string application_id = 2; string user_id = 3; }
+message RemoveApplicationMemberResponse {}

@@ -1,0 +1,24 @@
+syntax = "proto3";
+package platform.v1;
+option go_package = "github.com/sunshanpeng/yummy/gen/go/platform/v1;platformv1";
+service SourceService {
+  rpc CreateSourceUpload(CreateSourceUploadRequest) returns (CreateSourceUploadResponse);
+  rpc CompleteSourceUpload(CompleteSourceUploadRequest) returns (CompleteSourceUploadResponse);
+  rpc GetSourceSnapshot(GetSourceSnapshotRequest) returns (GetSourceSnapshotResponse);
+}
+message SourceUpload {
+  string id = 1; string workspace_id = 2; string application_id = 3; string state = 4;
+  int64 expected_size = 5; string expected_sha256 = 6; string dockerfile = 7; string expires_at = 8; string snapshot_id = 9;
+}
+message SourceEntry { string path = 1; int64 size = 2; uint32 mode = 3; bool directory = 4; }
+message SourceSnapshot {
+  string id = 1; string workspace_id = 2; string application_id = 3; string state = 4; string sha256 = 5;
+  int64 compressed_bytes = 6; int64 expanded_bytes = 7; int64 file_bytes = 8; int64 entry_count = 9;
+  string dockerfile = 10; repeated SourceEntry entries = 11; string created_at = 12; string expires_at = 13;
+}
+message CreateSourceUploadRequest { string workspace_id = 1; string application_id = 2; int64 size = 3; string sha256 = 4; string dockerfile = 5; }
+message CreateSourceUploadResponse { SourceUpload upload = 1; string transfer_path = 2; }
+message CompleteSourceUploadRequest { string workspace_id = 1; string application_id = 2; string upload_id = 3; }
+message CompleteSourceUploadResponse { SourceSnapshot snapshot = 1; }
+message GetSourceSnapshotRequest { string workspace_id = 1; string application_id = 2; string snapshot_id = 3; }
+message GetSourceSnapshotResponse { SourceSnapshot snapshot = 1; string download_path = 2; }

@@ -1,0 +1,24 @@
+syntax = "proto3";
+package platform.v1;
+option go_package = "github.com/sunshanpeng/yummy/gen/go/platform/v1;platformv1";
+// OAuth 客户端管理属实例级平台管理，仅实例管理员可操作；公共客户端本无 secret，
+// 视图不暴露任何凭证字段。
+service OAuthAdminService {
+  // 登记预注册公共客户端；client_id 重复返回冲突，不做静默覆盖。
+  rpc RegisterOAuthClient(RegisterOAuthClientRequest) returns (RegisterOAuthClientResponse);
+  // 按 client_id ASC 键集分页列出全部客户端，含停用状态。
+  rpc ListOAuthClients(ListOAuthClientsRequest) returns (ListOAuthClientsResponse);
+  // 停用即撤销该客户端全部既有授权；重新启用不恢复已撤销授权。
+  rpc SetOAuthClientActive(SetOAuthClientActiveRequest) returns (SetOAuthClientActiveResponse);
+}
+message OAuthClient {
+  string client_id = 1; string name = 2; string source = 3;
+  repeated string redirect_uris = 4; repeated string scopes = 5; repeated string resources = 6;
+  bool active = 7; string created_at = 8;
+}
+message RegisterOAuthClientRequest { string client_id = 1; string name = 2; repeated string redirect_uris = 3; repeated string scopes = 4; repeated string resources = 5; }
+message RegisterOAuthClientResponse { OAuthClient client = 1; }
+message ListOAuthClientsRequest { int32 limit = 1; string cursor = 2; }
+message ListOAuthClientsResponse { repeated OAuthClient clients = 1; string next_cursor = 2; }
+message SetOAuthClientActiveRequest { string client_id = 1; bool active = 2; }
+message SetOAuthClientActiveResponse { OAuthClient client = 1; }

@@ -1,0 +1,62 @@
+syntax = "proto3";
+package platform.v1;
+option go_package = "github.com/sunshanpeng/yummy/gen/go/platform/v1;platformv1";
+service DeploymentService {
+  rpc CreateDeployment(CreateDeploymentRequest) returns (CreateDeploymentResponse);
+  rpc GetDeployment(GetDeploymentRequest) returns (GetDeploymentResponse);
+  rpc ListDeployments(ListDeploymentsRequest) returns (ListDeploymentsResponse);
+  rpc GetRuntimeStatus(GetRuntimeStatusRequest) returns (GetRuntimeStatusResponse);
+  rpc RollbackDeployment(RollbackDeploymentRequest) returns (RollbackDeploymentResponse);
+  rpc ChangeRuntime(ChangeRuntimeRequest) returns (ChangeRuntimeResponse);
+  rpc GetRuntimeLogs(GetRuntimeLogsRequest) returns (GetRuntimeLogsResponse);
+  rpc GetRuntimeMetrics(GetRuntimeMetricsRequest) returns (GetRuntimeMetricsResponse);
+}
+message ExpectedRuntime { int64 generation = 1; string serving_release_id = 2; int64 config_revision = 3; }
+message Placement { string node_id = 1; int64 policy_revision = 2; string runtime_type = 3; string default_domain = 4; string created_at = 5; }
+message ReleaseArtifact { string id = 1; string registry_id = 2; int64 credential_version = 3; string repository = 4; string digest = 5; string platform = 6; }
+message Release {
+  string id = 1; string workspace_id = 2; string application_id = 3; ReleaseArtifact artifact = 4;
+  int64 runtime_config_revision = 5; Placement placement = 6; repeated string domains = 7;
+  string previous_serving_id = 8; string rollback_of = 9; string source = 10; string actor_id = 11; string created_at = 12;
+}
+message DeploymentOperation {
+  string id = 1; string workspace_id = 2; string application_id = 3; string release_id = 4; int64 generation = 5;
+  string action = 6; string state = 7; bool active = 8; string actor_id = 9; string error_code = 10;
+  string recovery_of = 11; string created_at = 12; string finished_at = 13;
+}
+message Deployment { Release release = 1; DeploymentOperation operation = 2; }
+message RuntimeStatus {
+  string workspace_id = 1; string application_id = 2; int64 generation = 3; string desired_state = 4;
+  string desired_release_id = 5; string serving_release_id = 6; int64 serving_generation = 7;
+  int64 observed_generation = 8; string observed_state = 9; string active_operation_id = 10; string last_observed_at = 11;
+}
+message CreateDeploymentRequest {
+  string workspace_id = 1; string application_id = 2; string artifact_id = 3; int64 runtime_config_revision = 4;
+  int64 expected_policy_revision = 5; ExpectedRuntime expected = 6; string idempotency_key = 7;
+}
+message CreateDeploymentResponse { Deployment deployment = 1; }
+message GetDeploymentRequest { string workspace_id = 1; string application_id = 2; string operation_id = 3; }
+message GetDeploymentResponse { Deployment deployment = 1; }
+message ListDeploymentsRequest { string workspace_id = 1; string application_id = 2; int32 limit = 3; string cursor = 4; }
+message ListDeploymentsResponse { repeated Deployment deployments = 1; string next_cursor = 2; }
+message GetRuntimeStatusRequest { string workspace_id = 1; string application_id = 2; }
+message GetRuntimeStatusResponse { RuntimeStatus status = 1; }
+message RollbackDeploymentRequest { string workspace_id = 1; string application_id = 2; string target_release_id = 3; int64 expected_policy_revision = 4; ExpectedRuntime expected = 5; string idempotency_key = 6; }
+message RollbackDeploymentResponse { Deployment deployment = 1; }
+message ChangeRuntimeRequest { string workspace_id = 1; string application_id = 2; string action = 3; ExpectedRuntime expected = 4; string idempotency_key = 5; }
+message ChangeRuntimeResponse { Deployment deployment = 1; }
+// 运行日志块：内容是 worker 上报的字节分块，时间为控制面数据库落库时间。
+message RuntimeLogChunk {
+  string id = 1; string workspace_id = 2; string application_id = 3; string pod_uid = 4;
+  string container = 5; int32 restart_count = 6; int64 seq = 7; bytes content = 8; bool truncated = 9; string created_at = 10;
+}
+message GetRuntimeLogsRequest { string workspace_id = 1; string application_id = 2; int32 limit = 3; string cursor = 4; string pod_uid = 5; string container = 6; }
+message GetRuntimeLogsResponse { repeated RuntimeLogChunk chunks = 1; string next_cursor = 2; }
+// 基础监控采样点；since/until 为可选 RFC3339 时间，缺省覆盖全部保留窗口（24 小时）。
+message RuntimeMetricSample {
+  string id = 1; string workspace_id = 2; string application_id = 3; string release_id = 4;
+  int64 generation = 5; string pod_uid = 6; int64 cpu_nano_cores = 7; int64 cpu_window_millis = 8;
+  int64 memory_working_set_bytes = 9; string collected_at = 10;
+}
+message GetRuntimeMetricsRequest { string workspace_id = 1; string application_id = 2; string since = 3; string until = 4; }
+message GetRuntimeMetricsResponse { repeated RuntimeMetricSample samples = 1; }

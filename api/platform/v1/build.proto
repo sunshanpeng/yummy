@@ -1,0 +1,52 @@
+syntax = "proto3";
+package platform.v1;
+option go_package = "github.com/sunshanpeng/yummy/gen/go/platform/v1;platformv1";
+import "platform/v1/inventory.proto";
+service BuildService {
+  rpc GetBuildConfig(GetBuildConfigRequest) returns (GetBuildConfigResponse);
+  rpc SaveBuildConfig(SaveBuildConfigRequest) returns (SaveBuildConfigResponse);
+  rpc PreviewBuild(PreviewBuildRequest) returns (PreviewBuildResponse);
+  rpc CreateBuild(CreateBuildRequest) returns (CreateBuildResponse);
+  rpc GetBuild(GetBuildRequest) returns (GetBuildResponse);
+  rpc ListBuilds(ListBuildsRequest) returns (ListBuildsResponse);
+  rpc ReadBuildLogs(ReadBuildLogsRequest) returns (ReadBuildLogsResponse);
+  rpc CancelBuild(CancelBuildRequest) returns (CancelBuildResponse);
+  rpc RetryBuild(RetryBuildRequest) returns (RetryBuildResponse);
+}
+message BuildSecretRef { string secret_id = 1; int64 version = 2; string name = 3; }
+message BuildConfig { string dockerfile = 1; string context = 2; string target = 3; map<string,string> args = 4; repeated BuildSecretRef secret_refs = 5; }
+message BuildOverrides { optional string dockerfile = 1; optional string context = 2; optional string target = 3; map<string,string> args = 4; repeated BuildSecretRef secret_refs = 5; }
+message Artifact { string id = 1; string registry_id = 2; int64 credential_version = 3; string repository = 4; string tag = 5; string digest = 6; string platform = 7; string state = 8; string verified_at = 9; }
+message Build {
+  string id = 1; string workspace_id = 2; string application_id = 3; string actor_id = 4;
+  string source_snapshot_id = 5; int64 config_revision = 6; BuildConfig config = 7; int64 policy_revision = 8;
+  string node_id = 9; string repository = 10; string platform = 11; string state = 12; string stage = 13;
+  string desired_state = 14; string error_code = 15; string queue_reason = 16; int64 version = 17;
+  bool auto_deploy = 18; optional int64 runtime_config_revision = 19; string retry_of = 20;
+  bool logs_complete = 21; bool logs_truncated = 22; string created_at = 23; string finished_at = 24; Artifact artifact = 25;
+}
+message BuildPreview { string source_snapshot_id = 1; string source_sha256 = 2; int64 config_revision = 3; BuildConfig config = 4; ExecutionSummary execution = 5; bool auto_deploy = 6; optional int64 runtime_config_revision = 7; }
+message BuildInput {
+  string source_snapshot_id = 1; int64 config_revision = 2; int64 expected_policy_revision = 3;
+  BuildOverrides overrides = 4; string idempotency_key = 5; bool auto_deploy = 6; int64 runtime_config_revision = 7;
+  string expected_serving_release = 8;
+}
+message GetBuildConfigRequest { string workspace_id = 1; string application_id = 2; }
+message GetBuildConfigResponse { BuildConfig config = 1; int64 revision = 2; }
+message SaveBuildConfigRequest { string workspace_id = 1; string application_id = 2; BuildConfig config = 3; int64 expected_revision = 4; }
+message SaveBuildConfigResponse { BuildConfig config = 1; int64 revision = 2; }
+message PreviewBuildRequest { string workspace_id = 1; string application_id = 2; BuildInput input = 3; }
+message PreviewBuildResponse { BuildPreview preview = 1; }
+message CreateBuildRequest { string workspace_id = 1; string application_id = 2; BuildInput input = 3; }
+message CreateBuildResponse { Build build = 1; }
+message GetBuildRequest { string workspace_id = 1; string application_id = 2; string build_id = 3; }
+message GetBuildResponse { Build build = 1; }
+message ListBuildsRequest { string workspace_id = 1; string application_id = 2; int32 limit = 3; string cursor = 4; }
+message ListBuildsResponse { repeated Build builds = 1; string next_cursor = 2; }
+message ReadBuildLogsRequest { string workspace_id = 1; string application_id = 2; string build_id = 3; int64 after_seq = 4; int32 limit = 5; }
+message BuildLogChunk { int64 seq = 1; string content = 2; bool truncated = 3; string created_at = 4; }
+message ReadBuildLogsResponse { repeated BuildLogChunk chunks = 1; int64 next_seq = 2; bool complete = 3; bool truncated = 4; }
+message CancelBuildRequest { string workspace_id = 1; string application_id = 2; string build_id = 3; }
+message CancelBuildResponse { Build build = 1; }
+message RetryBuildRequest { string workspace_id = 1; string application_id = 2; string build_id = 3; BuildInput input = 4; }
+message RetryBuildResponse { Build build = 1; }

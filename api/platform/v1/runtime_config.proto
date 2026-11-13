@@ -1,0 +1,31 @@
+syntax = "proto3";
+package platform.v1;
+option go_package = "github.com/sunshanpeng/yummy/gen/go/platform/v1;platformv1";
+
+service RuntimeConfigService {
+  rpc GetRuntimeConfig(GetRuntimeConfigRequest) returns (GetRuntimeConfigResponse);
+  rpc SaveRuntimeConfig(SaveRuntimeConfigRequest) returns (SaveRuntimeConfigResponse);
+}
+message RuntimeResources { int64 cpu_request_milli = 1; int64 cpu_limit_milli = 2; int64 memory_request_mib = 3; int64 memory_limit_mib = 4; }
+message RuntimeProbe { string path = 1; int32 initial_delay_seconds = 2; int32 period_seconds = 3; int32 timeout_seconds = 4; int32 failure_threshold = 5; }
+message RuntimeVariable { string name = 1; string value = 2; bool sensitive = 3; bool configured = 4; }
+message RuntimeVariableInput { string name = 1; string value = 2; bool sensitive = 3; bool keep_existing = 4; }
+message RuntimeFile { string path = 1; string content = 2; bool sensitive = 3; bool configured = 4; }
+message RuntimeFileInput { string path = 1; string content = 2; bool sensitive = 3; bool keep_existing = 4; }
+message RuntimeVolume { string name = 1; string mount_path = 2; int64 size_gib = 3; }
+message RuntimeConfig {
+  string workspace_id = 1; string application_id = 2; int64 revision = 3; bool confirmed = 4;
+  string type = 5; int32 port = 6; RuntimeProbe probe = 7; repeated string command = 8; repeated string args = 9;
+  repeated RuntimeVariable variables = 10; repeated RuntimeFile files = 11; repeated RuntimeVolume volumes = 12;
+  repeated string domains = 13; RuntimeResources resources = 14; string created_at = 15;
+}
+message GetRuntimeConfigRequest { string workspace_id = 1; string application_id = 2; int64 revision = 3; }
+message GetRuntimeConfigResponse { RuntimeConfig config = 1; }
+// 保存配置不会部署；revision=0表示尚未保存的系统建议。敏感旧值用keep_existing明确保留，不回传掩码。
+message SaveRuntimeConfigRequest {
+  string workspace_id = 1; string application_id = 2; int64 expected_revision = 3; bool confirmed = 4;
+  string type = 5; int32 port = 6; RuntimeProbe probe = 7; repeated string command = 8; repeated string args = 9;
+  repeated RuntimeVariableInput variables = 10; repeated RuntimeFileInput files = 11; repeated RuntimeVolume volumes = 12;
+  repeated string domains = 13; RuntimeResources resources = 14; string idempotency_key = 15;
+}
+message SaveRuntimeConfigResponse { RuntimeConfig config = 1; }

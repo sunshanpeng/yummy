@@ -1,0 +1,82 @@
+syntax = "proto3";
+
+package platform.v1;
+
+option go_package = "github.com/sunshanpeng/yummy/gen/go/platform/v1;platformv1";
+
+// 身份接口只返回公开资料，密码、散列和持久化模型不进入响应。
+service IdentityService {
+  rpc GetSession(GetSessionRequest) returns (GetSessionResponse);
+  rpc Login(LoginRequest) returns (LoginResponse);
+  rpc Logout(LogoutRequest) returns (LogoutResponse);
+  rpc ChangePassword(ChangePasswordRequest) returns (ChangePasswordResponse);
+  rpc AcceptInvitation(AcceptInvitationRequest) returns (AcceptInvitationResponse);
+  rpc CompletePasswordReset(CompletePasswordResetRequest) returns (CompletePasswordResetResponse);
+  rpc ListAccessTokens(ListAccessTokensRequest) returns (ListAccessTokensResponse);
+  rpc CreateAccessToken(CreateAccessTokenRequest) returns (CreateAccessTokenResponse);
+  rpc RevokeAccessToken(RevokeAccessTokenRequest) returns (RevokeAccessTokenResponse);
+  rpc ListUsers(ListUsersRequest) returns (ListUsersResponse);
+  rpc SetUserStatus(SetUserStatusRequest) returns (SetUserStatusResponse);
+  rpc CreatePasswordReset(CreatePasswordResetRequest) returns (CreatePasswordResetResponse);
+  rpc CreateInvitation(CreateInvitationRequest) returns (CreateInvitationResponse);
+  rpc ListInvitations(ListInvitationsRequest) returns (ListInvitationsResponse);
+  rpc RevokeInvitation(RevokeInvitationRequest) returns (RevokeInvitationResponse);
+}
+
+message User {
+  string id = 1;
+  string username = 2;
+  string status = 3;
+  bool instance_admin = 4;
+  int64 auth_version = 5;
+}
+message AccessToken {
+  string id = 1;
+  string name = 2;
+  repeated string scopes = 3;
+  repeated string application_ids = 4;
+  string expires_at = 5;
+  string created_at = 6;
+  string revoked_at = 7;
+  string last_used_at = 8;
+}
+message Invitation {
+  string id = 1;
+  string workspace_id = 2;
+  string username = 3;
+  string role = 4;
+  string expires_at = 5;
+  string consumed_at = 6;
+  string revoked_at = 7;
+}
+message GetSessionRequest {}
+message GetSessionResponse { User user = 1; string csrf_token = 2; }
+message LoginRequest { string username = 1; string password = 2; }
+message LoginResponse { User user = 1; }
+message LogoutRequest {}
+message LogoutResponse {}
+message ChangePasswordRequest { string old_password = 1; string new_password = 2; }
+message ChangePasswordResponse {}
+message AcceptInvitationRequest { string token = 1; string password = 2; }
+message AcceptInvitationResponse { User user = 1; }
+message CompletePasswordResetRequest { string token = 1; string new_password = 2; }
+message CompletePasswordResetResponse {}
+message ListAccessTokensRequest {}
+message ListAccessTokensResponse { repeated AccessToken tokens = 1; }
+message CreateAccessTokenRequest { string name = 1; repeated string scopes = 2; repeated string application_ids = 3; string expires_at = 4; }
+// 明文仅在创建成功响应出现一次，不记录在数据库、日志或后续查询中。
+message CreateAccessTokenResponse { AccessToken token = 1; string plaintext = 2; }
+message RevokeAccessTokenRequest { string token_id = 1; }
+message RevokeAccessTokenResponse {}
+message ListUsersRequest {}
+message ListUsersResponse { repeated User users = 1; }
+message SetUserStatusRequest { string user_id = 1; string status = 2; }
+message SetUserStatusResponse {}
+message CreatePasswordResetRequest { string user_id = 1; }
+message CreatePasswordResetResponse { string token = 1; }
+message CreateInvitationRequest { string workspace_id = 1; string username = 2; string role = 3; }
+message CreateInvitationResponse { Invitation invitation = 1; string token = 2; }
+message ListInvitationsRequest { string workspace_id = 1; }
+message ListInvitationsResponse { repeated Invitation invitations = 1; }
+message RevokeInvitationRequest { string workspace_id = 1; string invitation_id = 2; }
+message RevokeInvitationResponse {}

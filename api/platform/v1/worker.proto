@@ -1,0 +1,91 @@
+syntax = "proto3";
+package platform.v1;
+option go_package = "github.com/sunshanpeng/yummy/gen/go/platform/v1;platformv1";
+
+import "platform/v1/runtime_config.proto";
+
+// 只挂载在要求已验证客户端证书的独立HTTP/2入口；不经过浏览器会话认证。
+service WorkerGateway {
+  rpc Connect(stream WorkerEnvelope) returns (stream ControlEnvelope);
+  rpc CheckGeneration(WorkerGenerationRequest) returns (WorkerGenerationResponse);
+}
+message WorkerEnvelope {
+  oneof payload {
+    WorkerHello hello = 1;
+    WorkerHeartbeat heartbeat = 2;
+    WorkerQualification qualification = 3;
+    WorkerBuildEvent build_event = 4;
+    WorkerBuildLog build_log = 5;
+    WorkerDeploymentObservation deployment_observation = 6;
+    // 应用运行日志块与 CPU/内存采样：同一信封通道，复用现有持久化与重传机制。
+    WorkerRuntimeLog runtime_log = 7;
+    WorkerRuntimeMetric runtime_metric = 8;
+  }
+}
+message ControlEnvelope {
+  oneof payload {
+    WorkerWelcome welcome = 1;
+    WorkerBuildCommand build_command = 2;
+    WorkerDeploymentCommand deployment_command = 3;
+    WorkerAck ack = 4;
+    WorkerRejection rejection = 5;
+  }
+}
+message WorkerHello { string worker_id = 1; string node_id = 2; string version = 3; }
+message WorkerWelcome { string worker_id = 1; string node_id = 2; string server_id = 3; int64 connection_epoch = 4; string qualification_nonce = 5; }
+message WorkerHeartbeat { string cluster_node_uid = 1; string os = 2; string arch = 3; }
+// 所有资格由控制面注入的验证器核对管理员登记的qualification_id；自报布尔值不是资格。
+message WorkerQualification {
+  string qualification_id = 1; string nonce = 2; string cluster_node_uid = 3;
+  string os = 4; string arch = 5; bool build = 6; bool runtime = 7; bool ingress = 8; bool metrics = 9;
+  string probe_artifact_digest = 10; string registry_id = 11; int64 credential_version = 12;
+}
+message WorkerRegistryCredential { string origin = 1; string username = 2; bytes password = 3; int64 version = 4; }
+message WorkerBuildSecret { string name = 1; bytes value = 2; }
+message WorkerSourceGrant { string url = 1; string token = 2; string sha256 = 3; int64 expires_unix = 4; }
+// 凭据只发给冻结node的认证连接；禁止作为公共DTO、日志或审计正文。
+message WorkerBuildCommand {
+  string build_id = 1; string attempt_id = 2; string workspace_id = 3; string application_id = 4;
+  string node_id = 5; string worker_id = 6; string action = 7; string stable_job_name = 8; string job_uid = 9;
+  string source_snapshot_id = 10; string source_sha256 = 11; string dockerfile = 12; string context_path = 13;
+  string target = 14; map<string,string> build_args = 15; string repository = 16; string tag = 17; string platform = 18;
+  int64 deadline_unix = 19; WorkerSourceGrant source_grant = 20; WorkerRegistryCredential registry = 21;
+  repeated WorkerBuildSecret secrets = 22;
+}
+message WorkerDeploymentCommand {
+  string workspace_id = 1; string application_id = 2; string operation_id = 3; string release_id = 4;
+  string action = 5; int64 generation = 6; string node_id = 7; string worker_id = 8; string cluster_node_uid = 9;
+  string repository = 10; string digest = 11; string platform = 12; string restart_marker = 13;
+  RuntimeConfig config = 14; map<string,string> materialized_variables = 15; map<string,string> materialized_files = 16;
+  WorkerRegistryCredential registry = 17;
+  // 入口 TLS 由控制面按域名绑定的当下值汇聚后下发；未一致绑定全部域名时不携带（https=false），
+  // worker 不得自行猜测或伪造证书证据。
+  string tls_secret_name = 18; bool https = 19;
+}
+message WorkerBuildEvent { string attempt_id = 1; int64 seq = 2; string kind = 3; string job_uid = 4; string stage = 5; string digest = 6; string error_code = 7; bool logs_complete = 8; }
+message WorkerBuildLog { string attempt_id = 1; int64 seq = 2; bytes content = 3; bool truncated = 4; }
+message WorkerDeploymentObservation {
+  string workspace_id = 1; string application_id = 2; string operation_id = 3; string release_id = 4;
+  int64 generation = 5; int64 seq = 6; string cluster_node_uid = 7; string deployment_uid = 8; string pod_uid = 9;
+  string digest = 10; bool correct_generation = 11; int32 ready_replicas = 12; int32 replicas = 13;
+  bool old_pods_gone = 14; bool service_endpoints = 15; string kind = 16; string error_code = 17; int64 collected_unix_milli = 18;
+}
+// 单个容器实例（pod+container+restart）内连续的运行日志块；seq 在该流内连续。
+// 时间戳由控制面数据库时钟落库，worker 不自报日志时间。
+message WorkerRuntimeLog {
+  string workspace_id = 1; string application_id = 2; string operation_id = 3; string release_id = 4;
+  int64 generation = 5; string pod_uid = 6; string container = 7; int32 restart_count = 8;
+  int64 seq = 9; bytes content = 10; bool truncated = 11;
+}
+// 一次 CPU/内存采样；cpu_nano_cores 为自上次采样窗口的 CPU 纳秒消耗。
+// 幂等键是 (pod_uid, collected_unix_milli)，ack.Seq 复用 collected_unix_milli。
+message WorkerRuntimeMetric {
+  string workspace_id = 1; string application_id = 2; string release_id = 3;
+  int64 generation = 4; string pod_uid = 5;
+  int64 cpu_nano_cores = 6; int64 cpu_window_millis = 7; int64 memory_working_set_bytes = 8;
+  int64 collected_unix_milli = 9;
+}
+message WorkerAck { string channel = 1; string execution_id = 2; int64 seq = 3; bool duplicate = 4; string state = 5; }
+message WorkerRejection { string channel = 1; string execution_id = 2; int64 seq = 3; string code = 4; }
+message WorkerGenerationRequest { string workspace_id = 1; string application_id = 2; string operation_id = 3; int64 generation = 4; string release_id = 5; string cluster_node_uid = 6; }
+message WorkerGenerationResponse { bool current = 1; }
