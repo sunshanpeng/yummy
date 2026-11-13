@@ -1,0 +1,122 @@
+# 仅示例，不由程序自动安装。替换命名空间/worker节点名；一组执行范围使用独立SA。
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: yummy-build-example
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: yummy-runtime-example
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: yummy-worker
+  namespace: yummy-runtime-example
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: yummy-build-worker
+  namespace: yummy-build-example
+rules:
+  - apiGroups: [batch]
+    resources: [jobs]
+    verbs: [get, list, create, delete]
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list, delete]
+  - apiGroups: [""]
+    resources: [pods/log]
+    verbs: [get]
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [get, create, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: yummy-build-worker
+  namespace: yummy-build-example
+subjects:
+  - kind: ServiceAccount
+    name: yummy-worker
+    namespace: yummy-runtime-example
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: yummy-build-worker
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: yummy-runtime-worker
+  namespace: yummy-runtime-example
+rules:
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: [get, create, update]
+  - apiGroups: [apps]
+    resources: [replicasets]
+    verbs: [get, list]
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list]
+  - apiGroups: [""]
+    resources: [pods/log]
+    verbs: [get]
+  - apiGroups: [""]
+    resources: [services]
+    verbs: [get, create, update, delete]
+  - apiGroups: [""]
+    resources: [configmaps, secrets, persistentvolumeclaims]
+    verbs: [get, create]
+  - apiGroups: [networking.k8s.io]
+    resources: [ingresses]
+    verbs: [get, create, update, delete]
+  - apiGroups: [discovery.k8s.io]
+    resources: [endpointslices]
+    verbs: [list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: yummy-runtime-worker
+  namespace: yummy-runtime-example
+subjects:
+  - kind: ServiceAccount
+    name: yummy-worker
+    namespace: yummy-runtime-example
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: yummy-runtime-worker
+---
+# 节点级权限仅允许GET本节点。无nodes/proxy、exec、attach、cluster-admin。
+# Kubelet Webhook授权是否正确执行nodes/metrics+resourceNames须在专用服务器验证。
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: yummy-example-node-read
+rules:
+  - apiGroups: [""]
+    resources: [nodes, nodes/metrics]
+    resourceNames: [replace-with-exact-worker-node-name]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: yummy-example-node-read
+subjects:
+  - kind: ServiceAccount
+    name: yummy-worker
+    namespace: yummy-runtime-example
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: yummy-example-node-read

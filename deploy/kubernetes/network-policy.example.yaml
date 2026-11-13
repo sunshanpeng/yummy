@@ -1,0 +1,69 @@
+# 示例必须由安装者替换DNS/源码/仓库固定地址，按实际CNI做正反向连通验证。
+# 标准NetworkPolicy不提供FQDN白名单；本示例不能证明k3s网络隔离已通过资格检查。
+# 禁止为排障自动撤销策略、放通Kubernetes API/云元数据/控制面数据库/Redis。
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: build-default-deny
+  namespace: yummy-build-example
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: build-reviewed-egress
+  namespace: yummy-build-example
+spec:
+  podSelector:
+    matchLabels:
+      yummy.dev/managed-by: worker
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+    - to:
+        # 文档保留地址，必须替换为安装者审核过的源码/OCI HTTPS目标。
+        # Dockerfile依赖下载需要哪些额外出口由安装者配置，不默认允许整个互联网。
+        - ipBlock: {cidr: 192.0.2.10/32}
+        - ipBlock: {cidr: 192.0.2.11/32}
+      ports:
+        - {protocol: TCP, port: 443}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: runtime-managed-default-deny
+  namespace: yummy-runtime-example
+spec:
+  podSelector:
+    matchLabels:
+      yummy.dev/managed-by: worker
+  policyTypes: [Ingress, Egress]
+---
+# runtime出口、Traefik到应用端口的入口规则须按受管应用端口/已批准依赖分别添加。
+# 不包含worker（worker不使用managed-by:worker标签）；worker到API/控制面的TLS流量另审。
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: build-example-bounds
+  namespace: yummy-build-example
+spec:
+  hard:
+    requests.cpu: "4"
+    limits.cpu: "8"
+    requests.memory: 4Gi
+    limits.memory: 16Gi
+    requests.ephemeral-storage: 4Gi
+    limits.ephemeral-storage: 40Gi
+    count/jobs.batch: "4"
+    count/secrets: "12"
