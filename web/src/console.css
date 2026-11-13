@@ -1,0 +1,63 @@
+@import "tailwindcss";
+
+:root {
+  --background: oklch(0.985 0.002 90); --foreground: oklch(0.23 0.008 260);
+  --card: oklch(0.998 0.001 90); --card-foreground: var(--foreground);
+  --popover: var(--card); --popover-foreground: var(--foreground);
+  --primary: oklch(0.25 0.008 260); --primary-foreground: oklch(0.99 0.001 90);
+  --secondary: oklch(0.95 0.003 90); --secondary-foreground: var(--foreground);
+  --muted: oklch(0.96 0.003 90); --muted-foreground: oklch(0.46 0.01 260);
+  --accent: oklch(0.94 0.004 90); --accent-foreground: var(--foreground);
+  --destructive: oklch(0.48 0.19 27); --destructive-foreground: var(--primary-foreground);
+  --border: oklch(0.89 0.006 90); --input: oklch(0.81 0.008 90); --ring: oklch(0.5 0.19 260);
+  --link: oklch(0.46 0.18 260); --success: oklch(0.4 0.11 155); --success-surface: oklch(0.96 0.025 155);
+  --warning: oklch(0.45 0.1 75); --warning-surface: oklch(0.97 0.027 85); --danger-surface: oklch(0.97 0.016 27);
+  --overlay: oklch(0.18 0.005 260); --radius: 0.5rem;
+  --chart-1: oklch(0.46 0.14 260); --chart-2: oklch(0.42 0.1 155);
+}
+@theme inline {
+  --color-background: var(--background); --color-foreground: var(--foreground);
+  --color-card: var(--card); --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover); --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary); --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary); --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted); --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent); --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive); --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border); --color-input: var(--input); --color-ring: var(--ring); --color-link: var(--link);
+  --color-success: var(--success); --color-success-surface: var(--success-surface);
+  --color-warning: var(--warning); --color-warning-surface: var(--warning-surface);
+  --color-danger-surface: var(--danger-surface); --color-overlay: var(--overlay);
+}
+@layer base {
+  * { @apply border-border; }
+  body { margin: 0; min-width: 320px; @apply bg-background text-foreground; font-family: "Avenir Next", "PingFang SC", "Microsoft YaHei", sans-serif; font-size: 14px; line-height: 1.6; text-rendering: optimizeLegibility; }
+  button, a, select, input[type=checkbox] { -webkit-tap-highlight-color: transparent; }
+  button:not(:disabled), select, a { cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
+  h1, h2, h3, p { margin: 0; }
+  input, select, textarea { font: inherit; }
+  select { @apply min-h-10 max-w-full rounded-md border border-input bg-card px-3 text-sm; }
+  button { touch-action: manipulation; }
+  fieldset { min-width: 0; }
+  input[type=checkbox] { accent-color: var(--primary); }
+  input[type=file] { height: auto; min-height: 2.5rem; padding-block: 0.5rem; }
+  code { font-family: "SFMono-Regular", Consolas, monospace; overflow-wrap: anywhere; }
+}
+@layer components {
+  .page { @apply mx-auto w-full max-w-[1320px] px-5 py-8 sm:px-8 lg:px-12 lg:py-12; }
+  .page-heading { @apply mb-8 flex flex-wrap items-start justify-between gap-4; }
+  .page-title { @apply text-2xl font-semibold tracking-tight sm:text-[28px]; }
+  .subtitle { @apply mt-1.5 max-w-2xl text-sm text-muted-foreground; }
+  .section { @apply rounded-lg border bg-card p-5 sm:p-6; }
+  .section-title { @apply mb-1 text-base font-semibold; }
+  .tabs-nav { @apply mb-8 flex gap-6 overflow-x-auto border-b; }
+  .tabs-nav a { @apply shrink-0 border-b-2 border-transparent px-0.5 py-3 text-sm text-muted-foreground transition-colors hover:text-foreground; }
+  .tabs-nav a[aria-current=page] { @apply border-primary font-medium text-foreground; }
+  .text-link { @apply text-link underline-offset-4 hover:underline; }
+  .stack { @apply space-y-6; }
+  .metadata { @apply grid gap-5 sm:grid-cols-2; }
+  .metadata dt { @apply mb-1 text-xs text-muted-foreground; }
+  .metadata dd { @apply m-0 break-words text-sm; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; } }
