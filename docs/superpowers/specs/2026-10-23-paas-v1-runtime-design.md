@@ -4,15 +4,15 @@
 
 状态：待评审设计，2026-10-23。本文将第一期对外交付从“产出镜像”修订为“应用部署与日常运行的完整闭环”。配套：[产品方案](2026-10-22-agent-first-build-product-design.md)、[构建基础技术方案](2026-10-22-agent-first-build-technical-design.md)、[前端方案](2026-10-22-agent-first-build-frontend-design.md)、[OAuth 方案](2026-10-23-oauth-mcp-auth-design.md)。当前仍为方案与静态原型，未实现真实部署或监控后端。
 
-2026-10-24 的创建与资源边界修订以 [创建与配置边界复核](2026-10-24-application-configuration-boundaries-design.md) 为准。
+2026-10-24 的创建与资源边界修订以 [创建与配置边界复核](2026-10-24-application-configuration-boundaries-design.md) 为准。2026-10-26 修订集群/环境/部署与命名，见 [命名、集群与最小 CLI](2026-10-26-naming-cluster-and-minimal-cli-design.md)。
 
 ## 1. 首发成功标准
 
-非作者用户能在自有服务器接入节点和仓库，在应用中配置运行参数，通过网页或 Agent 上传本地源码与 Dockerfile，在服务器构建、部署并获得可访问的 HTTPS 地址；之后可以修改变量、查看运行日志和 CPU/内存趋势、更新版本、回滚和停止/启动应用。
+非作者用户能在自有服务器接入 k3s 集群和仓库，在应用中配置运行参数，通过网页或 Agent 上传本地源码与 Dockerfile，在服务器构建、部署并获得可访问的 HTTPS 地址；之后可以修改变量、查看运行日志和 CPU/内存趋势、更新版本、回滚和停止/启动应用。
 
-首期覆盖单容器 HTTP 服务、静态站点容器、后台任务进程；后台进程不创建域名。首期每应用一个运行实例、一个运行目标，支持基础持久卷与配置文件挂载。多副本伸缩、多节点迁移、多容器 Compose、托管数据库、完整 APM/Trace、任意 PromQL 与复杂告警后置。这里的“首期”是完整对外版本，下面的研发里程碑是内部顺序，构建功能独立完成不等于首期已可发布。
+首期覆盖单容器 HTTP 服务、静态站点容器、后台任务进程；后台进程不创建域名。首期每应用一个默认部署和一个运行实例，支持基础持久卷与配置文件挂载。多副本伸缩、跨集群迁移、多容器 Compose、托管数据库、完整 APM/Trace、任意 PromQL 与复杂告警后置。这里的“首期”是完整对外版本，下面的研发里程碑是内部顺序，构建功能独立完成不等于首期已可发布。
 
-业务层级仍只有工作空间 → 应用。每个应用首期只有一套运行配置，不增加项目或环境导航；未来多环境作为应用内维度扩展。常驻产品进程仍只有控制面和 worker，OAuth、调度、部署编排、采集与清理都在现有进程内组织。
+业务层级仍只有工作空间 → 应用。首期只有默认环境 prod，每个应用只有一个默认部署 default 和一套运行配置，不增加项目或环境导航；未来多环境、多部署作为应用运行位置的维度扩展。常驻产品进程仍只有控制面和 worker，OAuth、调度、部署编排、采集与清理都在现有进程内组织。
 
 ## 2. 竞品依据与明确取舍
 
@@ -23,7 +23,7 @@
 ## 3. 用户路径与页面
 
 ```text
-管理员：接入执行节点 → 仓库 → 入口域名/HTTPS → 创建应用与成员授权
+管理员：接入集群 → 仓库 → 应用根域名/HTTPS → 创建工作空间、应用与成员授权
 开发者：配置端口/健康检查与变量 → 上传源码 → 构建并部署
 运行确认：新实例就绪 → 业务入口验证 → 展示访问地址和运行版本
 日常操作：日志 / 监控 / 变量 / 配置 → 更新发布 / 回滚 / 重启 / 停止启动
@@ -35,15 +35,15 @@
 
 | 页签 | 首期内容 |
 |---|---|
-| 概览 | 当前运行版本、健康/访问状态、域名、执行节点、资源摘要、待发布配置和近期事件 |
-| 部署 | 发布历史、镜像与配置版本、阶段/失败证据、重新部署、选定版本回滚 |
+| 概览 | 当前运行版本、健康/访问状态、域名、运行位置、资源摘要、待发布配置和近期事件 |
+| 发布 | 发布历史、镜像与配置版本、阶段/失败证据、重新发布、选定版本回滚 |
 | 构建 | 源码上传、构建并部署/仅构建、构建日志与镜像；镜像产物作为本页子视图 |
 | 日志 | 运行日志，按实例、部署和时间范围查询/跟随；与单次构建日志明确分开 |
 | 监控 | CPU、内存、就绪状态、重启及 HTTP 探测结果，最近 1 小时/24 小时 |
 | 变量 | 运行时变量、敏感值替换、批量导入预览；构建参数另设明显分区 |
 | 配置 | 运行方式、端口、域名/HTTPS、健康检查、CPU/内存、配置文件、持久卷、构建设置 |
 
-节点、输出仓库与平台默认域名放实例级平台管理；空间管理只含成员身份、空间角色、应用授权概览与空间资料。节点页面改称“执行节点”，分别显示构建/运行/监控能力；应用成员只读查看平台资源摘要，不选择节点/输出仓库；构建密钥默认属于应用，引用需要校验本应用归属。
+集群、环境、输出仓库与应用根域名放全局管理；空间管理只含成员身份、空间角色、应用授权概览与空间资料。集群页显示 worker 连接、集群内机器（只读）与构建/运行/监控能力；应用成员只读查看平台资源摘要，不选择集群/输出仓库；构建密钥默认属于应用，引用需要校验本应用归属。
 
 ## 4. 发布、配置和运行状态
 
@@ -51,13 +51,13 @@
 
 | 对象 | 关键事实 |
 |---|---|
-| `Application` | workspace_id、应用类型、构建默认配置、当前配置草稿/已保存版本、desired_release_id、serving_release_id、运行意图与观察状态 |
-| `Build / Artifact` | 现有不可变源码/构建；验证过的 repository + digest + 平台，不使用可变 latest 发布 |
-| `ApplicationPlacement` | 系统分配的运行节点/集群身份；首次部署时固定，改变实例默认策略不迁移既有实例 |
-| `RuntimeConfigRevision` | 应用类型、端口、启动参数、探针、资源限制、变量/文件的版本引用、域名和卷绑定 |
-| `Release` | application_id、artifact_id、runtime_config_revision_id、placement/首发目标快照与策略版本、前一成功版本、发起者、来源 build/rollback、创建时间；创建后不可改 |
+| `Application` | workspace_id、应用名（不可改）、默认地址后缀、构建默认配置 |
+| `Build / Artifact` | 现有不可变源码/构建；验证过的 repository + digest + 平台，不使用可变 latest 发布；与环境无关 |
+| `ApplicationDeployment` | 应用在一个环境里的运行单元（第一版每应用一个 default，环境 prod），替代原 `ApplicationPlacement`；首次部署时冻结集群与命名空间；应用类型、当前配置草稿/已保存版本、desired_release_id、serving_release_id、运行意图与观察状态；环境改绑集群或策略变更不迁移 |
+| `RuntimeConfigRevision` | 应用类型、端口、启动参数、探针、资源限制、变量/文件的版本引用、域名和卷绑定；归属部署 |
+| `Release` | application_deployment_id、artifact_id、runtime_config_revision_id、集群与策略版本快照、前一成功版本、发起者、来源 build/rollback、创建时间；创建后不可改 |
 | `DeploymentOperation` | release_id、operation_id、单调 generation、目标 worker、阶段、结果、重试/恢复事实 |
-| `RuntimeObservation` | 节点、Deployment/Pod UID、观察 generation、Ready/重启/镜像身份、入口状态、采集时间 |
+| `RuntimeObservation` | 集群、机器、Deployment/Pod UID、观察 generation、Ready/重启/镜像身份、入口状态、采集时间 |
 
 PostgreSQL 保存这些对象，GORM Gen 与 Goose 继续适用。变量秘密、文件秘密单独加密存储并按版本引用；公共 DTO 只返回结构与已配置状态，不能把明文藏在未渲染 JSON 中。运行配置与构建配置分开，修改运行变量不需要重建镜像。
 
@@ -81,13 +81,13 @@ PostgreSQL 保存这些对象，GORM Gen 与 Goose 继续适用。变量秘密�
 
 ### 5.1 复用现有 worker
 
-每个执行节点仍是一个 worker 对应单节点 k3s。节点具有 build/runtime/metrics 能力标记，构建和运行可在同一节点，运行负载需预留资源，构建并发不能耗尽应用的保底资源。运行能力未就绪不能通过“仅构建就绪”校验。
+每个集群一个 worker；第一版每个实例一个集群，构建和应用都在其中运行。集群具有 build/runtime/metrics 能力标记；构建 Job 只调度到通过构建检查的 amd64 机器，运行负载需预留资源，构建并发不能耗尽应用的保底资源。运行能力未就绪不能通过“仅构建就绪”校验。
 
-控制面内的持久操作扫描器发送类型化 Deploy/Start/Stop/Restart/Reconcile 消息；worker 内的运行管理器通过 client-go 创建/更新 Deployment、Service、Ingress、ConfigMap、Secret 和 PVC。实例控制、调度、重启交给 Kubernetes 原生控制器；不新增自有 operator 进程、不用 SSH 执行 kubectl、不引入 Argo CD。
+控制面内的持久操作扫描器发送类型化 Deploy/Start/Stop/Restart/Reconcile 消息；worker 内的运行管理器通过 client-go 创建/更新 Deployment、Service、Ingress、ConfigMap、Secret 和 PVC，资源名为 `<应用名>-<部署名>`（第一版为 `<应用名>-default`）。实例控制、调度、重启交给 Kubernetes 原生控制器；不新增自有 operator 进程、不用 SSH 执行 kubectl、不引入 Argo CD。
 
-每个应用只有一个活动运行变更操作，数据库锁定并递增 generation；worker 持久保存已处理 generation，并在每次变更前验证当前期望值，旧消息不能覆盖新 release。资源命名确定，写入 workspace/application/release/generation 标签，重复发送只核对与恢复同一操作。重启通过 operation_id 对应的 Pod template 标记实现幂等，不因消息重投反复重启。
+每个应用只有一个活动运行变更操作，数据库锁定并递增 generation；worker 持久保存已处理 generation，并在每次变更前验证当前期望值，旧消息不能覆盖新 release。资源命名确定，按 [命名方案第 5 节](2026-10-26-naming-cluster-and-minimal-cli-design.md#5-k8s-名称) 核对对应作用域的固定归属：空间 Namespace 与隔离策略不绑定应用，应用运行资源核对 workspace/application/deployment。同名对象没有平台标签或固定归属不符时报错，不覆盖；release/generation 是通过期望值校验后更新的版本标记，正常发布不因旧版本标记不同而拒绝。重复发送只核对与恢复同一操作。重启通过 operation_id 对应的 Pod template 标记实现幂等，不因消息重投反复重启。
 
-首期由实例管理员为工作空间分配独占执行范围；工作空间不能管理节点。业务命名空间与构建命名空间分离。worker 权限仅覆盖本空间受管命名空间的必要资源；Kubelet 监控另授予本节点 `nodes/metrics get`，不为采集授予 `nodes/proxy`。应用容器不挂宿主 socket、worker 私钥或 Kubernetes token，不开放 privileged/hostNetwork。
+工作空间不能管理集群。每个工作空间的运行命名空间 `<环境>-<空间名>`（第一版为 `prod-<空间名>`）与构建命名空间 `build-<空间名>` 分离；运行命名空间下发空间隔离网络策略，只放行同命名空间与 Traefik 的入站流量，其他规则以后按需添加（见 [命名、集群与最小 CLI](2026-10-26-naming-cluster-and-minimal-cli-design.md)）。worker 的业务资源权限仅覆盖受管命名空间；安装者另配置最小集群级权限，用于读取集群标识与 Node 信息、创建和管理平台命名空间、更新 Node 的构建资格标签，以及 Kubelet 监控所需的 `nodes/metrics get`。worker 只修改平台管理的标签并核对对象归属，不为这些能力授予 `cluster-admin`，也不为采集授予 `nodes/proxy`；M0 验证这些操作在受限权限下可用。应用容器不挂宿主 socket、worker 私钥或 Kubernetes token，不开放 privileged/hostNetwork。
 
 ### 5.2 成功、更新与恢复
 
@@ -103,23 +103,23 @@ worker/control 重启后从 PostgreSQL 期望态与 k3s 资源标签恢复，查
 
 ### 5.3 域名与 HTTPS
 
-复用 k3s 的 [Traefik](https://docs.k3s.io/networking/networking-services)入口。管理员配置业务根域名及 DNS 指向、80/443 和 ACME 邮箱；平台以不可变应用 ID 为 HTTP 应用分配实例内唯一的默认子域名（只读），应用可以另外填写可选自定义域名并进行 DNS 检查。域名按实例唯一占用并绑定应用授权，不能通过修改域名接管其他应用入口。
+复用 k3s 的 [Traefik](https://docs.k3s.io/networking/networking-services)入口。管理员配置应用根域名（必须与控制台分属不同的可注册域名）、指向集群的泛解析、80/443 和 ACME 邮箱；k3s ServiceLB 在集群每台机器上暴露 80/443，泛解析指向任一可达机器即可。平台为 HTTP 应用分配默认地址 `<应用名>-<6 位后缀>.<应用根域名>`，后缀在创建应用时生成且不变，地址实例内唯一、只读；应用可以另外填写可选自定义域名并进行 DNS 检查。域名按实例唯一占用并绑定应用授权，不能通过修改域名接管其他应用入口。
 
-首期采用单 Traefik 实例的 [ACME HTTP-01](https://doc.traefik.io/traefik/reference/install-configuration/tls/certificate-resolvers/acme/)，显式持久化证书存储并验证续期/重启恢复。每个实际域名单独签发证书；泛域名 DNS 不等于已有泛域名证书。多入口 HA 与 DNS-01 提供方集成后置，不默认新增 cert-manager 服务。内网无法完成公开 ACME 时支持管理员预置证书，或明确使用 HTTP，不显示虚假的 HTTPS 通过状态。
+首期采用单 Traefik 实例的 [ACME HTTP-01](https://doc.traefik.io/traefik/reference/install-configuration/tls/certificate-resolvers/acme/)，显式持久化证书存储并验证续期/重启恢复。每个实际域名单独签发证书；泛域名 DNS 不等于已有泛域名证书。默认地址只有一层子域名，管理员也可以预置一张 `*.<应用根域名>` 证书覆盖全部默认地址。多入口 HA 与 DNS-01 提供方集成后置，不默认新增 cert-manager 服务。内网无法完成公开 ACME 时支持管理员预置证书，或明确使用 HTTP，不显示虚假的 HTTPS 通过状态。
 
 ### 5.4 配置文件与持久存储
 
 配置文件按路径、内容/敏感标记、版本保存，以只读 ConfigMap/Secret 文件挂载进入容器；不挂宿主文件，不通过 build ARG 写入秘密。挂载路径和冲突在发布前校验，按变更产生新配置版本并重建实例，不假定进程会自动热加载。
 
-基础持久卷使用固定 StorageClass/PVC 与应用绑定，初始容量建议 1 GiB。k3s local-path 只承诺当前节点的持久性，不能等同共享存储、跨节点故障恢复或备份。停止、重部署、回滚不删除 PVC；删除应用默认保留数据，删除卷是管理员单独确认的操作。后续数据库托管再提供专门备份恢复流程；首期应用可用运行变量连接外部数据库。
+基础持久卷使用固定 StorageClass/PVC 与应用绑定，初始容量建议 1 GiB。k3s local-path 只承诺卷所在机器的持久性，挂本地卷的应用固定在该机器上运行；不能等同共享存储、跨机器故障恢复或备份。停止、重部署、回滚不删除 PVC；删除应用默认保留数据，删除卷是管理员单独确认的操作。后续数据库托管再提供专门备份恢复流程；首期应用可用运行变量连接外部数据库。
 
 ## 6. 基础监控与运行日志
 
 ### 6.1 监控来源与限界
 
-首期必须有应用资源历史。采用 worker 内嵌采集器，读取本节点 Kubelet `/metrics/resource`，使用成熟 Prometheus 文本解析库，不新增采集进程。读取 `container_cpu_usage_seconds_total`、`container_memory_working_set_bytes` 与容器启动时间；按受管 namespace/Pod/容器解析回实际 Pod UID、application、release，平台与其他应用数据不混入。
+首期必须有应用资源历史。采用 worker 内嵌采集器，读取集群内各机器的 Kubelet `/metrics/resource`，使用成熟 Prometheus 文本解析库，不新增采集进程。读取 `container_cpu_usage_seconds_total`、`container_memory_working_set_bytes` 与容器启动时间；按受管 namespace/Pod/容器解析回实际 Pod UID、application、release，平台与其他应用数据不混入。
 
-[Kubernetes 指标参考](https://kubernetes.io/docs/reference/instrumentation/metrics/)列出了这些资源指标；[Kubelet 授权](https://kubernetes.io/docs/reference/access-authn-authz/kubelet-authn-authz/)支持节点 metrics 子资源。TLS、Kubelet Webhook 授权与本节点 resourceNames 必须在 M0 验证，不能关闭证书验证或回退到集群管理员凭证。
+[Kubernetes 指标参考](https://kubernetes.io/docs/reference/instrumentation/metrics/)列出了这些资源指标；[Kubelet 授权](https://kubernetes.io/docs/reference/access-authn-authz/kubelet-authn-authz/)支持节点 metrics 子资源。TLS、Kubelet Webhook 授权与各机器的 resourceNames 必须在 M0 验证，不能关闭证书验证或回退到集群管理员凭证。
 
 不把 Metrics Server 轮询后包装成监控历史：[其官方说明](https://github.com/kubernetes-sigs/metrics-server)明确其用途是自动伸缩，监控应直接采集 Kubelet 资源端点。k3s 自带该组件不代表已经具备历史监控系统。
 
@@ -129,7 +129,7 @@ PostgreSQL `runtime_metric_samples` 保存有界固定字段快照，按 applica
 
 就绪数、重启计数、OOM/拉取失败等来自 Pod 状态与事件；HTTP 可达性和探测延迟来自控制面内对已登记入口的探测，目标由已校验应用路由确定，不接受任意探测 URL。探测延迟不称为业务请求 P99/QPS。首期不承诺应用网络/磁盘吞吐、请求错误率或 Trace，不能用 CPU/内存数据伪造这些指标。
 
-采集失败、节点失联、应用停止时分别显示缺测/陈旧/已停止，曲线断开，不补 0。运行指标、探测、日志都带采集时间与 release 关联。基础异常在概览/监控/事件里可见，复杂规则告警、外部通知编排后置。
+采集失败、worker 或机器失联、应用停止时分别显示缺测/陈旧/已停止，曲线断开，不补 0。运行指标、探测、日志都带采集时间与 release 关联。基础异常在概览/监控/事件里可见，复杂规则告警、外部通知编排后置。
 
 ### 6.2 日志
 
@@ -147,35 +147,34 @@ worker 使用 Kubernetes 日志 API 跟随当前及必要的前一次容器日�
 | 构建并部署、部署已有产物、回滚、重启 | 是 | 是 | 是 | 否 |
 | 修改变量、端口/域名、资源/卷与运行配置 | 是 | 是 | 否 | 否 |
 | 停止/启动应用 | 是 | 是 | 否 | 否 |
-| 管理执行节点、入口基础设施和成员授权 | 是 | 否 | 否 | 否 |
+| 管理集群、环境与入口基础设施 | 否，仅实例管理员 | 否 | 否 | 否 |
+| 管理应用成员授权 | 是 | 否 | 否 | 否 |
 | 读取已存敏感值明文 | 否 | 否 | 否 | 否 |
 
-Casbin 增加 deployment、runtime、runtime-config、runtime-logs、runtime-metrics 动作，仍按当前用户权限 ∩ 应用范围 ∩ token scope。OAuth 增加 `deployment:read/write`、`runtime:read/write`、`config:read/write`，`logs:read` 覆盖获授权应用的日志；默认只读，发布/运行变更和配置修改分别授权。敏感配置 read 只返回键与版本，不回明文。
+Casbin 增加 deployment、runtime、runtime-config、runtime-logs、runtime-metrics 动作，仍按当前用户权限 ∩ 应用范围 ∩ 令牌动作范围。第一版 PAT 使用 read/build/deploy/runtime/config 动作组；第一版之后的 OAuth 增加 `deployment:read/write`、`runtime:read/write`、`config:read/write`，`logs:read` 覆盖获授权应用的日志；默认只读，发布/运行变更和配置修改分别授权。敏感配置 read 只返回键与版本，不回明文。
 
 Connect/CLI/MCP 共用应用服务：GetApplicationStatus、List/GetDeployment、CreateDeployment、RollbackDeployment、Restart/Start/StopApplication、Get/SaveRuntimeConfig、ReadRuntimeLogs、QueryRuntimeMetrics。操作返回 operation/release ID、已绑定版本、阶段、可重试性和详情 URL，不把等待中当作成功。更新带 expected_config_revision/expected_serving_release，防止 Agent 覆盖别人刚刚发布的版本。
 
-本地上传仍由 CLI/stdio 完成；远程 MCP 对已上传快照或已验证 artifact 操作。Skill 增加读取运行配置、预览发布差异、发布、确认可用、读运行日志/指标和回滚路径。用户要求部署时可按既有授权执行；平台不因 Agent 接入自动开放管理员或秘密读取能力。
+第一版 MCP 只有本地 stdio 方式，上传由 CLI/stdio 完成；第一版之后的远程 MCP 对已上传快照或已验证 artifact 操作。Skill 增加读取运行配置、预览发布差异、发布、确认可用、读运行日志/指标和回滚路径。用户要求部署时可按既有授权执行；平台不因 Agent 接入自动开放管理员或秘密读取能力。
 
-拟议 CLI：
+第一版拟议 CLI：
 
 ```bash
-platform build submit . --deploy --output json
-platform application status --output json
-platform deployment list --output json
-platform deployment get rel_example --output json
-platform application logs --follow
-platform application metrics --since 1h --output json
-platform deployment rollback rel_previous --expected-current rel_example
+yummy deploy . --output json   # 构建并部署，等待就绪与访问验证
+yummy status --output json     # 当前运行版本、最近构建与发布、访问地址
+yummy logs --follow            # 运行日志；--build <构建 ID> 查看构建日志
 ```
+
+第一版 CLI 只有最小命令；发布历史、指标与回滚在网页和本地 stdio MCP 中提供，CLI 以后按需补充。
 
 ## 8. 研发顺序与实际验收
 
 | 内部里程碑 | 内容 | 验证 |
 |---|---|---|
-| M0 | 固定 k3s/BuildKit、运行权限、Traefik/TLS、Kubelet 采集与持久卷 | 三个样例的构建/拉取/就绪/HTTPS、资源指标与卷保留实际记录 |
-| M1 | 身份/资源/应用、上传构建、产物、基础 CLI/页面 | 既有权限矩阵与 Apple Silicon 上传→AMD64 构建 |
+| M0 | 固定 k3s/BuildKit、运行权限、Traefik/TLS、Kubelet 采集、持久卷与空间隔离网络策略 | 三个样例的构建/拉取/就绪/HTTPS、资源指标、卷保留与跨空间访问被拒绝的实际记录 |
+| M1 | 身份/资源/应用（命名规范）、上传构建、产物、最小 CLI（PAT）/页面 | 既有权限矩阵、命名校验与 Apple Silicon 上 `yummy deploy` → AMD64 构建 |
 | M2 | 配置/变量/文件/卷、发布、域名、健康、运行日志 | 从零部署到真实 URL；改变量不重建镜像且保存未发布不影响线上 |
-| M3 | CPU/内存历史、更新失败恢复、手动回滚、停止启动、OAuth/MCP 完整操作 | 错误新版本保持/恢复旧版本；回滚匹配配置；查看者和越权令牌拒绝 |
+| M3 | CPU/内存历史、更新失败恢复、手动回滚、停止启动、本地 stdio MCP 完整操作 | 错误新版本保持/恢复旧版本；回滚匹配配置；查看者和越权令牌拒绝 |
 | M4 | 断线重启恢复、配额/清理、团队试用与备份说明 | 重投不重复发布/重启；失联显示未知；PVC 与当前/回滚引用不会被清理 |
 
 最终验收：外部用户分别部署 Go HTTP、Node HTTP、静态站点与后台进程；HTTP 可通过真实 HTTPS 访问，worker 不伪造域名；验证首发失败、发布失败但旧版本运行、证书/DNS 待处理、采集缺失、日志轮转、修改敏感变量、回滚配置、PVC 保留和控制面/worker 重启。
