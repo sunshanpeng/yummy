@@ -5,7 +5,7 @@ PROTOC ?= $(shell command -v protoc 2>/dev/null || echo work/protoc/bin/protoc)
 export GOPROXY ?= https://goproxy.cn,https://proxy.golang.org,direct
 export GOSUMDB ?= sum.golang.google.cn
 
-.PHONY: install generate web-build build test integration-test certs smoke
+.PHONY: install generate web-build build test integration-test certs smoke smoke-demo
 
 install:
 	pnpm --dir web install --frozen-lockfile
@@ -23,7 +23,7 @@ generate:
 		--connect-go_opt=paths=source_relative \
 		--es_out=web/src/gen \
 		--es_opt=target=ts \
-		api/demo/v1/demo.proto
+		api/demo/v1/demo.proto api/platform/v1/*.proto
 
 web-build:
 	pnpm --dir web build
@@ -47,5 +47,10 @@ integration-test:
 certs:
 	./scripts/generate-dev-certs.sh var/certs worker-1
 
-smoke: certs build
-	./scripts/smoke.sh
+# 产品冒烟：对 bin/platform 做迁移/管理员/登录/建空间/OAuth 元数据最小真实链路验证。
+smoke: build
+	./scripts/smoke-product.sh
+
+# 旧 uppercase demo 冒烟（显式开发模式），保留用于回归 demo 拓扑。
+smoke-demo: certs build
+	./scripts/smoke-demo.sh
