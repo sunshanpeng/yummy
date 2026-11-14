@@ -178,6 +178,8 @@
 | 16 | NetworkPolicy CNI 执行 | ✅通过 | 按新约定（只放行同 ns+Traefik）应用默认策略后：①Traefik 公网入口不受影响（A2 HTTPS 200）②同命名空间放行（app 响应正常）③跨命名空间（yummy-infra→app）被拒（差分证明 CNI 强制生效）；Tailscale 回归：ping apeng-ubuntu 正常（DERP 中继），宿主与集群零影响；出站回归：pod 公网访问与镜像拉取正常 |
 | 17 | 全量回归（真实 PG/Redis，-race） | ✅通过 | 两轮 EXIT=0 零失败（含全部实机修复）；宿主构建路径相关四包（workerexec/buildrunner/kube/cli）专项回归绿 |
 
+| 17+ | 命名空间按空间派生与引导（2026-10-26 设计对齐） | ✅通过 | proto 增 space_slug/app_name；派发带 slug/appname；worker 引导 `prod-accgo-1794635238`（归属标签 env/role/workspace/managed-by 齐全）+ Deployment `worker-demo-default` Running + 空间隔离 NetworkPolicy `yummy-workspace-isolation` 下发；旧命令回退历史名（兼容旧控制面）；集群级 ClusterRole 授权（namespaces/networkpolicies 引导）；全量回归 EXIT=0 |
+
 ### 实机发现与修复（全部真实缺陷，均有回归测试或部署验证）
 
 | # | 缺陷 | 级别 | 修复 |
