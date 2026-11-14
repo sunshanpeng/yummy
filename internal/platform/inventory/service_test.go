@@ -27,7 +27,7 @@ type testEnvironment struct {
 func setup(t *testing.T) testEnvironment {
 	t.Helper()
 	db := testkit.OpenDatabase(t)
-	for _, value := range []any{&model.User{ID: "root", Username: "root", PasswordHash: "hash", InstanceAdmin: true}, &model.User{ID: "admin", Username: "admin", PasswordHash: "hash"}, &model.User{ID: "viewer", Username: "viewer", PasswordHash: "hash"}, &model.Workspace{ID: "space", Name: "空间", Slug: "space"}, &model.WorkspaceMember{WorkspaceID: "space", UserID: "admin", Role: "admin"}, &model.WorkspaceMember{WorkspaceID: "space", UserID: "viewer", Role: "member"}, &model.Application{ID: "app_123", WorkspaceID: "space", Name: "gateway"}, &model.Application{ID: "app_456", WorkspaceID: "space", Name: "worker"}, &model.ApplicationMember{WorkspaceID: "space", ApplicationID: "app_123", UserID: "viewer", Role: "viewer"}} {
+	for _, value := range []any{&model.User{ID: "root", Username: "root", PasswordHash: "hash", InstanceAdmin: true}, &model.User{ID: "admin", Username: "admin", PasswordHash: "hash"}, &model.User{ID: "viewer", Username: "viewer", PasswordHash: "hash"}, &model.Workspace{ID: "space", Name: "空间", Slug: "space"}, &model.WorkspaceMember{WorkspaceID: "space", UserID: "admin", Role: "admin"}, &model.WorkspaceMember{WorkspaceID: "space", UserID: "viewer", Role: "member"}, &model.Application{ID: "app_123", WorkspaceID: "space", Name: "gateway", AddressSuffix: "k7m2x9"}, &model.Application{ID: "app_456", WorkspaceID: "space", Name: "worker"}, &model.ApplicationMember{WorkspaceID: "space", ApplicationID: "app_123", UserID: "viewer", Role: "viewer"}} {
 		if err := db.Create(value).Error; err != nil {
 			t.Fatal(err)
 		}
@@ -242,7 +242,7 @@ func TestResolveRequiresRealReadinessAndPreservesImmutableApplicationIdentity(t 
 	if err != nil || !summary.Ready || summary.Platform != "linux/amd64" {
 		t.Fatalf("构建摘要=%#v,%v", summary, err)
 	}
-	if summary.ImageRepository != "registry.example.com/tenant/apps/app_123" || summary.DefaultDomain != "app-123.apps.example.com" {
+	if summary.ImageRepository != "registry.example.com/tenant/apps/app_123" || summary.DefaultDomain != "gateway-k7m2x9.apps.example.com" {
 		t.Fatalf("系统身份=%#v", summary)
 	}
 	if summary.ResourceLimits.CPUMillis != 1000 || summary.ResourceLimits.MemoryMiB != 1024 {
