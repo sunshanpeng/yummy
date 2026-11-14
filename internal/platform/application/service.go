@@ -3,6 +3,7 @@ package application
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -13,6 +14,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/sunshanpeng/yummy/internal/domain"
 	"github.com/sunshanpeng/yummy/internal/platform/audit"
 	"github.com/sunshanpeng/yummy/internal/platform/authorization"
 	"github.com/sunshanpeng/yummy/internal/platform/model"
@@ -22,7 +24,8 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-var namePattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`)
+// 统一命名规范（internal/domain/name.go）：应用名与空间名同一规范。
+var namePattern = regexp.MustCompile(`^[a-z](-?[a-z0-9])*$`)
 
 type Service struct {
 	DB     *gorm.DB
@@ -35,8 +38,8 @@ func NewService(db *gorm.DB, access *authorization.Access) *Service {
 
 func normalizeName(name string) (string, error) {
 	name = strings.TrimSpace(name)
-	if !namePattern.MatchString(name) || strings.HasSuffix(name, "-") {
-		return "", fmt.Errorf("%w: 应用名称为小写字母开头的1～63位字母数字连字符，不能以连字符结尾", authorization.ErrInvalid)
+	if len(name) > domain.NameMaxLen || !namePattern.MatchString(name) {
+		return "", fmt.Errorf("%w: 应用名称为小写字母开头、最长30位的小写字母数字中划线（无连续--、不以-结尾）", authorization.ErrInvalid)
 	}
 	return name, nil
 }
@@ -147,7 +150,17 @@ func (s *Service) Create(ctx context.Context, p authorization.Principal, workspa
 		if err != nil {
 			return err
 		}
-		value := model.Application{ID: id, WorkspaceID: workspaceID, Name: name, Status: model.ResourceActive, Revision: 1}
+		// 默认地址后缀：创建时生成且不变（小写字母开头的6位小写字母数字）。
+		suffixBytes := make([]byte, 6)
+		if _, err := rand.Read(suffixBytes); err != nil {
+			return err
+		}
+		const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789"
+		suffix := string(alphabet[int(suffixBytes[0])%26])
+		for _, b := range suffixBytes[1:] {
+			suffix += string(alphabet[int(b)%len(alphabet)])
+		}
+		value := model.Application{ID: id, WorkspaceID: workspaceID, Name: name, AddressSuffix: suffix, Status: model.ResourceActive, Revision: 1}
 		if err := tx.Create(&value).Error; err != nil {
 			return conflict(err)
 		}

@@ -31,7 +31,8 @@ export function Empty({ title, description, children }: { title: string; descrip
 }
 export type FieldDefinition = { name: string; label: string; value?: string; type?: string; hint?: string; autoComplete?: string; readOnly?: boolean; options?: { value: string; label: string }[]; schema?: z.ZodType<string> };
 export const required = z.string().trim().min(1, "请填写此项");
-export const resourceName = required.regex(/^[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/, "使用小写字母开头的 1～63 位字母、数字或连字符，不能以连字符结尾");
+// 统一命名规范（2026-10-26 设计）：小写字母开头，最长 30 位，无连续 --，不以 - 结尾。
+export const resourceName = required.regex(/^[a-z](?:-?[a-z0-9]){0,29}$/, "使用小写字母开头的最长 30 位小写字母、数字或中划线（无连续中划线，不以中划线结尾）");
 export const passwordSchema = z.string().refine((v) => { const length = new TextEncoder().encode(v).length; return length >= 12 && length <= 128; }, "密码必须为 12～128 个字节");
 
 // 所有业务表单共用 TanStack Form 生命周期，字段与提交校验由 Zod 执行。

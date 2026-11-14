@@ -58,7 +58,10 @@ type Application struct {
 	ID          string    `gorm:"column:id;primaryKey"`
 	WorkspaceID string    `gorm:"column:workspace_id"`
 	Name        string    `gorm:"column:name"`
-	Description string    `gorm:"column:description"`
+	// AddressSuffix 默认地址后缀（创建时生成且不变）：默认地址为
+	// <应用名>-<后缀>.<应用根域名>（2026-10-26 设计）。
+	AddressSuffix string    `gorm:"column:address_suffix"`
+	Description   string    `gorm:"column:description"`
 	Status      string    `gorm:"column:status;default:ACTIVE"`
 	Revision    int64     `gorm:"column:revision;default:1"`
 	CreatedAt   time.Time `gorm:"column:created_at"`

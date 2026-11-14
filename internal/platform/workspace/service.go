@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/sunshanpeng/yummy/internal/domain"
 	"github.com/sunshanpeng/yummy/internal/platform/audit"
 	"github.com/sunshanpeng/yummy/internal/platform/authorization"
 	"github.com/sunshanpeng/yummy/internal/platform/model"
@@ -19,7 +20,8 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-var slugPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`)
+// 统一命名规范（internal/domain/name.go）：空间名与应用名同一规范。
+var slugPattern = regexp.MustCompile(`^[a-z](-?[a-z0-9])*$`)
 
 type Service struct {
 	DB     *gorm.DB
@@ -32,8 +34,8 @@ func NewService(db *gorm.DB, access *authorization.Access) *Service {
 
 func validate(input CreateInput) (CreateInput, error) {
 	input.Name, input.Slug, input.Description = strings.TrimSpace(input.Name), strings.TrimSpace(input.Slug), strings.TrimSpace(input.Description)
-	if !utf8.ValidString(input.Name) || utf8.RuneCountInString(input.Name) < 1 || utf8.RuneCountInString(input.Name) > 100 || !slugPattern.MatchString(input.Slug) || strings.HasSuffix(input.Slug, "-") || !utf8.ValidString(input.Description) || utf8.RuneCountInString(input.Description) > 2000 {
-		return input, fmt.Errorf("%w: 名称1～100字符，slug为小写字母开头的1～63位字母数字连字符且不以连字符结尾，说明不超过2000字符", authorization.ErrInvalid)
+	if !utf8.ValidString(input.Name) || utf8.RuneCountInString(input.Name) < 1 || utf8.RuneCountInString(input.Name) > 100 || len(input.Slug) > domain.NameMaxLen || !slugPattern.MatchString(input.Slug) || !utf8.ValidString(input.Description) || utf8.RuneCountInString(input.Description) > 2000 {
+		return input, fmt.Errorf("%w: 名称1～100字符，空间名为小写字母开头、最长30位的小写字母数字中划线（无连续--、不以-结尾），说明不超过2000字符", authorization.ErrInvalid)
 	}
 	return input, nil
 }

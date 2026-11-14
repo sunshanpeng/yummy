@@ -9,6 +9,8 @@ import (
 
 	"github.com/sunshanpeng/yummy/internal/platform/authorization"
 	"gorm.io/gorm"
+
+	"github.com/sunshanpeng/yummy/internal/platform/model"
 )
 
 // ResolveBuild 仅预览已通过资格门禁的冻结摘要，不领取任务或调用外部网络。
@@ -31,6 +33,11 @@ func (s *Service) resolve(ctx context.Context, p authorization.Principal, worksp
 			action = authorization.ConfigRead
 		}
 		if _, _, err := s.access.Application(tx, current, workspaceID, applicationID, action); err != nil {
+			return err
+		}
+		// 默认地址需要应用名与不可变地址后缀（2026-10-26 设计）。
+		var appRow model.Application
+		if err := tx.First(&appRow, "workspace_id = ? AND id = ?", workspaceID, applicationID).Error; err != nil {
 			return err
 		}
 		var settings instanceRecord
@@ -91,7 +98,9 @@ func (s *Service) resolve(ctx context.Context, p authorization.Principal, worksp
 		repository += applicationID
 		result = ExecutionSummary{PolicyRevision: policy.Revision, Platform: Platform, NodeID: node.ID, NodeName: node.Name, ImageRepository: repository, ResourceDefault: policy.ResourceDefault, ResourceLimits: policy.ResourceLimits, AutoRecoveryEnabled: policy.AutoRecoveryEnabled}
 		if policy.BaseDomain != "" {
-			result.DefaultDomain = strings.ReplaceAll(applicationID, "_", "-") + "." + policy.BaseDomain
+			// 默认地址规范：<应用名>-<6位后缀>.<应用根域名>（后缀创建时生成且不变）；
+			// 存量应用迁移回填的后缀同样满足规范。
+			result.DefaultDomain = appRow.Name + "-" + appRow.AddressSuffix + "." + policy.BaseDomain
 		}
 		if policy.ResourceDefault.CPUMillis > allocation.CPUMillis || policy.ResourceDefault.MemoryMiB > allocation.MemoryMiB {
 			return notReady(&result, "实例默认资源超过工作空间分配额度")
