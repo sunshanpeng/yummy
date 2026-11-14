@@ -171,8 +171,8 @@
 | 9 | 真实构建推拉部署闭环——静态站点 | ✅通过（应用侧换 nginx-unprivileged 镜像后） | bld_a757669a SUCCEEDED，公网 HTTPS 200 返回完整 HTML；官方 nginx 镜像与产品固定 uid 1000 不兼容（发现⑥，属用户镜像选择问题，如实记录） |
 | 10 | 真实构建推拉部署闭环——后台进程（WORKER 型） | ✅通过 | ⑦修复后：构建 SUCCEEDED → 部署 op SUCCEEDED（dop_55d17a14）→ Pod Running（worker-bg tick 日志真实输出）。隔离实验证实此前不收敛系 correctImageID 误判（⑦），多次测试重叠的跨应用 attempt 污染为触发背景 |
 | 11 | 公网入口 TLS（自签证书+Host 校验+反代契约） | ✅通过 | Traefik 终止 TLS 下发验收 CA 证书（SNI 匹配）；/transfer/ 经真实反代转发+Host 保留；127.0.0.1 直连被反 DNS 重绑定保护拒绝（设计行为） |
-| 12 | 运行日志/指标链路 | ❌未验证 | 部署观察已收敛（⑦修复）但 runtimeSidecar 零产出（发现⑨待查）——GetRuntimeLogs/GetRuntimeMetrics 与 DB runtime_log_chunks/metric_samples 均空 |
-| 13 | Kubelet 指标精度 | ❌未验证 | 同上（⑨阻塞）；metrics-server 存在、SA nodes/metrics 授权已配 |
+| 12 | 运行日志/指标链路 | ✅通过 | ⑨修复后：runtime_log_chunks 65/16 块真实 tick 日志入库（两个应用）、runtime_metric_samples 92+ 采样持续产出；GetRuntimeLogs/GetRuntimeMetrics 链路随 DB 数据打通 |
+| 13 | Kubelet 指标精度与 webhook 授权 | ✅通过 | ①SA token 直测 kubelet /metrics/resource 返回 200（nodes/metrics RBAC webhook 授权实证）；②采集值与 kubectl top 同源一致（cpu 0≈1m、内存 0.39Mi≈0Mi）；③采样序列严格递增、CPU counter 差值窗口真实（峰值 1113m 突发 / 8m 稳态如实呈现） |
 | 14 | 断网重传/journal 事件去重 | ❌未验证 | 待专项（journal 目录已在 worker 配置就绪） |
 | 15 | PVC 保留 | ❌未验证 | 待专项 |
 | 16 | NetworkPolicy CNI 执行 | ❌未验证 | 待专项（需在 yummy-runtime 内做正反向验证+Tailscale 连通回归） |
@@ -190,7 +190,7 @@
 | ⑥ | 固定 uid 1000 与官方 nginx 镜像不兼容（需 root 建 cache） | 兼容性 | 属用户镜像选择问题；验收改用 nginx-unprivileged 变体通过。如实记录，产品不做放宽 |
 | ⑦ | WORKER 型部署观察不收敛 | **已修复** | 根因：内容寻址构建使不同应用的镜像 digest 相同，containerd 的 ImageID 引用路径取决于先拉取者，correctImageID 整串精确比较误判同 digest 合法证据。修复为摘要等价比较（runtime.go correctImageID + 观察原因透传诊断）。修复后 WORKER 型部署 op SUCCEEDED、pod Running（2026-11-14） |
 | ⑧ | worker 客户端把非资格类业务拒绝（channel=deployment）当协议错误断流 → 归档应用重投形成"拒绝→断流→重连"风暴（359次/10分钟），节点心跳断开连带资格失效 | 阻断 | 修复：业务拒绝上报后保留流（workergateway/worker_client.go Rejection 分支）。归档应用的存量重投以 DB 标记终态清噪（测试实例数据操作） |
-| ⑨ | 运行日志/指标采集产出为 0：runtimeSidecar 在跟踪期未产出任何 chunk（旁路设计静默失败，journal 空），观察收敛后复验仍 0 | 待查 | 未修复；阻塞运行日志/指标/Kubelet 精度三项验收 |
+| ⑨ | 运行日志/指标采集产出为 0 | **已修复（三处叠加根因）** | ①采集生命周期错配：旁路挂操作跟踪窗口，⑦修复后收敛只需数秒，旁路来不及产出 → 改挂部署本体（collectors.go 持久采集器，Apply 启动/LOST 或 STOP 停止）；②分块阈值 16KiB 对低频日志永远凑不满且无时间刷出 → 按观察间隔时间刷出半满 buffer + 取消/EOF 时同步尾块；③CLI 从未接线 MetricsEnabled/KubeletMetrics（worker run 新增 --kubelet-metrics-endpoint）|
 
 ### 安装侧要点（非产品代码，实机参数）
 

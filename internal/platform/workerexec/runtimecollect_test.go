@@ -333,6 +333,9 @@ func TestDeployCancelStopsSidecarGoroutines(t *testing.T) {
 	if err := <-done; !errors.Is(err, context.Canceled) {
 		t.Fatalf("ctx取消应让Deploy返回取消错误: %v", err)
 	}
-	// Deploy 返回后旁路goroutine必须全部退出，不残留跟随流或指标循环。
+	// 新生命周期：采集器挂部署本体，Deploy 返回（甚至 ctx 取消）后采集继续；
+	// 显式停止（部署消失/STOP 语义）后 goroutine 才全部退出。
+	waitFor(t, 2*time.Second, func() bool { return runtime.NumGoroutine() > before })
+	executor.stopRuntimeCollector("release-1")
 	waitFor(t, 2*time.Second, func() bool { return runtime.NumGoroutine() <= before })
 }

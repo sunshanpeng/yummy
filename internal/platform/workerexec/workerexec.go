@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	platformv1 "github.com/sunshanpeng/yummy/gen/go/platform/v1"
@@ -98,6 +99,11 @@ type Executor struct {
 	// metrics 为 nil 表示未启用指标采集（MetricsEnabled 默认 false 失败关闭）；
 	// 启用时跨 Deploy 复用，CPU counter 基线因此跨发布保持连续。
 	metrics *kube.MetricsCollector
+	// collectorsMu/collectors 管理按 release 的持久运行采集器（生命周期挂部署
+	// 本体，见 collectors.go）；进程关闭时统一等待退出。
+	collectorsMu sync.Mutex
+	collectors   map[string]*collectorHandle
+	wgCollectors sync.WaitGroup
 }
 
 var _ workergateway.Executor = (*Executor)(nil)

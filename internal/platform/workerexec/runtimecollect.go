@@ -20,10 +20,13 @@ import (
 	"sync"
 	"time"
 
+	"fmt"
 	platformv1 "github.com/sunshanpeng/yummy/gen/go/platform/v1"
 	"github.com/sunshanpeng/yummy/internal/platform/kube"
 	"github.com/sunshanpeng/yummy/internal/platform/workergateway"
 	corev1 "k8s.io/api/core/v1"
+	"os"
+
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -64,9 +67,11 @@ type runtimeSidecar struct {
 	mu     sync.Mutex
 	target runtimeTarget
 
-	followKey    string
-	followCancel context.CancelFunc
-	drained      map[string]bool
+	followKey       string
+	followCancel    context.CancelFunc
+	drained         map[string]bool
+	foundNone       bool
+	metricErrLogged map[string]bool
 }
 
 func newRuntimeSidecar(exec *Executor, command *platformv1.WorkerDeploymentCommand, change kube.RuntimeChange, emitter workergateway.Emitter) *runtimeSidecar {
@@ -142,8 +147,17 @@ func (s *runtimeSidecar) applyEvidence(ctx context.Context, evidence kube.Runtim
 	s.mu.Unlock()
 
 	if logPod == nil {
+		// 可运维性：无合格跟随目标时输出一次原因（pod 数与资格），便于节点侧定位旁路静默。
+		if s.followKey == "" {
+			s.foundNone = true
+			fmt.Fprintln(os.Stderr, "worker日志旁路: 本轮无合格跟随目标, pods=", len(evidence.Pods))
+		}
 		s.stopFollower()
 		return
+	}
+	if s.foundNone {
+		s.foundNone = false
+		fmt.Fprintln(os.Stderr, "worker日志旁路: 恢复跟随", logPod.Name)
 	}
 	key := string(logPod.UID) + "/" + strconv.Itoa(int(logPod.Restarts))
 	if key == s.followKey {
@@ -176,6 +190,8 @@ func (s *runtimeSidecar) startFollower(ctx context.Context, key string, pod kube
 		RestartCount: pod.Restarts,
 	})
 	if err != nil {
+		// 可运维性：跟随流打开失败原样落节点日志（旁路语义不重试不告警）。
+		fmt.Fprintln(os.Stderr, "worker日志旁路: 跟随流打开失败:", err)
 		cancel()
 		return
 	}
@@ -183,7 +199,7 @@ func (s *runtimeSidecar) startFollower(ctx context.Context, key string, pod kube
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
-		drained := s.followRuntimeStream(streamCtx, stream, pod.UID, pod.Restarts)
+		drained := s.followRuntimeStream(streamCtx, stream, pod.UID, pod.Restarts, s.emitter)
 		select {
 		case s.finished <- streamResult{key: key, drained: drained}:
 		case <-streamCtx.Done():
@@ -194,16 +210,45 @@ func (s *runtimeSidecar) startFollower(ctx context.Context, key string, pod kube
 // followRuntimeStream 读取跟随流并按 LogChunkBytes 切块入队：排空（EOF）时补发
 // 尾块并返回 true；ctx 取消或读取失败丢弃残余并返回 false（交由重试语义处理，
 // 流内已发序号仍连续，尾部缺失不产生断号）。
-func (s *runtimeSidecar) followRuntimeStream(ctx context.Context, stream *kube.LogStream, podUID types.UID, restarts int32) bool {
+func (s *runtimeSidecar) followRuntimeStream(ctx context.Context, stream *kube.LogStream, podUID types.UID, restarts int32, emitter workergateway.Emitter) bool {
 	defer stream.Close()
 	chunkSize := s.exec.options.LogChunkBytes
 	identity := runtimeLogChunk{podUID: podUID, restarts: restarts}
 	buffer := make([]byte, 0, chunkSize)
 	readBuf := make([]byte, 4096)
+	emitDirect := func(content []byte) bool {
+		// 取消/排空路径的同步尾块：管理循环可能已退出（不再消费 chunks 队列），
+		// 残余日志直接经 emitter 发射；失败按旁路语义丢弃。
+		value := &platformv1.WorkerRuntimeLog{
+			WorkspaceId:   s.command.WorkspaceId,
+			ApplicationId: s.command.ApplicationId,
+			OperationId:   s.command.OperationId,
+			ReleaseId:     s.command.ReleaseId,
+			Generation:    s.command.Generation,
+			PodUid:        string(identity.podUID),
+			Container:     "app",
+			RestartCount:  identity.restarts,
+			Seq:           0,
+			Content:       content,
+		}
+		return emitter.RuntimeLog(value) == nil
+	}
+	lastFlush := time.Now()
 	for {
 		n, readErr := stream.Read(readBuf)
 		if n > 0 {
 			buffer = append(buffer, readBuf[:n]...)
+			// 时间刷出（发现⑨剩余部分）：分块阈值 16KiB 对低频日志永远凑不满，
+			// 按观察间隔把半满 buffer 刷成小块，保证运行日志按时间可见。
+			if len(buffer) > 0 && time.Since(lastFlush) >= s.exec.options.ObserveInterval {
+				content := append([]byte(nil), buffer...)
+				buffer = buffer[:0]
+				select {
+				case s.chunks <- runtimeLogChunk{podUID: identity.podUID, restarts: identity.restarts, content: content}:
+				default:
+				}
+				lastFlush = time.Now()
+			}
 			for len(buffer) >= chunkSize {
 				chunk := append([]byte(nil), buffer[:chunkSize]...)
 				select {
@@ -215,18 +260,28 @@ func (s *runtimeSidecar) followRuntimeStream(ctx context.Context, stream *kube.L
 			}
 		}
 		if readErr != nil {
+			// 尾块策略：EOF（pod 终止/排空）与取消/超时（部署跟踪结束）都把残余
+			// buffer 作为尾块同步发射——Follow=true 的流永不 EOF，若无尾块发射，
+			// 快速收敛的部署与低频日志应用将永远凑不满分块阈值而零产出（发现⑨）。
 			if errors.Is(readErr, io.EOF) || errors.Is(readErr, context.Canceled) || errors.Is(readErr, context.DeadlineExceeded) {
-				if errors.Is(readErr, io.EOF) && len(buffer) > 0 {
+				if len(buffer) > 0 {
 					select {
 					case s.chunks <- runtimeLogChunk{podUID: identity.podUID, restarts: identity.restarts, content: append([]byte(nil), buffer...)}:
 					case <-ctx.Done():
+						emitDirect(append([]byte(nil), buffer...))
 					}
 				}
 				return errors.Is(readErr, io.EOF)
 			}
+			if len(buffer) > 0 {
+				emitDirect(append([]byte(nil), buffer...))
+			}
 			return false
 		}
 		if ctx.Err() != nil {
+			if len(buffer) > 0 {
+				emitDirect(append([]byte(nil), buffer...))
+			}
 			return false
 		}
 	}
@@ -255,6 +310,7 @@ func (s *runtimeSidecar) emitLogChunk() {
 		Content:       chunk.content,
 	}
 	if err := s.emitter.RuntimeLog(value); err != nil {
+		fmt.Fprintln(os.Stderr, "worker日志旁路: 发射失败:", err)
 		s.stopFollower()
 	}
 }
@@ -282,7 +338,21 @@ func (s *runtimeSidecar) runMetrics(ctx context.Context) {
 			}
 			samples, err := s.exec.metrics.Collect(ctx)
 			if err != nil {
+				// 可运维性：指标采集失败按旁路语义静默重试，但把首轮失败落节点日志。
+				if _, seen := s.metricErrLogged[err.Error()]; !seen {
+					if s.metricErrLogged == nil {
+						s.metricErrLogged = map[string]bool{}
+					}
+					s.metricErrLogged[err.Error()] = true
+					fmt.Fprintln(os.Stderr, "worker指标旁路: 采集失败:", err)
+				}
 				continue
+			}
+			if s.metricErrLogged != nil {
+				for key := range s.metricErrLogged {
+					fmt.Fprintln(os.Stderr, "worker指标旁路: 采集恢复")
+					delete(s.metricErrLogged, key)
+				}
 			}
 			for _, sample := range samples {
 				previous, hasPrevious := seen[sample.PodUID]

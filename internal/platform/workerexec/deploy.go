@@ -68,6 +68,7 @@ func (e *Executor) Deploy(ctx context.Context, command *platformv1.WorkerDeploym
 			return err
 		}
 	case "STOP":
+		e.stopRuntimeCollector(change.Release.ID)
 		if err := e.runtime.Stop(ctx, change); err != nil {
 			return err
 		}
@@ -157,12 +158,15 @@ func (e *Executor) runtimeChange(command *platformv1.WorkerDeploymentCommand) (k
 // 与指标采样挂在同生命周期的尽力而为旁路上（见 runtimecollect.go）：每轮证据
 // 推给旁路，Deploy 返回或 ctx 取消时旁路统一停止并等待退出，失败绝不影响状态机。
 func (e *Executor) observeLoop(ctx context.Context, command *platformv1.WorkerDeploymentCommand, change kube.RuntimeChange, http, stop bool, emitter workergateway.Emitter) error {
-	sideCtx, stopSide := context.WithCancel(ctx)
-	side := newRuntimeSidecar(e, command, change, emitter)
-	side.start(sideCtx)
-	// defer 后进先出：先取消旁路 ctx，再等待其全部 goroutine 退出。
-	defer side.wait()
-	defer stopSide()
+	// 运行日志/指标采集生命周期改挂部署本体（见 startRuntimeCollector）：Apply 成功
+	// 即启动持久采集器，部署消失（LOST）或 STOP 时停止；不再随操作跟踪窗口结束。
+	if stop {
+		e.stopRuntimeCollector(change.Release.ID)
+	} else {
+		if err := e.startRuntimeCollector(command, change, http, emitter); err != nil {
+			return err
+		}
+	}
 	ticker := time.NewTicker(e.options.ObserveInterval)
 	defer ticker.Stop()
 	for {
@@ -172,12 +176,12 @@ func (e *Executor) observeLoop(ctx context.Context, command *platformv1.WorkerDe
 		evidence, err := e.runtime.Observe(ctx, change, http)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
+				e.stopRuntimeCollector(change.Release.ID)
 				return emitter.Observation(e.deploymentObservation(command, kube.RuntimeEvidence{CollectedAt: time.Now().UTC()}, observationKindLost, ""))
 			}
 			return err
 		}
-		// 旁路只消费这里给出的运行事实，不另起第二套资源读取路径。
-		side.update(evidence)
+		// 旁路证据由持久采集器独立观察（collectors.go），跟踪循环不再喂第二套。
 		kind, code := classifyRuntime(evidence, stop)
 		// KubernetesReady 为假且已过发布进度期限时按真实状态条件上报 FAILED，
 		// 让控制面走失败收尾/自动恢复；证据不足时继续保持 WAITING_READY。
