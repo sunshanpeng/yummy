@@ -531,5 +531,15 @@ func correctImageID(id, image string) bool {
 	if len(parts) != 2 {
 		return false
 	}
-	return id == image || id == "docker-pullable://"+image || id == "containerd://"+parts[1] || id == "docker://"+parts[1]
+	if id == image || id == "docker-pullable://"+image || id == "containerd://"+parts[1] || id == "docker://"+parts[1] {
+		return true
+	}
+	// 实机发现⑦（2026-11-14）：内容寻址构建使不同应用的镜像 digest 相同，而
+	// containerd 的 ImageID 引用路径取决于先拉取者（如 repo@app_a@digest vs
+	// repo@app_b@digest），整串精确比较会把同 digest 的合法运行证据误判为
+	// 不匹配。此处回退为摘要等价：两边 @sha256 摘要一致即视为同一镜像证据。
+	if i := strings.LastIndex(id, "@sha256:"); i >= 0 {
+		return id[i+1:] == parts[1]
+	}
+	return false
 }

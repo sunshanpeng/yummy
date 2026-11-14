@@ -101,6 +101,15 @@ func (r *Runtime) Observe(ctx context.Context, c RuntimeChange, http bool) (Runt
 	generation := strconv.FormatInt(c.ExpectedGeneration, 10)
 	e.CorrectGeneration = d.Labels[LabelGeneration] == generation && d.Labels[LabelOperation] == c.OperationID && d.Labels[LabelRelease] == c.Release.ID && d.Status.ObservedGeneration >= d.Generation
 	e.CorrectDigest = len(d.Spec.Template.Spec.Containers) == 1 && d.Spec.Template.Spec.Containers[0].Image == c.Release.Image && d.Spec.Template.Annotations[annotationSnapshot] == fingerprint(c.Release)
+	// 可运维性：digest 证据缺失时区分具体子条件（镜像引用/快照指纹），便于节点侧定位。
+	if !e.CorrectDigest && len(d.Spec.Template.Spec.Containers) == 1 {
+		if d.Spec.Template.Spec.Containers[0].Image != c.Release.Image {
+			e.Reasons = append(e.Reasons, "deployment镜像引用与命令不一致")
+		}
+		if d.Spec.Template.Annotations[annotationSnapshot] != fingerprint(c.Release) {
+			e.Reasons = append(e.Reasons, "deployment快照指纹与命令不一致: 部署注解="+d.Spec.Template.Annotations[annotationSnapshot]+" 计算="+fingerprint(c.Release))
+		}
+	}
 	selector := metav1.ListOptions{LabelSelector: labels.SelectorFromSet(labelsFor(c.Release.WorkspaceID, c.Release.ApplicationID, c.Release.Placement.UID)).String()}
 	replicasets, err := a.client.AppsV1().ReplicaSets(ns).List(ctx, selector)
 	if err != nil {
@@ -165,6 +174,16 @@ func (r *Runtime) Observe(ctx context.Context, c RuntimeChange, http bool) (Runt
 			continue
 		}
 		if len(p.Spec.Containers) != 1 || p.Spec.Containers[0].Image != c.Release.Image || !correctImageID(pe.ImageID, c.Release.Image) {
+			// 可运维性：pod 级证据失败时输出三个子条件的事实值（引用/ID 均为公开形态）。
+			if p.Spec.Containers[0].Image != c.Release.Image {
+				e.Reasons = append(e.Reasons, "pod镜像与命令不一致: pod="+p.Spec.Containers[0].Image+" 命令="+c.Release.Image)
+			}
+			if !correctImageID(pe.ImageID, c.Release.Image) {
+				e.Reasons = append(e.Reasons, "pod imageID证据不足: id="+pe.ImageID+" 命令="+c.Release.Image)
+			}
+			if p.Annotations[annotationSnapshot] != fingerprint(c.Release) {
+				e.Reasons = append(e.Reasons, "pod快照指纹不一致: pod="+p.Annotations[annotationSnapshot]+" 计算="+fingerprint(c.Release))
+			}
 			e.CorrectDigest = false
 			continue
 		}
@@ -179,6 +198,10 @@ func (r *Runtime) Observe(ctx context.Context, c RuntimeChange, http bool) (Runt
 	}
 	e.Stopped = desired == 0 && activeCount == 0 && e.CorrectGeneration && d.Status.Replicas == 0
 	e.Ready = desired == 1 && currentReady == 1 && activeCount == 1 && d.Status.ReadyReplicas == 1 && d.Status.UpdatedReplicas == 1 && d.Status.AvailableReplicas == 1
+	// 可运维性：副本未就绪时输出各计数子条件。
+	if !e.Ready {
+		e.Reasons = append(e.Reasons, fmt.Sprintf("副本计数: desired=%d currentReady=%d active=%d statusReady=%d updated=%d available=%d", desired, currentReady, activeCount, d.Status.ReadyReplicas, d.Status.UpdatedReplicas, d.Status.AvailableReplicas))
+	}
 	e.ServiceEndpoints = !http
 	if http && desired > 0 {
 		service, err := a.client.CoreV1().Services(ns).Get(ctx, name, metav1.GetOptions{})

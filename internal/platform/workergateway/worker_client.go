@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"sync"
@@ -167,8 +168,11 @@ func (c *WorkerClient) runOnce(parent context.Context) error {
 					return
 				}
 				if value.Rejection.Channel != "qualification" {
-					receiveErrors <- ErrProtocol
-					return
+					// 业务拒绝（如归档应用的重投被控制面拒收）不是传输层错误：
+					// 上报后保留流继续收后续消息，否则会形成"拒绝→断流→重连→
+					// 再拒绝"的无限重连风暴，并连带中断心跳与资格（2026-11-14 实机）。
+					c.report(fmt.Errorf("worker被拒绝: channel=%s code=%s", value.Rejection.Channel, value.Rejection.Code))
+					continue
 				}
 				// 资格失败不等于断线；保留未就绪状态并允许运维发现问题。
 				c.report(ErrQualification)

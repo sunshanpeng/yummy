@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"os"
 	"slices"
 	"strconv"
 	"time"
@@ -185,6 +186,13 @@ func (e *Executor) observeLoop(ctx context.Context, command *platformv1.WorkerDe
 		}
 		if err := emitter.Observation(e.deploymentObservation(command, evidence, kind, code)); err != nil {
 			return err
+		}
+		// 可运维性：观察不收敛时把证据缺失原因写入节点日志（不含敏感值），
+		// 运维无需进集群即可判断卡在哪一项。
+		if kind == observationKindWaitingReady && len(evidence.Reasons) > 0 {
+			for _, reason := range evidence.Reasons {
+				fmt.Fprintln(os.Stderr, "worker观察未收敛:", reason)
+			}
 		}
 		switch kind {
 		case observationKindObserved, observationKindStopped, observationKindFailed:
