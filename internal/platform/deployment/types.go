@@ -171,15 +171,18 @@ type DispatchTLS struct {
 // Dispatch 含解密运行配置，只允许发送给冻结节点的认证 worker，不能作为公共 DTO。
 type Dispatch struct {
 	WorkspaceID, ApplicationID, OperationID, ReleaseID string
-	Action                                             string
-	Generation                                         int64
-	NextEventSeq                                       int64
-	RestartMarker                                      string
-	Placement                                          Placement
-	Artifact                                           ArtifactSnapshot
-	Config                                             runtimeconfig.Materialized
-	Domains                                            []string
-	TLS                                                *DispatchTLS
+	// SpaceSlug/AppName 空间标识与应用名（统一命名规范）：worker 据此派生
+	// 运行命名空间 prod-<space_slug> 与 Deployment/Service 名称 <应用名>-default。
+	SpaceSlug, AppName string
+	Action             string
+	Generation         int64
+	NextEventSeq       int64
+	RestartMarker      string
+	Placement          Placement
+	Artifact           ArtifactSnapshot
+	Config             runtimeconfig.Materialized
+	Domains            []string
+	TLS                *DispatchTLS
 }
 
 // Observation 只记录 Kubernetes 证据，不接收任意日志、错误详情或探测 URL。

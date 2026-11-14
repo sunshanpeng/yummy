@@ -8,6 +8,7 @@ import (
 
 	"github.com/sunshanpeng/yummy/internal/platform/audit"
 	"github.com/sunshanpeng/yummy/internal/platform/authorization"
+	"github.com/sunshanpeng/yummy/internal/platform/model"
 	"github.com/sunshanpeng/yummy/internal/platform/runtimeconfig"
 	"github.com/sunshanpeng/yummy/internal/platform/security"
 	"gorm.io/gorm"
@@ -98,7 +99,14 @@ func (s *Service) ClaimPending(ctx context.Context, worker WorkerIdentity) (Disp
 		}
 		// 默认域名属于冻结发布，不修改已经保存的配置版本。
 		material.View.Domains = append([]string{}, release.Domains...)
-		result = Dispatch{WorkspaceID: op.WorkspaceID, ApplicationID: op.ApplicationID, OperationID: op.ID, ReleaseID: release.ID, Action: op.Action, Generation: op.Generation, NextEventSeq: op.EventSeq + 1, Placement: release.PlacementSnapshot, Artifact: releaseView(release).Artifact, Config: material, Domains: release.Domains}
+		var spaceSlug, appName string
+		if err := tx.Table("workspaces").Select("slug").Where("id = ?", op.WorkspaceID).Take(&spaceSlug).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&model.Application{}).Select("name").Where("workspace_id = ? AND id = ?", op.WorkspaceID, op.ApplicationID).Take(&appName).Error; err != nil {
+			return err
+		}
+		result = Dispatch{WorkspaceID: op.WorkspaceID, ApplicationID: op.ApplicationID, SpaceSlug: spaceSlug, AppName: appName, OperationID: op.ID, ReleaseID: release.ID, Action: op.Action, Generation: op.Generation, NextEventSeq: op.EventSeq + 1, Placement: release.PlacementSnapshot, Artifact: releaseView(release).Artifact, Config: material, Domains: release.Domains}
 		// 入口 TLS 是实例级运行设施的当下事实，不冻结进发布：证书轮换不应要求
 		// 重新发布。领取时按 release.Domains 查 application_domain_claims 当前绑定，
 		// 全部域名绑定同一非空 Secret 才下发 HTTPS；存在未绑定或绑定不一致时

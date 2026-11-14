@@ -354,8 +354,9 @@ func TestBuildReconcileRestoresWithoutRecreating(t *testing.T) {
 		t.Fatalf("RECONCILE返回错误: %v", err)
 	}
 	for _, action := range client.Actions() {
-		if action.GetVerb() == "create" {
-			t.Fatalf("RECONCILE按JobUID恢复，不得重建: %s", action.GetVerb())
+		// 命名空间引导的创建合法；不得重建的是构建 Job 本体。
+		if action.GetVerb() == "create" && action.GetResource().Resource == "jobs" {
+			t.Fatalf("RECONCILE按JobUID恢复，不得重建Job: %s", action.GetVerb())
 		}
 	}
 	events := emitter.buildEvents()

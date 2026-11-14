@@ -96,7 +96,11 @@ func (s *Service) GetAttempt(ctx context.Context, w WorkerIdentity, id string) (
 		if err != nil {
 			return err
 		}
-		out = dispatch(b, a)
+		slug, slugErr := workspaceSlug(tx, b.WorkspaceID)
+		if slugErr != nil {
+			return slugErr
+		}
+		out = dispatch(b, a, slug)
 		if terminal(b.State) && !a.Occupied {
 			out.Command = "FINISHED"
 		}

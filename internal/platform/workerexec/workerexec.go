@@ -165,6 +165,9 @@ func (e *Executor) Build(ctx context.Context, command *platformv1.WorkerBuildCom
 		if e.options.Installed.HostBuild {
 			return e.runHostBuild(ctx, command, task, emitter)
 		}
+		if err := e.options.Adapter.BootstrapBuildNamespace(ctx, task.SpaceSlug, task.WorkspaceID); err != nil {
+			return err
+		}
 		return e.runBuild(ctx, command, task, emitter)
 	case "CANCEL":
 		if e.options.Installed.HostBuild {
@@ -174,6 +177,9 @@ func (e *Executor) Build(ctx context.Context, command *platformv1.WorkerBuildCom
 	case "RECONCILE":
 		if e.options.Installed.HostBuild {
 			return e.runHostBuild(ctx, command, task, emitter)
+		}
+		if err := e.options.Adapter.BootstrapBuildNamespace(ctx, task.SpaceSlug, task.WorkspaceID); err != nil {
+			return err
 		}
 		return e.reconcileBuild(ctx, command, task, emitter)
 	default:
@@ -194,6 +200,7 @@ func (e *Executor) buildTask(command *platformv1.WorkerBuildCommand) (kube.Build
 		StableJobName: command.StableJobName,
 		WorkspaceID:   command.WorkspaceId,
 		ApplicationID: command.ApplicationId,
+		SpaceSlug:     command.SpaceSlug,
 		Node:          e.options.Node,
 		Platform:      command.Platform,
 		Dockerfile:    command.Dockerfile,

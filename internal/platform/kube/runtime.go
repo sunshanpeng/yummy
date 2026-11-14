@@ -24,8 +24,11 @@ import (
 // Release 是控制面已验证、不可变的发布快照。Placement不得由应用输入或当前默认策略重新计算。
 type Release struct {
 	ID, WorkspaceID, ApplicationID, Image string
-	ConfigRevision                        int64
-	Placement                             NodeTarget
+	// SpaceSlug/AppName 统一命名派生源：运行命名空间 prod-<space_slug>，
+	// Deployment/Service 名称 <app_name>-default（2026-10-26 设计）。
+	SpaceSlug, AppName string
+	ConfigRevision     int64
+	Placement          NodeTarget
 	// 拉取凭据只供受限worker内部使用，不参与快照公开序列化。
 	RegistryDockerConfig      []byte `json:"-"`
 	RegistryCredentialVersion int64
@@ -205,8 +208,8 @@ type Route struct {
 func (r *Runtime) objects(c RuntimeChange, m runtimeconfig.Materialized, route Route) (runtimeObjects, error) {
 	a := r.adapter
 	v := m.View
-	ns := a.config.RuntimeNamespace
-	name := AppName(c.Release.ApplicationID)
+	ns := a.runtimeNamespace(c)
+	name := a.deployedName(c.Release)
 	configName := name + "-" + shortHash(c.Release.ID)[:12]
 	objects := runtimeObjects{}
 	cm := &corev1.ConfigMap{ObjectMeta: runtimeMeta(configName, ns, c), Immutable: ptr(true), Data: map[string]string{}}
@@ -352,7 +355,7 @@ func (r *Runtime) Apply(ctx context.Context, c RuntimeChange, m runtimeconfig.Ma
 		return "", err
 	}
 	a := r.adapter
-	ns := a.config.RuntimeNamespace
+	ns := a.runtimeNamespace(c)
 	// 在创建配置/路由之前预检稳定Deployment，避免跨app冲突后先改动其他运行资源。
 	current, checkErr := a.client.AppsV1().Deployments(ns).Get(ctx, objects.deployment.Name, metav1.GetOptions{})
 	if checkErr == nil {
@@ -435,8 +438,8 @@ func (r *Runtime) Apply(ctx context.Context, c RuntimeChange, m runtimeconfig.Ma
 	return dep.UID, nil
 }
 func (r *Runtime) removeRoute(ctx context.Context, c RuntimeChange) error {
-	ns := r.adapter.config.RuntimeNamespace
-	name := AppName(c.Release.ApplicationID)
+	ns := r.adapter.runtimeNamespace(c)
+	name := r.adapter.deployedName(c.Release)
 	apiI := r.adapter.client.NetworkingV1().Ingresses(ns)
 	i, err := apiI.Get(ctx, name, metav1.GetOptions{})
 	if err == nil {
@@ -479,8 +482,8 @@ func (r *Runtime) scale(ctx context.Context, c RuntimeChange, replicas int32, re
 			return err
 		}
 	}
-	api := r.adapter.client.AppsV1().Deployments(r.adapter.config.RuntimeNamespace)
-	d, err := api.Get(ctx, AppName(c.Release.ApplicationID), metav1.GetOptions{})
+	api := r.adapter.client.AppsV1().Deployments(r.adapter.runtimeNamespace(c))
+	d, err := api.Get(ctx, r.adapter.deployedName(c.Release), metav1.GetOptions{})
 	if err != nil {
 		return err
 	}

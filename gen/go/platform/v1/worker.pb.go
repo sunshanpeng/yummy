@@ -872,8 +872,10 @@ type WorkerBuildCommand struct {
 	SourceGrant      *WorkerSourceGrant        `protobuf:"bytes,20,opt,name=source_grant,json=sourceGrant,proto3" json:"source_grant,omitempty"`
 	Registry         *WorkerRegistryCredential `protobuf:"bytes,21,opt,name=registry,proto3" json:"registry,omitempty"`
 	Secrets          []*WorkerBuildSecret      `protobuf:"bytes,22,rep,name=secrets,proto3" json:"secrets,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// 空间标识（统一命名规范）：worker 据此派生构建命名空间 build-<space_slug>。
+	SpaceSlug     string `protobuf:"bytes,23,opt,name=space_slug,json=spaceSlug,proto3" json:"space_slug,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *WorkerBuildCommand) Reset() {
@@ -1060,6 +1062,13 @@ func (x *WorkerBuildCommand) GetSecrets() []*WorkerBuildSecret {
 	return nil
 }
 
+func (x *WorkerBuildCommand) GetSpaceSlug() string {
+	if x != nil {
+		return x.SpaceSlug
+	}
+	return ""
+}
+
 type WorkerDeploymentCommand struct {
 	state                 protoimpl.MessageState    `protogen:"open.v1"`
 	WorkspaceId           string                    `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
@@ -1083,6 +1092,10 @@ type WorkerDeploymentCommand struct {
 	// worker 不得自行猜测或伪造证书证据。
 	TlsSecretName string `protobuf:"bytes,18,opt,name=tls_secret_name,json=tlsSecretName,proto3" json:"tls_secret_name,omitempty"`
 	Https         bool   `protobuf:"varint,19,opt,name=https,proto3" json:"https,omitempty"`
+	// 空间标识与应用名（统一命名规范）：worker 据此派生运行命名空间 prod-<space_slug>
+	// 与 Deployment/Service 名称 <应用名>-default。
+	SpaceSlug     string `protobuf:"bytes,20,opt,name=space_slug,json=spaceSlug,proto3" json:"space_slug,omitempty"`
+	AppName       string `protobuf:"bytes,21,opt,name=app_name,json=appName,proto3" json:"app_name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1248,6 +1261,20 @@ func (x *WorkerDeploymentCommand) GetHttps() bool {
 		return x.Https
 	}
 	return false
+}
+
+func (x *WorkerDeploymentCommand) GetSpaceSlug() string {
+	if x != nil {
+		return x.SpaceSlug
+	}
+	return ""
+}
+
+func (x *WorkerDeploymentCommand) GetAppName() string {
+	if x != nil {
+		return x.AppName
+	}
+	return ""
 }
 
 type WorkerBuildEvent struct {
@@ -2171,7 +2198,7 @@ const file_platform_v1_worker_proto_rawDesc = "" +
 	"\x03url\x18\x01 \x01(\tR\x03url\x12\x14\n" +
 	"\x05token\x18\x02 \x01(\tR\x05token\x12\x16\n" +
 	"\x06sha256\x18\x03 \x01(\tR\x06sha256\x12!\n" +
-	"\fexpires_unix\x18\x04 \x01(\x03R\vexpiresUnix\"\x95\a\n" +
+	"\fexpires_unix\x18\x04 \x01(\x03R\vexpiresUnix\"\xb4\a\n" +
 	"\x12WorkerBuildCommand\x12\x19\n" +
 	"\bbuild_id\x18\x01 \x01(\tR\abuildId\x12\x1d\n" +
 	"\n" +
@@ -2201,10 +2228,12 @@ const file_platform_v1_worker_proto_rawDesc = "" +
 	"\rdeadline_unix\x18\x13 \x01(\x03R\fdeadlineUnix\x12A\n" +
 	"\fsource_grant\x18\x14 \x01(\v2\x1e.platform.v1.WorkerSourceGrantR\vsourceGrant\x12A\n" +
 	"\bregistry\x18\x15 \x01(\v2%.platform.v1.WorkerRegistryCredentialR\bregistry\x128\n" +
-	"\asecrets\x18\x16 \x03(\v2\x1e.platform.v1.WorkerBuildSecretR\asecrets\x1a<\n" +
+	"\asecrets\x18\x16 \x03(\v2\x1e.platform.v1.WorkerBuildSecretR\asecrets\x12\x1d\n" +
+	"\n" +
+	"space_slug\x18\x17 \x01(\tR\tspaceSlug\x1a<\n" +
 	"\x0eBuildArgsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xe1\a\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x9b\b\n" +
 	"\x17WorkerDeploymentCommand\x12!\n" +
 	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x12%\n" +
 	"\x0eapplication_id\x18\x02 \x01(\tR\rapplicationId\x12!\n" +
@@ -2230,7 +2259,10 @@ const file_platform_v1_worker_proto_rawDesc = "" +
 	"\x12materialized_files\x18\x10 \x03(\v2;.platform.v1.WorkerDeploymentCommand.MaterializedFilesEntryR\x11materializedFiles\x12A\n" +
 	"\bregistry\x18\x11 \x01(\v2%.platform.v1.WorkerRegistryCredentialR\bregistry\x12&\n" +
 	"\x0ftls_secret_name\x18\x12 \x01(\tR\rtlsSecretName\x12\x14\n" +
-	"\x05https\x18\x13 \x01(\bR\x05https\x1aH\n" +
+	"\x05https\x18\x13 \x01(\bR\x05https\x12\x1d\n" +
+	"\n" +
+	"space_slug\x18\x14 \x01(\tR\tspaceSlug\x12\x19\n" +
+	"\bapp_name\x18\x15 \x01(\tR\aappName\x1aH\n" +
 	"\x1aMaterializedVariablesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1aD\n" +

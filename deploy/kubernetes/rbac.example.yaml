@@ -1,4 +1,39 @@
 # 仅示例，不由程序自动安装。替换命名空间/worker节点名；一组执行范围使用独立SA。
+#
+# 命名空间按空间派生（2026-10-26 设计 §5）后，worker 需要集群级权限引导命名空间：
+# ①创建/读取 build-<空间名> 与 prod-<空间名> 并打归属标签；②下发空间隔离
+# NetworkPolicy；③在引导后的命名空间内执行构建与运行资源操作（集群级 ClusterRole，
+# 归属核对由 worker 代码对平台标签执行，R21C 权限边界不放宽到无归属对象）。
+# 若沿用固定命名空间的旧模式，仍可使用下方按命名空间的 Role 授权。
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: yummy-worker-cluster
+rules:
+  - apiGroups: [""]
+    resources: [namespaces]
+    verbs: [get, list, create]
+  - apiGroups: [networking.k8s.io]
+    resources: [networkpolicies]
+    verbs: [get, list, create, update]
+  - apiGroups: [batch]
+    resources: [jobs]
+    verbs: [get, list, create, delete]
+  - apiGroups: [""]
+    resources: [pods, secrets, services, configmaps, persistentvolumeclaims, events]
+    verbs: [get, list, create, delete]
+  - apiGroups: [""]
+    resources: [pods/log]
+    verbs: [get]
+  - apiGroups: [apps]
+    resources: [deployments, replicasets]
+    verbs: [get, list, create, update]
+  - apiGroups: [networking.k8s.io]
+    resources: [ingresses]
+    verbs: [get, list, create, update, delete]
+  - apiGroups: [discovery.k8s.io]
+    resources: [endpointslices]
+    verbs: [list]
 apiVersion: v1
 kind: Namespace
 metadata:

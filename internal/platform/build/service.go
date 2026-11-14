@@ -71,7 +71,7 @@ func validateConfig(c Config) (Config, error) {
 		return c, invalid("构建密钥过多")
 	}
 	for _, ref := range c.SecretRefs {
-		if ref.SecretID == "" || len(ref.SecretID)>128 || !utf8.ValidString(ref.SecretID) || strings.ContainsRune(ref.SecretID,0) || ref.Version < 0 || (ref.Name!=""&&!nameRE.MatchString(ref.Name)) {
+		if ref.SecretID == "" || len(ref.SecretID) > 128 || !utf8.ValidString(ref.SecretID) || strings.ContainsRune(ref.SecretID, 0) || ref.Version < 0 || (ref.Name != "" && !nameRE.MatchString(ref.Name)) {
 			return c, invalid("构建密钥引用非法")
 		}
 	}
@@ -160,7 +160,7 @@ func (s *Service) prepare(tx *gorm.DB, ws, app string, in CreateInput) (Preview,
 	fail := func(err error) (Preview, settingsRecord, policyRecord, registryRecord, error) {
 		return out, settings, policy, registry, err
 	}
-	if in.ExpectedPolicyRevision < 1 || in.ConfigRevision < 0 || (!in.AutoDeploy && (in.RuntimeConfigRevision != 0 || in.ExpectedServingRelease!="")) || len(in.SourceSnapshotID)>128 || strings.ContainsRune(in.SourceSnapshotID,0) || len(in.ExpectedServingRelease)>128 || strings.ContainsRune(in.ExpectedServingRelease,0) || !utf8.ValidString(in.SourceSnapshotID) || !utf8.ValidString(in.ExpectedServingRelease) {
+	if in.ExpectedPolicyRevision < 1 || in.ConfigRevision < 0 || (!in.AutoDeploy && (in.RuntimeConfigRevision != 0 || in.ExpectedServingRelease != "")) || len(in.SourceSnapshotID) > 128 || strings.ContainsRune(in.SourceSnapshotID, 0) || len(in.ExpectedServingRelease) > 128 || strings.ContainsRune(in.ExpectedServingRelease, 0) || !utf8.ValidString(in.SourceSnapshotID) || !utf8.ValidString(in.ExpectedServingRelease) {
 		return fail(authorization.ErrInvalid)
 	}
 	config, err := configAt(tx, ws, app, in.ConfigRevision)
@@ -292,7 +292,7 @@ func (s *Service) CreateBuild(ctx context.Context, p authorization.Principal, ws
 }
 func (s *Service) create(ctx context.Context, p authorization.Principal, ws, app string, in CreateInput, retry *string) (View, error) {
 	var out View
-	if len(in.IdempotencyKey) < 1 || len(in.IdempotencyKey) > 200 || !utf8.ValidString(in.IdempotencyKey) || strings.ContainsRune(in.IdempotencyKey,0) {
+	if len(in.IdempotencyKey) < 1 || len(in.IdempotencyKey) > 200 || !utf8.ValidString(in.IdempotencyKey) || strings.ContainsRune(in.IdempotencyKey, 0) {
 		return out, authorization.ErrInvalid
 	}
 	raw, _ := json.Marshal(struct {

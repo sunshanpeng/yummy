@@ -106,6 +106,15 @@ func shortHash(value string) string {
 }
 func JobName(attemptID string) string     { return "yb-" + shortHash(attemptID) }
 func AppName(applicationID string) string { return "ya-" + shortHash(applicationID) }
+
+// 命名空间与部署对象命名（2026-10-26 设计 §5）：第一版固定默认环境 prod，
+// 命名空间按空间派生，Deployment/Service 按应用派生；worker 在命名空间缺失
+// 时引导创建并打平台归属标签（见 Adapter.BootstrapBuild/RuntimeNamespace）。
+const EnvProd = "prod"
+
+func BuildNamespaceFor(spaceSlug string) string   { return "build-" + spaceSlug }
+func RuntimeNamespaceFor(spaceSlug string) string { return EnvProd + "-" + spaceSlug }
+func DeployedName(appName string) string          { return appName + "-default" }
 func validIdentity(value string) bool {
 	return value != "" && len(validation.IsValidLabelValue(value)) == 0
 }

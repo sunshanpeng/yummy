@@ -20,7 +20,7 @@ var digestRE = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 var stages = map[string]int{"PREPARING_SOURCE": 1, "BUILDING": 2, "PUSHING": 3, "VERIFYING_ARTIFACT": 4}
 
 func validateEvent(e Event) error {
-	if e.AttemptID == "" || e.Seq < 1 || len(e.JobUID) > 200 || len(e.ErrorCode) > 128 || !utf8.ValidString(e.JobUID) || !utf8.ValidString(e.ErrorCode) || strings.ContainsAny(e.JobUID,"\x00\r\n") || strings.ContainsRune(e.ErrorCode,0) {
+	if e.AttemptID == "" || e.Seq < 1 || len(e.JobUID) > 200 || len(e.ErrorCode) > 128 || !utf8.ValidString(e.JobUID) || !utf8.ValidString(e.ErrorCode) || strings.ContainsAny(e.JobUID, "\x00\r\n") || strings.ContainsRune(e.ErrorCode, 0) {
 		return authorization.ErrInvalid
 	}
 	switch e.Kind {

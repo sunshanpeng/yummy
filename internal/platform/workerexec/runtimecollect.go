@@ -182,8 +182,13 @@ func (s *runtimeSidecar) stopFollower() {
 // 全部由 kube 适配器完成；打开失败按旁路失败处理，等待下一次证据更新重试。
 func (s *runtimeSidecar) startFollower(ctx context.Context, key string, pod kube.PodEvidence) {
 	streamCtx, cancel := context.WithCancel(ctx)
+	// 命名空间与 change 派生一致（按空间或旧配置回退），保持 FollowLogs 归属校验通过。
+	logNS := s.exec.options.RuntimeNamespace
+	if s.change.Release.SpaceSlug != "" {
+		logNS = kube.RuntimeNamespaceFor(s.change.Release.SpaceSlug)
+	}
 	stream, err := s.exec.runtime.FollowLogs(streamCtx, s.change, kube.LogRequest{
-		Namespace:    s.exec.options.RuntimeNamespace,
+		Namespace:    logNS,
 		PodName:      pod.Name,
 		PodUID:       pod.UID,
 		Container:    "app",

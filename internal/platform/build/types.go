@@ -125,15 +125,17 @@ type Page struct {
 type WorkerIdentity struct{ NodeID, WorkerID, CertificateSerial string }
 type Dispatch struct {
 	BuildID, AttemptID, WorkspaceID, ApplicationID string
-	NodeID, WorkerID, JobName, JobUID              string
-	Command                                        string
-	SourceSnapshotID, SourceSHA256                 string
-	Config                                         Config
-	RegistryID                                     string
-	CredentialVersion                              int64
-	Repository, Tag, Platform                      string
-	Execution                                      inventory.ExecutionSummary
-	DeadlineAt                                     time.Time
+	// SpaceSlug 空间标识：worker 据此派生按空间的构建/运行命名空间（2026-10-26 设计）。
+	SpaceSlug                         string
+	NodeID, WorkerID, JobName, JobUID string
+	Command                           string
+	SourceSnapshotID, SourceSHA256    string
+	Config                            Config
+	RegistryID                        string
+	CredentialVersion                 int64
+	Repository, Tag, Platform         string
+	Execution                         inventory.ExecutionSummary
+	DeadlineAt                        time.Time
 }
 type Event struct {
 	AttemptID    string `json:"attemptId"`

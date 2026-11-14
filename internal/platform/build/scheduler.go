@@ -204,7 +204,11 @@ func (s *Service) Claim(ctx context.Context, w WorkerIdentity) (Dispatch, error)
 			if err := audit.Record(tx, b.ActorID, "build.claim", "build", b.ID, &b.WorkspaceID, &b.ApplicationID); err != nil {
 				return err
 			}
-			out = dispatch(*b, a)
+			slug, slugErr := workspaceSlug(tx, b.WorkspaceID)
+			if slugErr != nil {
+				return slugErr
+			}
+			out = dispatch(*b, a, slug)
 			claimed = true
 			return nil
 		}
@@ -218,14 +222,24 @@ func (s *Service) Claim(ctx context.Context, w WorkerIdentity) (Dispatch, error)
 	}
 	return out, nil
 }
-func dispatch(b buildRecord, a attemptRecord) Dispatch {
+
+// workspaceSlug 读取空间标识（统一命名规范），供按空间派生命名空间。
+func workspaceSlug(tx *gorm.DB, workspaceID string) (string, error) {
+	var ws model.Workspace
+	if err := tx.First(&ws, "id = ?", workspaceID).Error; err != nil {
+		return "", err
+	}
+	return ws.Slug, nil
+}
+
+func dispatch(b buildRecord, a attemptRecord, spaceSlug string) Dispatch {
 	command := "RECONCILE"
 	if b.DesiredState == "CANCEL" {
 		command = "CANCEL"
 	} else if a.JobUID == "" && b.State == Starting {
 		command = "RUN"
 	}
-	return Dispatch{BuildID: b.ID, AttemptID: a.ID, WorkspaceID: b.WorkspaceID, ApplicationID: b.ApplicationID, NodeID: a.NodeID, WorkerID: a.WorkerID, JobName: a.JobName, JobUID: a.JobUID, Command: command, SourceSnapshotID: b.SourceSnapshotID, SourceSHA256: b.SourceSHA256, Config: b.ConfigSnapshot, RegistryID: b.RegistryID, CredentialVersion: b.CredentialVersion, Repository: b.Repository, Tag: b.Tag, Platform: b.Platform, Execution: b.ExecutionSnapshot, DeadlineAt: b.DeadlineAt}
+	return Dispatch{BuildID: b.ID, AttemptID: a.ID, WorkspaceID: b.WorkspaceID, ApplicationID: b.ApplicationID, SpaceSlug: spaceSlug, NodeID: a.NodeID, WorkerID: a.WorkerID, JobName: a.JobName, JobUID: a.JobUID, Command: command, SourceSnapshotID: b.SourceSnapshotID, SourceSHA256: b.SourceSHA256, Config: b.ConfigSnapshot, RegistryID: b.RegistryID, CredentialVersion: b.CredentialVersion, Repository: b.Repository, Tag: b.Tag, Platform: b.Platform, Execution: b.ExecutionSnapshot, DeadlineAt: b.DeadlineAt}
 }
 
 // PendingDispatch 从 PG 恢复同一个 attempt；发送失败不会创建新 Job 身份。
@@ -253,7 +267,11 @@ func (s *Service) PendingDispatch(ctx context.Context, w WorkerIdentity, limit i
 			if err := tx.Save(&a).Error; err != nil {
 				return err
 			}
-			out = append(out, dispatch(b, a))
+			slug, slugErr := workspaceSlug(tx, b.WorkspaceID)
+			if slugErr != nil {
+				return slugErr
+			}
+			out = append(out, dispatch(b, a, slug))
 		}
 		return nil
 	})

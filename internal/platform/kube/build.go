@@ -36,13 +36,15 @@ type BuildSecret struct {
 }
 type BuildTask struct {
 	AttemptID, JobName, StableJobName, WorkspaceID, ApplicationID string
-	Node                                                          NodeTarget
-	Platform                                                      string
-	Source                                                        SourceGrant
-	ImageTag, Dockerfile, Context, Target                         string
-	BuildArgs                                                     map[string]string
-	Secrets                                                       []BuildSecret
-	RegistryDockerConfig                                          []byte `json:"-"`
+	// SpaceSlug 空间标识：构建命名空间 build-<space_slug> 按此派生（统一命名规范）。
+	SpaceSlug                             string
+	Node                                  NodeTarget
+	Platform                              string
+	Source                                SourceGrant
+	ImageTag, Dockerfile, Context, Target string
+	BuildArgs                             map[string]string
+	Secrets                               []BuildSecret
+	RegistryDockerConfig                  []byte `json:"-"`
 	// JobUID与Acknowledged来自持久化attempt；重投必须保留，不得根据当前内存清空。
 	JobUID       types.UID `json:"-"`
 	Acknowledged bool      `json:"-"`
@@ -133,7 +135,7 @@ func (a *Adapter) buildObjects(t BuildTask) (*batchv1.Job, *corev1.Secret) {
 	l := buildLabels(t)
 	annotations := map[string]string{annotationSnapshot: fingerprint(t)}
 	name := t.JobName + "-auth"
-	secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: a.config.BuildNamespace, Labels: copyLabels(l), Annotations: annotations}, Type: corev1.SecretTypeOpaque, Immutable: ptr(true), Data: map[string][]byte{"source-token": slices.Clone(t.Source.Token), "config.json": slices.Clone(t.RegistryDockerConfig)}}
+	secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: a.buildNamespace(t), Labels: copyLabels(l), Annotations: annotations}, Type: corev1.SecretTypeOpaque, Immutable: ptr(true), Data: map[string][]byte{"source-token": slices.Clone(t.Source.Token), "config.json": slices.Clone(t.RegistryDockerConfig)}}
 	authItems := []corev1.KeyToPath{{Key: "config.json", Path: "config.json"}}
 	args := []string{"build", "--metadata-output=/dev/termination-log", "--", "build", "--frontend=dockerfile.v0", "--metadata-file=/workspace/buildkit-metadata.json", "--local=context=/workspace/source/" + t.Context, "--local=dockerfile=/workspace/source/" + path.Dir(t.Dockerfile), "--opt=filename=" + path.Base(t.Dockerfile), "--opt=platform=" + Platform, "--output=type=image,name=" + t.ImageTag + ",push=true"}
 	if t.Target != "" {
@@ -171,7 +173,7 @@ func (a *Adapter) buildObjects(t BuildTask) (*batchv1.Job, *corev1.Secret) {
 	mounts := []corev1.VolumeMount{{Name: "workspace", MountPath: "/workspace"}, {Name: "state", MountPath: "/home/user/.local/share/buildkit"}, {Name: "auth", MountPath: "/run/build-auth", ReadOnly: true}, {Name: "runner-runtime", MountPath: "/run/yummy-runtime"}}
 	prepare := corev1.Container{Name: "prepare", Image: a.config.Installed.RunnerImage, ImagePullPolicy: corev1.PullIfNotPresent, Command: []string{"/usr/local/bin/yummy-runner"}, Args: []string{"prepare", "--source-uri=" + t.Source.URI, "--grant-file=/run/source-auth/source-token", "--archive-sha256=" + t.Source.ArchiveSHA256, fmt.Sprintf("--max-bytes=%d", t.Source.MaxBytes), "--destination=/workspace/source", "--dockerfile=" + t.Dockerfile}, SecurityContext: security.DeepCopy(), Resources: buildResources(), VolumeMounts: []corev1.VolumeMount{mounts[0], {Name: "source-auth", MountPath: "/run/source-auth", ReadOnly: true}}}
 	build := corev1.Container{Name: "build", Image: a.config.Installed.RunnerImage, ImagePullPolicy: corev1.PullIfNotPresent, Command: []string{"/usr/local/bin/yummy-runner"}, Args: args, SecurityContext: security, Resources: buildResources(), VolumeMounts: mounts, Env: []corev1.EnvVar{{Name: "DOCKER_CONFIG", Value: "/run/build-auth"}}, TerminationMessagePath: "/dev/termination-log", TerminationMessagePolicy: corev1.TerminationMessageReadFile}
-	job := &batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: t.JobName, Namespace: a.config.BuildNamespace, Labels: l, Annotations: annotations}, Spec: batchv1.JobSpec{BackoffLimit: ptr(int32(0)), ActiveDeadlineSeconds: ptr(int64(a.config.BuildDeadline.Seconds())), Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: copyLabels(l)}, Spec: corev1.PodSpec{NodeName: t.Node.Name, AutomountServiceAccountToken: ptr(false), RestartPolicy: corev1.RestartPolicyNever, SecurityContext: sec, EnableServiceLinks: ptr(false), Volumes: []corev1.Volume{workspace, state, auth, runtime, {Name: "source-auth", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: name, DefaultMode: ptr(int32(0440)), Items: []corev1.KeyToPath{{Key: "source-token", Path: "source-token"}}}}}}, InitContainers: []corev1.Container{prepare}, Containers: []corev1.Container{build}}}}}
+	job := &batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: t.JobName, Namespace: a.buildNamespace(t), Labels: l, Annotations: annotations}, Spec: batchv1.JobSpec{BackoffLimit: ptr(int32(0)), ActiveDeadlineSeconds: ptr(int64(a.config.BuildDeadline.Seconds())), Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: copyLabels(l)}, Spec: corev1.PodSpec{NodeName: t.Node.Name, AutomountServiceAccountToken: ptr(false), RestartPolicy: corev1.RestartPolicyNever, SecurityContext: sec, EnableServiceLinks: ptr(false), Volumes: []corev1.Volume{workspace, state, auth, runtime, {Name: "source-auth", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: name, DefaultMode: ptr(int32(0440)), Items: []corev1.KeyToPath{{Key: "source-token", Path: "source-token"}}}}}}, InitContainers: []corev1.Container{prepare}, Containers: []corev1.Container{build}}}}}
 	return job, secret
 }
 func (a *Adapter) verifyJob(t BuildTask, job *batchv1.Job) error {
@@ -252,7 +254,7 @@ func (a *Adapter) Run(ctx context.Context, t BuildTask) (BuildEvidence, error) {
 	if err := a.checkNodeIdentity(ctx, t.Node); err != nil {
 		return BuildEvidence{}, err
 	}
-	job, err := a.client.BatchV1().Jobs(a.config.BuildNamespace).Get(ctx, t.JobName, metav1.GetOptions{})
+	job, err := a.client.BatchV1().Jobs(a.buildNamespace(t)).Get(ctx, t.JobName, metav1.GetOptions{})
 	if err == nil {
 		if err = a.verifyJob(t, job); err != nil {
 			return BuildEvidence{}, err
@@ -272,9 +274,9 @@ func (a *Adapter) Run(ctx context.Context, t BuildTask) (BuildEvidence, error) {
 	if err := a.ensureBuildSecret(ctx, secret); err != nil {
 		return BuildEvidence{}, err
 	}
-	job, err = a.client.BatchV1().Jobs(a.config.BuildNamespace).Create(ctx, want, metav1.CreateOptions{})
+	job, err = a.client.BatchV1().Jobs(a.buildNamespace(t)).Create(ctx, want, metav1.CreateOptions{})
 	if apierrors.IsAlreadyExists(err) {
-		job, err = a.client.BatchV1().Jobs(a.config.BuildNamespace).Get(ctx, t.JobName, metav1.GetOptions{})
+		job, err = a.client.BatchV1().Jobs(a.buildNamespace(t)).Get(ctx, t.JobName, metav1.GetOptions{})
 	}
 	if err != nil {
 		return BuildEvidence{}, err
@@ -291,7 +293,7 @@ func (a *Adapter) Reconcile(ctx context.Context, t BuildTask) (BuildEvidence, er
 	if err := a.checkNodeIdentity(ctx, t.Node); err != nil {
 		return BuildEvidence{}, err
 	}
-	job, err := a.client.BatchV1().Jobs(a.config.BuildNamespace).Get(ctx, t.JobName, metav1.GetOptions{})
+	job, err := a.client.BatchV1().Jobs(a.buildNamespace(t)).Get(ctx, t.JobName, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
 		e := BuildEvidence{JobName: t.JobName, MissingAfterAcknowledgement: t.Acknowledged || t.JobUID != ""}
 		if e.MissingAfterAcknowledgement {
@@ -335,7 +337,7 @@ func (a *Adapter) buildEvidence(ctx context.Context, t BuildTask, j *batchv1.Job
 			e.Reason = c.Reason
 		}
 	}
-	pods, err := a.client.CoreV1().Pods(a.config.BuildNamespace).List(ctx, metav1.ListOptions{LabelSelector: labels.SelectorFromSet(buildLabels(t)).String()})
+	pods, err := a.client.CoreV1().Pods(a.buildNamespace(t)).List(ctx, metav1.ListOptions{LabelSelector: labels.SelectorFromSet(buildLabels(t)).String()})
 	if err != nil {
 		return e, err
 	}
@@ -387,8 +389,8 @@ func (a *Adapter) Cancel(ctx context.Context, t BuildTask) (StopEvidence, error)
 	if err := a.checkNodeIdentity(ctx, t.Node); err != nil {
 		return e, err
 	}
-	jobs := a.client.BatchV1().Jobs(a.config.BuildNamespace)
-	podsAPI := a.client.CoreV1().Pods(a.config.BuildNamespace)
+	jobs := a.client.BatchV1().Jobs(a.buildNamespace(t))
+	podsAPI := a.client.CoreV1().Pods(a.buildNamespace(t))
 	j, err := jobs.Get(ctx, t.JobName, metav1.GetOptions{})
 	uid := t.JobUID
 	if err == nil {
@@ -447,7 +449,7 @@ func (a *Adapter) Cancel(ctx context.Context, t BuildTask) (StopEvidence, error)
 	}
 	e.Stopped = !e.JobPresent && len(e.RemainingPodUIDs) == 0
 	if e.Stopped {
-		secret, err := a.client.CoreV1().Secrets(a.config.BuildNamespace).Get(ctx, t.JobName+"-auth", metav1.GetOptions{})
+		secret, err := a.client.CoreV1().Secrets(a.buildNamespace(t)).Get(ctx, t.JobName+"-auth", metav1.GetOptions{})
 		if err == nil {
 			if err := owns(secret, buildLabels(t), ""); err != nil {
 				return e, err

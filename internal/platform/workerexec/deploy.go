@@ -60,6 +60,9 @@ func (e *Executor) Deploy(ctx context.Context, command *platformv1.WorkerDeploym
 			route.HTTPS = command.GetHttps()
 			route.TLSSecretName = command.GetTlsSecretName()
 		}
+		if err := e.options.Adapter.BootstrapRuntimeNamespace(ctx, command.SpaceSlug, command.WorkspaceId); err != nil {
+			return err
+		}
 		if _, err := e.runtime.Apply(ctx, change, material, route); err != nil {
 			return err
 		}
@@ -108,6 +111,8 @@ func (e *Executor) runtimeChange(command *platformv1.WorkerDeploymentCommand) (k
 			ID:            command.ReleaseId,
 			WorkspaceID:   command.WorkspaceId,
 			ApplicationID: command.ApplicationId,
+			SpaceSlug:     command.SpaceSlug,
+			AppName:       command.AppName,
 			// 控制面只发布 digest 钉住镜像；repository@digest 形态由 kube 适配器复核。
 			Image:                     command.Repository + "@" + command.Digest,
 			ConfigRevision:            config.GetRevision(),

@@ -146,7 +146,7 @@ func (g *Gateway) sendBuild(ctx context.Context, s *session, value build.Dispatc
 	if err := g.check(ctx, s); err != nil {
 		return err
 	}
-	message := &platformv1.WorkerBuildCommand{BuildId: value.BuildID, AttemptId: value.AttemptID, WorkspaceId: value.WorkspaceID, ApplicationId: value.ApplicationID, NodeId: value.NodeID, WorkerId: value.WorkerID, Action: value.Command, StableJobName: value.JobName, JobUid: value.JobUID, SourceSnapshotId: value.SourceSnapshotID, SourceSha256: value.SourceSHA256, Dockerfile: value.Config.Dockerfile, ContextPath: value.Config.Context, Target: value.Config.Target, BuildArgs: value.Config.Args, Repository: value.Repository, Tag: value.Tag, Platform: value.Platform, DeadlineUnix: value.DeadlineAt.Unix()}
+	message := &platformv1.WorkerBuildCommand{BuildId: value.BuildID, AttemptId: value.AttemptID, WorkspaceId: value.WorkspaceID, ApplicationId: value.ApplicationID, NodeId: value.NodeID, WorkerId: value.WorkerID, Action: value.Command, StableJobName: value.JobName, JobUid: value.JobUID, SourceSnapshotId: value.SourceSnapshotID, SourceSha256: value.SourceSHA256, Dockerfile: value.Config.Dockerfile, ContextPath: value.Config.Context, Target: value.Config.Target, BuildArgs: value.Config.Args, Repository: value.Repository, Tag: value.Tag, Platform: value.Platform, DeadlineUnix: value.DeadlineAt.Unix(), SpaceSlug: value.SpaceSlug}
 	if value.Command == "RUN" {
 		if g.config.BuildMaterial == nil {
 			return ErrQualification
@@ -206,7 +206,7 @@ func deploymentCommand(value deployment.Dispatch) *platformv1.WorkerDeploymentCo
 	for _, file := range view.Files {
 		config.Files = append(config.Files, &platformv1.RuntimeFile{Path: file.Path, Sensitive: file.Sensitive, Configured: file.Configured})
 	}
-	message := &platformv1.WorkerDeploymentCommand{WorkspaceId: value.WorkspaceID, ApplicationId: value.ApplicationID, OperationId: value.OperationID, ReleaseId: value.ReleaseID, Action: value.Action, Generation: value.Generation, NodeId: value.Placement.NodeID, WorkerId: value.Placement.WorkerID, ClusterNodeUid: value.Placement.ClusterNodeUID, Repository: value.Artifact.Repository, Digest: value.Artifact.Digest, Platform: value.Artifact.Platform, RestartMarker: value.RestartMarker, Config: config, MaterializedVariables: value.Config.Variables, MaterializedFiles: value.Config.Files}
+	message := &platformv1.WorkerDeploymentCommand{WorkspaceId: value.WorkspaceID, ApplicationId: value.ApplicationID, OperationId: value.OperationID, ReleaseId: value.ReleaseID, Action: value.Action, Generation: value.Generation, NodeId: value.Placement.NodeID, WorkerId: value.Placement.WorkerID, ClusterNodeUid: value.Placement.ClusterNodeUID, Repository: value.Artifact.Repository, Digest: value.Artifact.Digest, Platform: value.Artifact.Platform, RestartMarker: value.RestartMarker, Config: config, MaterializedVariables: value.Config.Variables, MaterializedFiles: value.Config.Files, SpaceSlug: value.SpaceSlug, AppName: value.AppName}
 	// 入口 TLS 是控制面领取时汇聚的当下绑定；未一致绑定时如实下发 https=false，worker 不猜证书。
 	if value.TLS != nil {
 		message.Https = value.TLS.HTTPS

@@ -51,6 +51,8 @@ message WorkerBuildCommand {
   string target = 14; map<string,string> build_args = 15; string repository = 16; string tag = 17; string platform = 18;
   int64 deadline_unix = 19; WorkerSourceGrant source_grant = 20; WorkerRegistryCredential registry = 21;
   repeated WorkerBuildSecret secrets = 22;
+  // 空间标识（统一命名规范）：worker 据此派生构建命名空间 build-<space_slug>。
+  string space_slug = 23;
 }
 message WorkerDeploymentCommand {
   string workspace_id = 1; string application_id = 2; string operation_id = 3; string release_id = 4;
@@ -61,6 +63,9 @@ message WorkerDeploymentCommand {
   // 入口 TLS 由控制面按域名绑定的当下值汇聚后下发；未一致绑定全部域名时不携带（https=false），
   // worker 不得自行猜测或伪造证书证据。
   string tls_secret_name = 18; bool https = 19;
+  // 空间标识与应用名（统一命名规范）：worker 据此派生运行命名空间 prod-<space_slug>
+  // 与 Deployment/Service 名称 <应用名>-default。
+  string space_slug = 20; string app_name = 21;
 }
 message WorkerBuildEvent { string attempt_id = 1; int64 seq = 2; string kind = 3; string job_uid = 4; string stage = 5; string digest = 6; string error_code = 7; bool logs_complete = 8; }
 message WorkerBuildLog { string attempt_id = 1; int64 seq = 2; bytes content = 3; bool truncated = 4; }

@@ -10,6 +10,8 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
@@ -74,8 +76,8 @@ func (r *Runtime) Observe(ctx context.Context, c RuntimeChange, http bool) (Runt
 		return e, err
 	}
 	a := r.adapter
-	ns := a.config.RuntimeNamespace
-	name := AppName(c.Release.ApplicationID)
+	ns := a.runtimeNamespace(c)
+	name := a.deployedName(c.Release)
 	d, err := a.client.AppsV1().Deployments(ns).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return e, err
@@ -353,7 +355,7 @@ func (r *Runtime) FollowLogs(ctx context.Context, c RuntimeChange, request LogRe
 		return nil, err
 	}
 	a := r.adapter
-	if request.Namespace != a.config.RuntimeNamespace || request.Container != "app" {
+	if request.Namespace != a.runtimeNamespace(c) || request.Container != "app" {
 		return nil, ErrOwnership
 	}
 	p, err := a.client.CoreV1().Pods(request.Namespace).Get(ctx, request.PodName, metav1.GetOptions{})
@@ -367,4 +369,104 @@ func (r *Runtime) FollowLogs(ctx context.Context, c RuntimeChange, request LogRe
 		return nil, ErrOwnership
 	}
 	return a.followPodLogs(ctx, p, request)
+}
+
+// buildNamespace 返回构建任务的命名空间：命令携带空间标识时按统一命名规范
+// 派生 build-<space_slug>，否则回退到安装配置的固定命名空间（旧控制面兼容）。
+func (a *Adapter) buildNamespace(t BuildTask) string {
+	if t.SpaceSlug != "" {
+		return BuildNamespaceFor(t.SpaceSlug)
+	}
+	return a.config.BuildNamespace
+}
+
+// runtimeNamespace 返回运行变更的命名空间：命令携带空间标识时按统一命名规范
+// 派生 prod-<space_slug>，否则回退到安装配置的固定命名空间。
+func (a *Adapter) runtimeNamespace(c RuntimeChange) string {
+	if c.Release.SpaceSlug != "" {
+		return RuntimeNamespaceFor(c.Release.SpaceSlug)
+	}
+	return a.config.RuntimeNamespace
+}
+
+// deployedName 返回 Deployment/Service/Ingress 的规范名称：<应用名>-default；
+// 命令未携带应用名（旧控制面）时回退到 ID 派生的历史名称。
+func (a *Adapter) deployedName(r Release) string {
+	if r.AppName != "" {
+		return DeployedName(r.AppName)
+	}
+	return AppName(r.ApplicationID)
+}
+
+// BootstrapBuildNamespace 确保 build-<space_slug> 存在并打平台归属标签
+// （2026-10-26 设计 §5：构建命名空间归属 workspace_id，不加网络策略）。
+func (a *Adapter) BootstrapBuildNamespace(ctx context.Context, spaceSlug, workspaceID string) error {
+	name := BuildNamespaceFor(spaceSlug)
+	labels := map[string]string{
+		LabelManaged:     "worker",
+		LabelWorkspace:   workspaceID,
+		"yummy.dev/role": "build",
+	}
+	return a.ensureNamespace(ctx, name, labels)
+}
+
+// BootstrapRuntimeNamespace 确保 prod-<space_slug> 存在，打归属标签并下发
+// 空间隔离 NetworkPolicy（同命名空间与 Traefik 可入站，2026-10-26 设计 §6）。
+func (a *Adapter) BootstrapRuntimeNamespace(ctx context.Context, spaceSlug, workspaceID string) error {
+	name := RuntimeNamespaceFor(spaceSlug)
+	labels := map[string]string{
+		LabelManaged:     "worker",
+		LabelWorkspace:   workspaceID,
+		"yummy.dev/env":  EnvProd,
+		"yummy.dev/role": "runtime",
+	}
+	if err := a.ensureNamespace(ctx, name, labels); err != nil {
+		return err
+	}
+	policy := &networkingv1.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{
+		Name:      "yummy-workspace-isolation",
+		Namespace: name,
+		Labels:    map[string]string{LabelManaged: "worker", LabelWorkspace: workspaceID},
+	}}
+	_, err := a.client.NetworkingV1().NetworkPolicies(name).Get(ctx, policy.Name, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		policy.Spec = networkingv1.NetworkPolicySpec{
+			PodSelector: metav1.LabelSelector{},
+			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
+			Ingress: []networkingv1.NetworkPolicyIngressRule{{
+				From: []networkingv1.NetworkPolicyPeer{
+					{PodSelector: &metav1.LabelSelector{}},
+					{NamespaceSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"kubernetes.io/metadata.name": "kube-system"}},
+						PodSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"app.kubernetes.io/name": "traefik"}}},
+				},
+			}},
+		}
+		_, err = a.client.NetworkingV1().NetworkPolicies(name).Create(ctx, policy, metav1.CreateOptions{})
+	} else if err == nil {
+		_, err = a.client.NetworkingV1().NetworkPolicies(name).Update(ctx, policy, metav1.UpdateOptions{})
+	}
+	return err
+}
+
+// ensureNamespace 幂等创建命名空间并设置平台归属标签；同名但归属不符的对象
+// 一律报错不接管（2026-10-26 设计 §5 归属核对）。
+func (a *Adapter) ensureNamespace(ctx context.Context, name string, labels map[string]string) error {
+	ns, err := a.client.CoreV1().Namespaces().Get(ctx, name, metav1.GetOptions{})
+	if err == nil {
+		for key, value := range labels {
+			if ns.Labels[key] != value {
+				return fmt.Errorf("%w: 命名空间 %s 的平台标签 %s 归属不符", ErrOwnership, name, key)
+			}
+		}
+		return nil
+	}
+	if !apierrors.IsNotFound(err) {
+		return err
+	}
+	created := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name, Labels: labels}}
+	_, err = a.client.CoreV1().Namespaces().Create(ctx, created, metav1.CreateOptions{})
+	if err != nil && !apierrors.IsAlreadyExists(err) {
+		return err
+	}
+	return nil
 }
