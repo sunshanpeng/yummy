@@ -173,9 +173,9 @@
 | 11 | 公网入口 TLS（自签证书+Host 校验+反代契约） | ✅通过 | Traefik 终止 TLS 下发验收 CA 证书（SNI 匹配）；/transfer/ 经真实反代转发+Host 保留；127.0.0.1 直连被反 DNS 重绑定保护拒绝（设计行为） |
 | 12 | 运行日志/指标链路 | ✅通过 | ⑨修复后：runtime_log_chunks 65/16 块真实 tick 日志入库（两个应用）、runtime_metric_samples 92+ 采样持续产出；GetRuntimeLogs/GetRuntimeMetrics 链路随 DB 数据打通 |
 | 13 | Kubelet 指标精度与 webhook 授权 | ✅通过 | ①SA token 直测 kubelet /metrics/resource 返回 200（nodes/metrics RBAC webhook 授权实证）；②采集值与 kubectl top 同源一致（cpu 0≈1m、内存 0.39Mi≈0Mi）；③采样序列严格递增、CPU counter 差值窗口真实（峰值 1113m 突发 / 8m 稳态如实呈现） |
-| 14 | 断网重传/journal 事件去重 | ❌未验证 | 待专项（journal 目录已在 worker 配置就绪） |
-| 15 | PVC 保留 | ❌未验证 | 待专项 |
-| 16 | NetworkPolicy CNI 执行 | ❌未验证 | 待专项（需在 yummy-runtime 内做正反向验证+Tailscale 连通回归） |
+| 14 | 断网重传/journal 事件去重 | ✅通过 | 真实构建进行中 kill worker（QUEUED 窗口）→ 控制面保留非终态 → 重启后 journal 重放 RECONCILE → 构建重跑收敛 SUCCEEDED；事件序列干净（attempt seq 1 ACCEPTED → 2 SUCCEEDED，无重复无乱序）。另附多轮 worker 重启+断连的 journal 重放均正常恢复（本验收全程 15+ 次重启） |
+| 15 | PVC 保留 | ✅通过 | 带卷应用（1Gi local-path PVC）写入 6 行 → 删 pod（RS 重建挂同一 PVC）→ 新 pod 数据完整保留（46 行，首行 line-1 时间戳不变） |
+| 16 | NetworkPolicy CNI 执行 | ✅通过 | 按新约定（只放行同 ns+Traefik）应用默认策略后：①Traefik 公网入口不受影响（A2 HTTPS 200）②同命名空间放行（app 响应正常）③跨命名空间（yummy-infra→app）被拒（差分证明 CNI 强制生效）；Tailscale 回归：ping apeng-ubuntu 正常（DERP 中继），宿主与集群零影响；出站回归：pod 公网访问与镜像拉取正常 |
 | 17 | 全量回归（真实 PG/Redis，-race） | ✅通过 | 两轮 EXIT=0 零失败（含全部实机修复）；宿主构建路径相关四包（workerexec/buildrunner/kube/cli）专项回归绿 |
 
 ### 实机发现与修复（全部真实缺陷，均有回归测试或部署验证）
