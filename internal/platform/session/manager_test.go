@@ -621,3 +621,37 @@ func TestBehindTLSProxyRestoresCookieCSRFBehindTerminatingProxy(t *testing.T) {
 		})
 	}
 }
+
+// 浏览器对 POST 携带 Origin: <https 主机>；反向代理明文转发到本进程后
+// gorilla/csrf 的 sameOrigin 会因 scheme 不一致误判跨站。BehindTLSProxy（与
+// behind-tls-proxy 安装形态一致）下必须放行"自己的 https 来源"，跨站仍拒绝。
+func TestBrowserOriginOverBehindTLSProxyPassesCSRF(t *testing.T) {
+	_, server, _, csrfToken, cookies := newTLSProxyFixture(t, true)
+	originHeader := "https://122.51.59.201.nip.io"
+	send := func(withOrigin bool) int {
+		login, err := http.NewRequest(http.MethodPost, server.URL+"/login", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		login.Host = "122.51.59.201.nip.io"
+		for _, cookie := range cookies {
+			login.AddCookie(cookie)
+		}
+		login.Header.Set("X-CSRF-Token", csrfToken)
+		if withOrigin {
+			login.Header.Set("Origin", originHeader)
+		}
+		response, err := http.DefaultTransport.RoundTrip(login)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = response.Body.Close() }()
+		return response.StatusCode
+	}
+	if code := send(false); code != http.StatusOK {
+		t.Fatalf("无 Origin 头的 POST 应通过: %d", code)
+	}
+	if code := send(true); code != http.StatusOK {
+		t.Fatalf("浏览器 Origin（与公开地址一致）的 POST 应通过: %d", code)
+	}
+}

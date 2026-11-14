@@ -138,7 +138,12 @@ func (m *Manager) APIAudience() string { return strings.TrimSuffix(m.baseURL.Str
 
 // Middleware 不信任 Host 或转发头；有 Authorization 的请求绝不借用 Cookie 身份。
 func (m *Manager) Middleware(next http.Handler) http.Handler {
+	// 浏览器的 POST 总是携带 Origin: <https 主机>；而反向代理转发到本进程的请求
+	// 没有 TLS，gorilla/csrf 的 sameOrigin 会因 scheme 不一致误判为跨站（实机发现
+	// ⑪）。Middleware 自身已严格校验 Origin 必须等于 PUBLIC_BASE_URL，这里把控制台
+	// 主机加入 gorilla 可信来源即只放行"自己的控制台"这一个来源，跨站仍被拒。
 	protected := csrf.Protect(m.csrfKey, csrf.Secure(m.secure), csrf.HttpOnly(true), csrf.Path("/"), csrf.CookieName("yummy_csrf"),
+		csrf.TrustedOrigins([]string{m.baseURL.Host}),
 		csrf.ErrorHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusForbidden)

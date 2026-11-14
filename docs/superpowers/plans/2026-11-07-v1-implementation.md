@@ -191,6 +191,7 @@
 | ⑤ | dockerConfigJSON 用 origin.Hostname()（丢端口）作 auths 键 → 带端口私有仓库推送 401 | 阻断 | 改 origin.Host（host:port 完整形态） |
 | ⑥ | 固定 uid 1000 与官方 nginx 镜像不兼容（需 root 建 cache） | 兼容性 | 属用户镜像选择问题；验收改用 nginx-unprivileged 变体通过。如实记录，产品不做放宽 |
 | ⑦ | WORKER 型部署观察不收敛 | **已修复** | 根因：内容寻址构建使不同应用的镜像 digest 相同，containerd 的 ImageID 引用路径取决于先拉取者，correctImageID 整串精确比较误判同 digest 合法证据。修复为摘要等价比较（runtime.go correctImageID + 观察原因透传诊断）。修复后 WORKER 型部署 op SUCCEEDED、pod Running（2026-11-14） |
+| ⑪ | 反向代理部署形态下浏览器登录/操作全部 403：浏览器 POST 必带 Origin: <https 主机>，gorilla/csrf 的 sameOrigin 比对反向代理明文转发的 r.URL（http）scheme 不一致误判跨站；api.sh 脚本不带 Origin 从未暴露（脚本在 e2e/服务端路径均同 scheme） | 阻断 | 修复：csrf.TrustedOrigins(baseURL.Host)——Middleware 已先严格校验 Origin==PUBLIC_BASE_URL，此处只放行"自己的控制台"来源，跨站仍拒（+浏览器形态回归测试） |
 | ⑧ | worker 客户端把非资格类业务拒绝（channel=deployment）当协议错误断流 → 归档应用重投形成"拒绝→断流→重连"风暴（359次/10分钟），节点心跳断开连带资格失效 | 阻断 | 修复：业务拒绝上报后保留流（workergateway/worker_client.go Rejection 分支）。归档应用的存量重投以 DB 标记终态清噪（测试实例数据操作） |
 | ⑨ | 运行日志/指标采集产出为 0 | **已修复（三处叠加根因）** | ①采集生命周期错配：旁路挂操作跟踪窗口，⑦修复后收敛只需数秒，旁路来不及产出 → 改挂部署本体（collectors.go 持久采集器，Apply 启动/LOST 或 STOP 停止）；②分块阈值 16KiB 对低频日志永远凑不满且无时间刷出 → 按观察间隔时间刷出半满 buffer + 取消/EOF 时同步尾块；③CLI 从未接线 MetricsEnabled/KubeletMetrics（worker run 新增 --kubelet-metrics-endpoint）|
 
