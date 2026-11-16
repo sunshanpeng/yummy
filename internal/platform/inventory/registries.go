@@ -3,7 +3,6 @@ package inventory
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/sunshanpeng/yummy/internal/platform/audit"
 	"github.com/sunshanpeng/yummy/internal/platform/authorization"
@@ -165,9 +164,6 @@ func (s *Service) ListRegistries(ctx context.Context, p authorization.Principal,
 func (s *Service) GetInstanceSettings(ctx context.Context, p authorization.Principal) (bool, error) {
 	var value bool
 	err := s.access.Do(ctx, p, false, func(tx *gorm.DB, current authorization.Principal) error {
-		if _, _, err := s.access.Application(tx, current, "any", "any", authorization.BuildRead); err != nil {
-			return err
-		}
 		var row instanceRecord
 		if err := tx.First(&row, "singleton = TRUE").Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -198,8 +194,7 @@ func (s *Service) SetWorkspaceSelfCreate(ctx context.Context, p authorization.Pr
 			return err
 		}
 		value = enabled
-		returned := fmt.Sprintf("%t", enabled)
-		return audit.Record(tx, current.UserID, "instance.settings.self_create", "instance", settings.ID, nil, &returned)
+		return audit.Record(tx, current.UserID, "instance.settings.self_create", "instance", settings.ID, nil, nil)
 	})
 	return value, err
 }
