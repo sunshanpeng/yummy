@@ -32,16 +32,37 @@ func NewService(db *gorm.DB, access *authorization.Access) *Service {
 	return &Service{DB: db, Access: access}
 }
 
+// validateNameDesc 校验显示名称与说明，创建与更新共用；空间名校验见 validateSlug。
+func validateNameDesc(name, description string) error {
+	if !utf8.ValidString(name) || utf8.RuneCountInString(name) < 1 || utf8.RuneCountInString(name) > 100 || !utf8.ValidString(description) || utf8.RuneCountInString(description) > 2000 {
+		return fmt.Errorf("%w: 名称1～100字符，说明不超过2000字符", authorization.ErrInvalid)
+	}
+	return nil
+}
+
+// validateSlug 校验空间名格式与保留名单：slug 会派生集群命名空间
+// （build-<slug>/prod-<slug>），与 K8s 系统命名空间或平台组件命名空间
+// 同名会造成归属冲突，创建时即拒绝。
+func validateSlug(slug string) (string, error) {
+	if len(slug) > domain.NameMaxLen || !slugPattern.MatchString(slug) {
+		return slug, fmt.Errorf("%w: 空间名为小写字母开头、最长30位的小写字母数字中划线（无连续--、不以-结尾）", authorization.ErrInvalid)
+	}
+	if domain.ReservedWorkspaceNames[slug] {
+		return slug, fmt.Errorf("%w: 空间名 %s 为系统保留名称", authorization.ErrInvalid, slug)
+	}
+	return slug, nil
+}
+
 func validate(input CreateInput) (CreateInput, error) {
 	input.Name, input.Slug, input.Description = strings.TrimSpace(input.Name), strings.TrimSpace(input.Slug), strings.TrimSpace(input.Description)
-	if !utf8.ValidString(input.Name) || utf8.RuneCountInString(input.Name) < 1 || utf8.RuneCountInString(input.Name) > 100 || len(input.Slug) > domain.NameMaxLen || !slugPattern.MatchString(input.Slug) || !utf8.ValidString(input.Description) || utf8.RuneCountInString(input.Description) > 2000 {
-		return input, fmt.Errorf("%w: 名称1～100字符，空间名为小写字母开头、最长30位的小写字母数字中划线（无连续--、不以-结尾），说明不超过2000字符", authorization.ErrInvalid)
+	if err := validateNameDesc(input.Name, input.Description); err != nil {
+		return input, err
 	}
-	// 保留名单：slug 会派生集群命名空间（build-<slug>/prod-<slug>），与 K8s 系统
-	// 命名空间或平台组件命名空间同名会造成归属冲突，创建时即拒绝。
-	if domain.ReservedWorkspaceNames[input.Slug] {
-		return input, fmt.Errorf("%w: 空间名 %s 为系统保留名称", authorization.ErrInvalid, input.Slug)
+	slug, err := validateSlug(input.Slug)
+	if err != nil {
+		return input, err
 	}
+	input.Slug = slug
 	return input, nil
 }
 
@@ -187,19 +208,28 @@ func (s *Service) Create(ctx context.Context, p authorization.Principal, input C
 }
 
 func (s *Service) Update(ctx context.Context, p authorization.Principal, id string, input UpdateInput) (View, error) {
-	validated, err := validate(CreateInput{Name: input.Name, Slug: input.Slug, Description: input.Description})
-	if err != nil {
+	// 空间名（slug）创建后不可修改（设计约束）：slug 派生集群命名空间与默认
+	// 地址，改名会造成归属漂移；Update 只接受显示名称与说明变更。
+	input.Name, input.Slug, input.Description = strings.TrimSpace(input.Name), strings.TrimSpace(input.Slug), strings.TrimSpace(input.Description)
+	if err := validateNameDesc(input.Name, input.Description); err != nil {
 		return View{}, err
 	}
 	if input.ExpectedRevision < 1 {
 		return View{}, authorization.ErrInvalid
 	}
 	var result View
-	err = s.Access.Do(ctx, p, true, func(tx *gorm.DB, current authorization.Principal) error {
+	err := s.Access.Do(ctx, p, true, func(tx *gorm.DB, current authorization.Principal) error {
 		if err := s.Access.RequireWorkspaceAdmin(tx, current, id); err != nil {
 			return err
 		}
-		updated := tx.Model(&model.Workspace{}).Where("id = ? AND revision = ? AND status = ?", id, input.ExpectedRevision, model.ResourceActive).Updates(map[string]any{"name": validated.Name, "slug": validated.Slug, "description": validated.Description, "revision": gorm.Expr("revision + 1")})
+		var value model.Workspace
+		if err := tx.First(&value, "id = ?", id).Error; err != nil {
+			return err
+		}
+		if input.Slug != value.Slug {
+			return fmt.Errorf("%w: 空间名创建后不可修改", authorization.ErrInvalid)
+		}
+		updated := tx.Model(&model.Workspace{}).Where("id = ? AND revision = ? AND status = ?", id, input.ExpectedRevision, model.ResourceActive).Updates(map[string]any{"name": input.Name, "description": input.Description, "revision": gorm.Expr("revision + 1")})
 		if updated.Error != nil {
 			return conflict(updated.Error)
 		}
@@ -209,7 +239,6 @@ func (s *Service) Update(ctx context.Context, p authorization.Principal, id stri
 		if err := audit.Record(tx, current.UserID, "workspace.update", "workspace", id, &id, nil); err != nil {
 			return err
 		}
-		var value model.Workspace
 		if err := tx.First(&value, "id = ?", id).Error; err != nil {
 			return err
 		}

@@ -49,17 +49,21 @@ func TestCreateWorkspaceRequiresInstanceAdminAndUpdatesUseRevision(t *testing.T)
 	if err := db.First(&member, "workspace_id = ? AND user_id = ?", value.ID, root.UserID).Error; err != nil || member.Role != "admin" {
 		t.Fatalf("创建者管理员=%#v,%v", member, err)
 	}
-	updated, err := service.Update(ctx, root, value.ID, workspace.UpdateInput{Name: "空间乙", Slug: "space-b", Description: "", ExpectedRevision: 1})
+	// 空间名（slug）创建后不可修改：改名请求被拒绝，且不消耗修订号。
+	if _, err := service.Update(ctx, root, value.ID, workspace.UpdateInput{Name: "改名", Slug: "space-b", ExpectedRevision: 1}); !errors.Is(err, authorization.ErrInvalid) {
+		t.Fatalf("空间名不可修改=%v", err)
+	}
+	updated, err := service.Update(ctx, root, value.ID, workspace.UpdateInput{Name: "空间乙", Slug: "space-a", Description: "", ExpectedRevision: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if updated.Revision != 2 {
 		t.Fatal(updated)
 	}
-	if _, err := service.Update(ctx, root, value.ID, workspace.UpdateInput{Name: "过期", Slug: "space-c", ExpectedRevision: 1}); !errors.Is(err, authorization.ErrConflict) {
+	if _, err := service.Update(ctx, root, value.ID, workspace.UpdateInput{Name: "过期", Slug: "space-a", ExpectedRevision: 1}); !errors.Is(err, authorization.ErrConflict) {
 		t.Fatalf("过期revision=%v", err)
 	}
-	if _, err := service.Create(ctx, root, workspace.CreateInput{Name: "重复", Slug: "space-b"}); !errors.Is(err, authorization.ErrConflict) {
+	if _, err := service.Create(ctx, root, workspace.CreateInput{Name: "重复", Slug: "space-a"}); !errors.Is(err, authorization.ErrConflict) {
 		t.Fatalf("重复slug=%v", err)
 	}
 	var audits int64
