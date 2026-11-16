@@ -203,3 +203,18 @@
 - ctr push 的 TLS 行为异常（显式 hosts-dir/CA 均无效）→ 验收用 curl 手工实现 OCI 推送（03b 脚本，digest 一致性校验）
 - buildkitd 需烧入 docker.io mirror 配置（不经 containerd 加速）；runner 镜像需对齐 /usr/local/bin/buildctl-daemonless.sh 契约路径
 - 宿主 rootless buildkitd 需要：uidmap 包（newuidmap）、sysctl apparmor_restrict_unprivileged_userns=0、专用用户+linger、socket 落用户自有目录
+
+### Review 修复批与观察恢复（2026-11-16/17，实机复验通过，40943b4/a2fa3e9/43b5244/aa2c595）
+
+代码 review 发现命名空间按空间重构后的三处遗留（控制面查询侧未跟上派生）+ 一个实机新缺陷，全部修复并实机复验：
+
+| # | 问题 | 修复 | 实机复验 |
+|---|---|---|---|
+| A | 指标采集仍按固定命名空间过滤——重构后新空间应用零采样；受管 pod 列表只查固定 ns | kubelet summary 过滤改 `prod-<slug>` 前缀匹配（旧 config ns 兼容保留）；受管 pod 列表改集群级按平台标签查询（metrics.go） | GetRuntimeMetrics 返回 47 采样点，每分钟 12 条持续写入 |
+| B | 构建日志跟随仍查固定构建命名空间——派生 `build-<slug>` 后 pod 构建日志丢失 | listManagedBuildPods/FollowLogs 按 task.SpaceSlug 派生，旧命令回退安装配置 ns（workerexec.go） | pod 路径为兼容保留（实机现为宿主构建，buildctl stdout 直采不受影响）；ReadBuildLogs 日志块正常 |
+| C | Workspace Update 仍允许改 slug——设计明确"空间名创建后不能修改" | validate 拆 validateNameDesc/validateSlug；Update 事务内比对现有 slug 不一致即拒绝（保留名单不回溯限制存量改名） | 改 slug → `invalid_argument: 空间名创建后不可修改`；同 slug 改名成功 |
+| ⑫ | **worker 重启后存量 release 运行采集器全丢**：采集器注册表在 worker 内存，已完成部署操作不重投，runtime_metric_samples 停写两天无人发现 | 控制面 ClaimPending 无 pending 时对"观察停更>2min 的 serving release"合成 RECONCILE（内存退避 60s；DesiredState!=RUN 绝不合成；RECONCILE 走独立 journal 键 `deployment:<opID>:RECONCILE` 避免 spool 指纹失配；worker 不动集群资源只重建 observeLoop，观察经 monitoring 路径续传）+ 单测 | 控制面+worker 重启后采样从 0 恢复持续写入；观察循环全部重建 |
+
+**部署纪律（实机教训）**：新二进制必须控制面与 worker 同步重启——claimResume 在控制面，只重启 worker 恢复不生效。
+
+**旧命名空间应用恢复后如实 LOST**：`yummy-runtime` 旧部署按新 SpaceSlug 派生 `prod-<slug>` 找不到 Deployment → LOST（KubernetesReady=false）属命名空间重构预期行为，重新发布即迁移；LOST 应用自动退出 probe 目标，此前每 15s 的 probe 存量报错（"运行观察已被新操作取代"，来自 KubernetesReady=true 的旧 serving op 持续被探测被 stale 拒绝）随之消失，无需代码修复。
