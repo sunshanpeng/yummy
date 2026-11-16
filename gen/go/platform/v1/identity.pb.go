@@ -326,11 +326,14 @@ func (*GetSessionRequest) Descriptor() ([]byte, []int) {
 }
 
 type GetSessionResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	User          *User                  `protobuf:"bytes,1,opt,name=user,proto3" json:"user,omitempty"`
-	CsrfToken     string                 `protobuf:"bytes,2,opt,name=csrf_token,json=csrfToken,proto3" json:"csrf_token,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	User      *User                  `protobuf:"bytes,1,opt,name=user,proto3" json:"user,omitempty"`
+	CsrfToken string                 `protobuf:"bytes,2,opt,name=csrf_token,json=csrfToken,proto3" json:"csrf_token,omitempty"`
+	// 实例管理员恒为真；非实例管理员取决于实例的"自由建空间"开关（SaaS 形态）。
+	// 前端据此决定是否展示创建工作空间入口；授权仍由 CreateWorkspace 服务端判定。
+	WorkspaceSelfCreate bool `protobuf:"varint,3,opt,name=workspace_self_create,json=workspaceSelfCreate,proto3" json:"workspace_self_create,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *GetSessionResponse) Reset() {
@@ -375,6 +378,13 @@ func (x *GetSessionResponse) GetCsrfToken() string {
 		return x.CsrfToken
 	}
 	return ""
+}
+
+func (x *GetSessionResponse) GetWorkspaceSelfCreate() bool {
+	if x != nil {
+		return x.WorkspaceSelfCreate
+	}
+	return false
 }
 
 type LoginRequest struct {
@@ -1678,11 +1688,12 @@ const file_platform_v1_identity_proto_rawDesc = "" +
 	"consumedAt\x12\x1d\n" +
 	"\n" +
 	"revoked_at\x18\a \x01(\tR\trevokedAt\"\x13\n" +
-	"\x11GetSessionRequest\"Z\n" +
+	"\x11GetSessionRequest\"\x8e\x01\n" +
 	"\x12GetSessionResponse\x12%\n" +
 	"\x04user\x18\x01 \x01(\v2\x11.platform.v1.UserR\x04user\x12\x1d\n" +
 	"\n" +
-	"csrf_token\x18\x02 \x01(\tR\tcsrfToken\"F\n" +
+	"csrf_token\x18\x02 \x01(\tR\tcsrfToken\x122\n" +
+	"\x15workspace_self_create\x18\x03 \x01(\bR\x13workspaceSelfCreate\"F\n" +
 	"\fLoginRequest\x12\x1a\n" +
 	"\busername\x18\x01 \x01(\tR\busername\x12\x1a\n" +
 	"\bpassword\x18\x02 \x01(\tR\bpassword\"6\n" +

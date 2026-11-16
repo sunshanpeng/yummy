@@ -13,3 +13,27 @@ const NameMaxLen = 30
 func ValidName(name string) bool {
 	return len(name) >= 1 && len(name) <= NameMaxLen && NamePattern.MatchString(name)
 }
+
+// ReservedWorkspaceNames 工作空间空间名的保留名单：K8s 系统命名空间、产品自身
+// 命名空间与设计 §5 的保留标识。创建工作空间时命中即拒绝，避免与集群基础设施
+// 或平台组件命名空间冲突（2026-10-26 设计 §5 归属核对）。
+var ReservedWorkspaceNames = map[string]bool{
+	"default":         true,
+	"kube-system":     true,
+	"kube-public":     true,
+	"kube-node-lease": true,
+	"kube":            true,
+	"k3s":             true,
+	"yummy":           true,
+	"build":           true,
+	"prod":            true,
+	"traefik":         true,
+	"yummy-system":    true,
+	"yummy-build":     true,
+	"yummy-runtime":   true,
+}
+
+// ValidWorkspaceSlug 报告空间名是否符合规范且不在保留名单中。
+func ValidWorkspaceSlug(slug string) bool {
+	return ValidName(slug) && !ReservedWorkspaceNames[slug]
+}

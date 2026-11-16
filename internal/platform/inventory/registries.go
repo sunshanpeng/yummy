@@ -2,6 +2,8 @@ package inventory
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"github.com/sunshanpeng/yummy/internal/platform/audit"
 	"github.com/sunshanpeng/yummy/internal/platform/authorization"
@@ -155,4 +157,49 @@ func (s *Service) ListRegistries(ctx context.Context, p authorization.Principal,
 		return nil
 	})
 	return result, err
+}
+
+// GetInstanceSettings 读取实例设置（当前仅含"自由建空间"开关）。登录身份均可读：
+// 该开关只决定控制台是否展示创建工作空间入口，不含敏感配置；授权仍由
+// CreateWorkspace 服务端判定。
+func (s *Service) GetInstanceSettings(ctx context.Context, p authorization.Principal) (bool, error) {
+	var value bool
+	err := s.access.Do(ctx, p, false, func(tx *gorm.DB, current authorization.Principal) error {
+		if _, _, err := s.access.Application(tx, current, "any", "any", authorization.BuildRead); err != nil {
+			return err
+		}
+		var row instanceRecord
+		if err := tx.First(&row, "singleton = TRUE").Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil
+			}
+			return err
+		}
+		value = row.WorkspaceSelfCreate
+		return nil
+	})
+	return value, err
+}
+
+// SetWorkspaceSelfCreate 设置"自由建空间"开关：仅限实例管理员。开启后所有登录
+// 身份（会话）可在控制台自助创建工作空间并成为空间管理员；关闭恢复为仅实例
+// 管理员可创建。
+func (s *Service) SetWorkspaceSelfCreate(ctx context.Context, p authorization.Principal, enabled bool) (bool, error) {
+	var value bool
+	err := s.access.Do(ctx, p, true, func(tx *gorm.DB, current authorization.Principal) error {
+		if err := s.access.RequireInstance(current); err != nil {
+			return err
+		}
+		settings, err := instance(tx)
+		if err != nil {
+			return err
+		}
+		if err := tx.Model(&instanceRecord{}).Where("singleton = TRUE").Update("workspace_self_create", enabled).Error; err != nil {
+			return err
+		}
+		value = enabled
+		returned := fmt.Sprintf("%t", enabled)
+		return audit.Record(tx, current.UserID, "instance.settings.self_create", "instance", settings.ID, nil, &returned)
+	})
+	return value, err
 }

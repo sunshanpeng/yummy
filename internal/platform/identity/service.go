@@ -286,3 +286,16 @@ func (s *Service) CompletePasswordReset(ctx context.Context, plaintext, password
 		return audit.Record(tx, user.ID, "account.password.reset", "user", user.ID, nil, nil)
 	})
 }
+
+// WorkspaceSelfCreateEnabled 读取实例级"自由建空间"开关（2026-10-26 设计对齐：
+// SaaS 形态允许登录身份自助建空间）。无实例行或查询失败时按关闭处理——该位只是
+// 控制台入口的展示依据，授权仍由 CreateWorkspace 在事务内判定。
+func (s *Service) WorkspaceSelfCreateEnabled(ctx context.Context) bool {
+	var row struct {
+		WorkspaceSelfCreate bool `gorm:"column:workspace_self_create"`
+	}
+	if err := s.DB.WithContext(ctx).Table("instance_settings").Select("workspace_self_create").Where("singleton = TRUE").Take(&row).Error; err != nil {
+		return false
+	}
+	return row.WorkspaceSelfCreate
+}

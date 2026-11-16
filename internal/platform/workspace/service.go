@@ -37,6 +37,11 @@ func validate(input CreateInput) (CreateInput, error) {
 	if !utf8.ValidString(input.Name) || utf8.RuneCountInString(input.Name) < 1 || utf8.RuneCountInString(input.Name) > 100 || len(input.Slug) > domain.NameMaxLen || !slugPattern.MatchString(input.Slug) || !utf8.ValidString(input.Description) || utf8.RuneCountInString(input.Description) > 2000 {
 		return input, fmt.Errorf("%w: 名称1～100字符，空间名为小写字母开头、最长30位的小写字母数字中划线（无连续--、不以-结尾），说明不超过2000字符", authorization.ErrInvalid)
 	}
+	// 保留名单：slug 会派生集群命名空间（build-<slug>/prod-<slug>），与 K8s 系统
+	// 命名空间或平台组件命名空间同名会造成归属冲突，创建时即拒绝。
+	if domain.ReservedWorkspaceNames[input.Slug] {
+		return input, fmt.Errorf("%w: 空间名 %s 为系统保留名称", authorization.ErrInvalid, input.Slug)
+	}
 	return input, nil
 }
 
@@ -144,8 +149,20 @@ func (s *Service) Create(ctx context.Context, p authorization.Principal, input C
 	}
 	var result View
 	err = s.Access.Do(ctx, p, true, func(tx *gorm.DB, current authorization.Principal) error {
-		if err := s.Access.RequireInstance(current); err != nil {
-			return err
+		// 授权：实例管理员恒可；非实例管理员仅当实例开启"自由建空间"且为会话
+		// 身份（应用范围 PAT 不继承该能力，与实例管理权限同边界）。
+		selfCreate := current.InstanceAdmin && !current.IsBearer()
+		if !current.InstanceAdmin {
+			var settings instanceSettingsRow
+			if err := tx.Table("instance_settings").Select("workspace_self_create").Where("singleton = TRUE").Take(&settings).Error; err != nil {
+				if !errors.Is(err, gorm.ErrRecordNotFound) {
+					return err
+				}
+			}
+			selfCreate = settings.WorkspaceSelfCreate && !current.IsBearer()
+		}
+		if !selfCreate {
+			return authorization.ErrDenied
 		}
 		value := model.Workspace{ID: id, Name: input.Name, Slug: input.Slug, Description: input.Description, Status: model.ResourceActive, Revision: 1}
 		if err := tx.Create(&value).Error; err != nil {
@@ -157,7 +174,13 @@ func (s *Service) Create(ctx context.Context, p authorization.Principal, input C
 		if err := audit.Record(tx, current.UserID, "workspace.create", "workspace", id, &id, nil); err != nil {
 			return err
 		}
-		result = view(value, "instance_admin", current)
+		// 视图角色如实反映创建者身份：实例管理员保留其角色；非实例管理员经
+		// 自由建空间入口创建后即为空间管理员（成员插入已赋予）。
+		creatorRole := "workspace_admin"
+		if current.InstanceAdmin {
+			creatorRole = "instance_admin"
+		}
+		result = view(value, creatorRole, current)
 		return nil
 	})
 	return result, err
@@ -222,4 +245,9 @@ func (s *Service) Archive(ctx context.Context, p authorization.Principal, id str
 		}
 		return audit.Record(tx, current.UserID, "workspace.archive", "workspace", id, &id, nil)
 	})
+}
+
+// instanceSettingsRow 是工作空间服务读取实例开关的轻量投影。
+type instanceSettingsRow struct {
+	WorkspaceSelfCreate bool `gorm:"column:workspace_self_create"`
 }

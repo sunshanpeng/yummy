@@ -25,6 +25,9 @@ service InventoryService {
   // 验证输出仓库当前凭据版本：真实执行网络/认证探测（可选校验指定引用的读取），
   // 全部通过才标记 verified_at/verified_revision，构建与部署以该标记为准；失败关闭不标记。
   rpc VerifyRegistry(VerifyRegistryRequest) returns (VerifyRegistryResponse);
+  // 实例设置：登录身份均可读（控制台据此决定入口展示），写入仅限实例管理员。
+  rpc GetInstanceSettings(GetInstanceSettingsRequest) returns (GetInstanceSettingsResponse);
+  rpc SetWorkspaceSelfCreate(SetWorkspaceSelfCreateRequest) returns (SetWorkspaceSelfCreateResponse);
 }
 message ExecutionNode {
   string id = 1; string name = 2; string worker_id = 3; string status = 4; string cluster_node_uid = 5;
@@ -109,3 +112,8 @@ message VerifyRegistryResponse {
   RegistryConnection registry = 1; bool ok = 2; string checked_at = 3; string message = 4;
   bool network_reachable = 5; bool authentication_accepted = 6; bool read_verified = 7;
 }
+
+message GetInstanceSettingsRequest {}
+message GetInstanceSettingsResponse { bool workspace_self_create = 1; }
+message SetWorkspaceSelfCreateRequest { bool enabled = 1; }
+message SetWorkspaceSelfCreateResponse { bool workspace_self_create = 1; }

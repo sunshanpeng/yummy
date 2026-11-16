@@ -303,3 +303,27 @@ func (h *InventoryHandler) VerifyRegistry(ctx context.Context, r *connect.Reques
 	}
 	return connect.NewResponse(response), nil
 }
+
+func (h *InventoryHandler) GetInstanceSettings(ctx context.Context, _ *connect.Request[platformv1.GetInstanceSettingsRequest]) (*connect.Response[platformv1.GetInstanceSettingsResponse], error) {
+	p, e := authorization.FromContext(ctx)
+	if e != nil {
+		return nil, inventoryError(h.Log, e)
+	}
+	enabled, e := h.Service.GetInstanceSettings(ctx, p)
+	if e != nil {
+		return nil, inventoryError(h.Log, e)
+	}
+	return connect.NewResponse(&platformv1.GetInstanceSettingsResponse{WorkspaceSelfCreate: enabled}), nil
+}
+
+func (h *InventoryHandler) SetWorkspaceSelfCreate(ctx context.Context, r *connect.Request[platformv1.SetWorkspaceSelfCreateRequest]) (*connect.Response[platformv1.SetWorkspaceSelfCreateResponse], error) {
+	p, e := authorization.FromContext(ctx)
+	if e != nil {
+		return nil, inventoryError(h.Log, e)
+	}
+	enabled, e := h.Service.SetWorkspaceSelfCreate(ctx, p, r.Msg.Enabled)
+	if e != nil {
+		return nil, inventoryError(h.Log, e)
+	}
+	return connect.NewResponse(&platformv1.SetWorkspaceSelfCreateResponse{WorkspaceSelfCreate: enabled}), nil
+}

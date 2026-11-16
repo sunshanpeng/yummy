@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { z } from "zod";
 import { IdentityService } from "../gen/platform/v1/identity_pb";
+import { InventoryService } from "../gen/platform/v1/inventory_pb";
 import { OAuthAdminService } from "../gen/platform/v1/oauth_admin_pb";
 import { WorkspaceService } from "../gen/platform/v1/resources_pb";
 import { Button } from "../components/ui/button";
@@ -30,7 +31,19 @@ export const PlatformOAuthClientsRoute = () => <PlatformPage tab="oauth-clients"
 function Workspaces() {
   const { cursor, onPage } = useCursor(); const [creating, setCreating] = useState(false); const client = useQueryClient();
   const query = useRPC(WorkspaceService.method.listWorkspaces, { limit: 24, cursor });
-  return <div className="stack"><div className="flex items-center justify-between gap-4"><h2 className="text-lg font-semibold">全部工作空间</h2><Button onClick={() => setCreating(!creating)} variant={creating ? "outline" : "default"}><Plus />{creating ? "取消创建" : "创建空间"}</Button></div>{creating && <section className="section max-w-2xl"><DataForm fields={[{ name: "name", label: "工作空间名称", schema: required.max(100, "名称最多 100 字符") }, { name: "slug", label: "空间标识", schema: resourceName, hint: "小写字母、数字和连字符；在实例中唯一。" }, { name: "description", label: "空间说明", type: "textarea", schema: z.string().max(2000, "说明最多 2000 字符") }]} submitLabel="创建工作空间" onSubmit={async (value) => { await platform.workspaces.createWorkspace({ name: value.name, slug: value.slug, description: value.description }); setCreating(false); await invalidateMethods(client, ["ListWorkspaces"]); }} /></section>}<QueryState query={query}>{query.data?.workspaces.length ? <><DataTable label="全部工作空间" rows={query.data.workspaces} columns={[
+  const settings = useRPC(InventoryService.method.getInstanceSettings, {});
+  const [savingToggle, setSavingToggle] = useState(false);
+  const selfCreate = settings.data?.workspaceSelfCreate === true;
+  const toggleSelfCreate = async () => {
+    setSavingToggle(true);
+    try {
+      await platform.inventory.setWorkspaceSelfCreate({ enabled: !selfCreate });
+      await invalidateMethods(client, ["GetInstanceSettings"]);
+    } finally {
+      setSavingToggle(false);
+    }
+  };
+  return <div className="stack"><Notice tone={selfCreate ? "success" : "neutral"}>{selfCreate ? "所有登录用户可自助创建工作空间（SaaS 自由创建已开启）。" : "仅实例管理员可创建工作空间（SaaS 自由创建已关闭）。"}</Notice><div className="flex items-center justify-between gap-4"><h2 className="text-lg font-semibold">全部工作空间</h2><div className="flex items-center gap-3"><Button onClick={toggleSelfCreate} variant={selfCreate ? "outline" : "default"} disabled={savingToggle}>{savingToggle ? "保存中…" : selfCreate ? "关闭自助创建" : "开启自助创建"}</Button><Button onClick={() => setCreating(!creating)} variant={creating ? "outline" : "default"}><Plus />{creating ? "取消创建" : "创建空间"}</Button></div></div>{creating && <section className="section max-w-2xl"><DataForm fields={[{ name: "name", label: "工作空间名称", schema: required.max(100, "名称最多 100 字符") }, { name: "slug", label: "空间标识", schema: resourceName, hint: "小写字母、数字和连字符；在实例中唯一。" }, { name: "description", label: "空间说明", type: "textarea", schema: z.string().max(2000, "说明最多 2000 字符") }]} submitLabel="创建工作空间" onSubmit={async (value) => { await platform.workspaces.createWorkspace({ name: value.name, slug: value.slug, description: value.description }); setCreating(false); await invalidateMethods(client, ["ListWorkspaces"]); }} /></section>}<QueryState query={query}>{query.data?.workspaces.length ? <><DataTable label="全部工作空间" rows={query.data.workspaces} columns={[
     { id: "name", title: "工作空间", cell: (workspace) => <div><Link className="text-link font-medium" to="/w/$workspaceId/apps" params={{ workspaceId: workspace.id }}>{workspace.name}</Link><p className="mt-1 text-xs text-muted-foreground">{workspace.slug}</p></div> },
     { id: "description", title: "说明", cell: (workspace) => <p className="max-w-md break-words text-muted-foreground">{workspace.description || "—"}</p> },
     { id: "role", title: "你的业务权限", cell: (workspace) => roleLabel(workspace.role) },

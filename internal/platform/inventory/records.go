@@ -4,10 +4,11 @@ import "time"
 
 // 持久化结构留在模块内部，避免实例凭据变成公共 DTO 或跨模块可写对象。
 type instanceRecord struct {
-	Singleton      bool      `gorm:"column:singleton;primaryKey"`
-	ID             string    `gorm:"column:id"`
-	PolicyRevision int64     `gorm:"column:policy_revision"`
-	CreatedAt      time.Time `gorm:"column:created_at"`
+	Singleton           bool      `gorm:"column:singleton;primaryKey"`
+	ID                  string    `gorm:"column:id"`
+	PolicyRevision      int64     `gorm:"column:policy_revision"`
+	CreatedAt           time.Time `gorm:"column:created_at"`
+	WorkspaceSelfCreate bool      `gorm:"column:workspace_self_create"`
 }
 
 func (instanceRecord) TableName() string { return "instance_settings" }

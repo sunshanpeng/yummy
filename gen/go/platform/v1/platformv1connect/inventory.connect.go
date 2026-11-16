@@ -90,6 +90,12 @@ const (
 	// InventoryServiceVerifyRegistryProcedure is the fully-qualified name of the InventoryService's
 	// VerifyRegistry RPC.
 	InventoryServiceVerifyRegistryProcedure = "/platform.v1.InventoryService/VerifyRegistry"
+	// InventoryServiceGetInstanceSettingsProcedure is the fully-qualified name of the
+	// InventoryService's GetInstanceSettings RPC.
+	InventoryServiceGetInstanceSettingsProcedure = "/platform.v1.InventoryService/GetInstanceSettings"
+	// InventoryServiceSetWorkspaceSelfCreateProcedure is the fully-qualified name of the
+	// InventoryService's SetWorkspaceSelfCreate RPC.
+	InventoryServiceSetWorkspaceSelfCreateProcedure = "/platform.v1.InventoryService/SetWorkspaceSelfCreate"
 )
 
 // InventoryServiceClient is a client for the platform.v1.InventoryService service.
@@ -117,6 +123,9 @@ type InventoryServiceClient interface {
 	// 验证输出仓库当前凭据版本：真实执行网络/认证探测（可选校验指定引用的读取），
 	// 全部通过才标记 verified_at/verified_revision，构建与部署以该标记为准；失败关闭不标记。
 	VerifyRegistry(context.Context, *connect.Request[v1.VerifyRegistryRequest]) (*connect.Response[v1.VerifyRegistryResponse], error)
+	// 实例设置：登录身份均可读（控制台据此决定入口展示），写入仅限实例管理员。
+	GetInstanceSettings(context.Context, *connect.Request[v1.GetInstanceSettingsRequest]) (*connect.Response[v1.GetInstanceSettingsResponse], error)
+	SetWorkspaceSelfCreate(context.Context, *connect.Request[v1.SetWorkspaceSelfCreateRequest]) (*connect.Response[v1.SetWorkspaceSelfCreateResponse], error)
 }
 
 // NewInventoryServiceClient constructs a client for the platform.v1.InventoryService service. By
@@ -244,6 +253,18 @@ func NewInventoryServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(inventoryServiceMethods.ByName("VerifyRegistry")),
 			connect.WithClientOptions(opts...),
 		),
+		getInstanceSettings: connect.NewClient[v1.GetInstanceSettingsRequest, v1.GetInstanceSettingsResponse](
+			httpClient,
+			baseURL+InventoryServiceGetInstanceSettingsProcedure,
+			connect.WithSchema(inventoryServiceMethods.ByName("GetInstanceSettings")),
+			connect.WithClientOptions(opts...),
+		),
+		setWorkspaceSelfCreate: connect.NewClient[v1.SetWorkspaceSelfCreateRequest, v1.SetWorkspaceSelfCreateResponse](
+			httpClient,
+			baseURL+InventoryServiceSetWorkspaceSelfCreateProcedure,
+			connect.WithSchema(inventoryServiceMethods.ByName("SetWorkspaceSelfCreate")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -268,6 +289,8 @@ type inventoryServiceClient struct {
 	setDomainTLSSecret        *connect.Client[v1.SetDomainTLSSecretRequest, v1.SetDomainTLSSecretResponse]
 	getDomainTLSSecret        *connect.Client[v1.GetDomainTLSSecretRequest, v1.GetDomainTLSSecretResponse]
 	verifyRegistry            *connect.Client[v1.VerifyRegistryRequest, v1.VerifyRegistryResponse]
+	getInstanceSettings       *connect.Client[v1.GetInstanceSettingsRequest, v1.GetInstanceSettingsResponse]
+	setWorkspaceSelfCreate    *connect.Client[v1.SetWorkspaceSelfCreateRequest, v1.SetWorkspaceSelfCreateResponse]
 }
 
 // ListNodes calls platform.v1.InventoryService.ListNodes.
@@ -365,6 +388,16 @@ func (c *inventoryServiceClient) VerifyRegistry(ctx context.Context, req *connec
 	return c.verifyRegistry.CallUnary(ctx, req)
 }
 
+// GetInstanceSettings calls platform.v1.InventoryService.GetInstanceSettings.
+func (c *inventoryServiceClient) GetInstanceSettings(ctx context.Context, req *connect.Request[v1.GetInstanceSettingsRequest]) (*connect.Response[v1.GetInstanceSettingsResponse], error) {
+	return c.getInstanceSettings.CallUnary(ctx, req)
+}
+
+// SetWorkspaceSelfCreate calls platform.v1.InventoryService.SetWorkspaceSelfCreate.
+func (c *inventoryServiceClient) SetWorkspaceSelfCreate(ctx context.Context, req *connect.Request[v1.SetWorkspaceSelfCreateRequest]) (*connect.Response[v1.SetWorkspaceSelfCreateResponse], error) {
+	return c.setWorkspaceSelfCreate.CallUnary(ctx, req)
+}
+
 // InventoryServiceHandler is an implementation of the platform.v1.InventoryService service.
 type InventoryServiceHandler interface {
 	ListNodes(context.Context, *connect.Request[v1.ListNodesRequest]) (*connect.Response[v1.ListNodesResponse], error)
@@ -390,6 +423,9 @@ type InventoryServiceHandler interface {
 	// 验证输出仓库当前凭据版本：真实执行网络/认证探测（可选校验指定引用的读取），
 	// 全部通过才标记 verified_at/verified_revision，构建与部署以该标记为准；失败关闭不标记。
 	VerifyRegistry(context.Context, *connect.Request[v1.VerifyRegistryRequest]) (*connect.Response[v1.VerifyRegistryResponse], error)
+	// 实例设置：登录身份均可读（控制台据此决定入口展示），写入仅限实例管理员。
+	GetInstanceSettings(context.Context, *connect.Request[v1.GetInstanceSettingsRequest]) (*connect.Response[v1.GetInstanceSettingsResponse], error)
+	SetWorkspaceSelfCreate(context.Context, *connect.Request[v1.SetWorkspaceSelfCreateRequest]) (*connect.Response[v1.SetWorkspaceSelfCreateResponse], error)
 }
 
 // NewInventoryServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -513,6 +549,18 @@ func NewInventoryServiceHandler(svc InventoryServiceHandler, opts ...connect.Han
 		connect.WithSchema(inventoryServiceMethods.ByName("VerifyRegistry")),
 		connect.WithHandlerOptions(opts...),
 	)
+	inventoryServiceGetInstanceSettingsHandler := connect.NewUnaryHandler(
+		InventoryServiceGetInstanceSettingsProcedure,
+		svc.GetInstanceSettings,
+		connect.WithSchema(inventoryServiceMethods.ByName("GetInstanceSettings")),
+		connect.WithHandlerOptions(opts...),
+	)
+	inventoryServiceSetWorkspaceSelfCreateHandler := connect.NewUnaryHandler(
+		InventoryServiceSetWorkspaceSelfCreateProcedure,
+		svc.SetWorkspaceSelfCreate,
+		connect.WithSchema(inventoryServiceMethods.ByName("SetWorkspaceSelfCreate")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/platform.v1.InventoryService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case InventoryServiceListNodesProcedure:
@@ -553,6 +601,10 @@ func NewInventoryServiceHandler(svc InventoryServiceHandler, opts ...connect.Han
 			inventoryServiceGetDomainTLSSecretHandler.ServeHTTP(w, r)
 		case InventoryServiceVerifyRegistryProcedure:
 			inventoryServiceVerifyRegistryHandler.ServeHTTP(w, r)
+		case InventoryServiceGetInstanceSettingsProcedure:
+			inventoryServiceGetInstanceSettingsHandler.ServeHTTP(w, r)
+		case InventoryServiceSetWorkspaceSelfCreateProcedure:
+			inventoryServiceSetWorkspaceSelfCreateHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -636,4 +688,12 @@ func (UnimplementedInventoryServiceHandler) GetDomainTLSSecret(context.Context, 
 
 func (UnimplementedInventoryServiceHandler) VerifyRegistry(context.Context, *connect.Request[v1.VerifyRegistryRequest]) (*connect.Response[v1.VerifyRegistryResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("platform.v1.InventoryService.VerifyRegistry is not implemented"))
+}
+
+func (UnimplementedInventoryServiceHandler) GetInstanceSettings(context.Context, *connect.Request[v1.GetInstanceSettingsRequest]) (*connect.Response[v1.GetInstanceSettingsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("platform.v1.InventoryService.GetInstanceSettings is not implemented"))
+}
+
+func (UnimplementedInventoryServiceHandler) SetWorkspaceSelfCreate(context.Context, *connect.Request[v1.SetWorkspaceSelfCreateRequest]) (*connect.Response[v1.SetWorkspaceSelfCreateResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("platform.v1.InventoryService.SetWorkspaceSelfCreate is not implemented"))
 }

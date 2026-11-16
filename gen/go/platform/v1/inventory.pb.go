@@ -3039,6 +3039,174 @@ func (x *VerifyRegistryResponse) GetReadVerified() bool {
 	return false
 }
 
+type GetInstanceSettingsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetInstanceSettingsRequest) Reset() {
+	*x = GetInstanceSettingsRequest{}
+	mi := &file_platform_v1_inventory_proto_msgTypes[46]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetInstanceSettingsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetInstanceSettingsRequest) ProtoMessage() {}
+
+func (x *GetInstanceSettingsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_platform_v1_inventory_proto_msgTypes[46]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetInstanceSettingsRequest.ProtoReflect.Descriptor instead.
+func (*GetInstanceSettingsRequest) Descriptor() ([]byte, []int) {
+	return file_platform_v1_inventory_proto_rawDescGZIP(), []int{46}
+}
+
+type GetInstanceSettingsResponse struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	WorkspaceSelfCreate bool                   `protobuf:"varint,1,opt,name=workspace_self_create,json=workspaceSelfCreate,proto3" json:"workspace_self_create,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *GetInstanceSettingsResponse) Reset() {
+	*x = GetInstanceSettingsResponse{}
+	mi := &file_platform_v1_inventory_proto_msgTypes[47]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetInstanceSettingsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetInstanceSettingsResponse) ProtoMessage() {}
+
+func (x *GetInstanceSettingsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_platform_v1_inventory_proto_msgTypes[47]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetInstanceSettingsResponse.ProtoReflect.Descriptor instead.
+func (*GetInstanceSettingsResponse) Descriptor() ([]byte, []int) {
+	return file_platform_v1_inventory_proto_rawDescGZIP(), []int{47}
+}
+
+func (x *GetInstanceSettingsResponse) GetWorkspaceSelfCreate() bool {
+	if x != nil {
+		return x.WorkspaceSelfCreate
+	}
+	return false
+}
+
+type SetWorkspaceSelfCreateRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Enabled       bool                   `protobuf:"varint,1,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetWorkspaceSelfCreateRequest) Reset() {
+	*x = SetWorkspaceSelfCreateRequest{}
+	mi := &file_platform_v1_inventory_proto_msgTypes[48]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetWorkspaceSelfCreateRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetWorkspaceSelfCreateRequest) ProtoMessage() {}
+
+func (x *SetWorkspaceSelfCreateRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_platform_v1_inventory_proto_msgTypes[48]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetWorkspaceSelfCreateRequest.ProtoReflect.Descriptor instead.
+func (*SetWorkspaceSelfCreateRequest) Descriptor() ([]byte, []int) {
+	return file_platform_v1_inventory_proto_rawDescGZIP(), []int{48}
+}
+
+func (x *SetWorkspaceSelfCreateRequest) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+type SetWorkspaceSelfCreateResponse struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	WorkspaceSelfCreate bool                   `protobuf:"varint,1,opt,name=workspace_self_create,json=workspaceSelfCreate,proto3" json:"workspace_self_create,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *SetWorkspaceSelfCreateResponse) Reset() {
+	*x = SetWorkspaceSelfCreateResponse{}
+	mi := &file_platform_v1_inventory_proto_msgTypes[49]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetWorkspaceSelfCreateResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetWorkspaceSelfCreateResponse) ProtoMessage() {}
+
+func (x *SetWorkspaceSelfCreateResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_platform_v1_inventory_proto_msgTypes[49]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetWorkspaceSelfCreateResponse.ProtoReflect.Descriptor instead.
+func (*SetWorkspaceSelfCreateResponse) Descriptor() ([]byte, []int) {
+	return file_platform_v1_inventory_proto_rawDescGZIP(), []int{49}
+}
+
+func (x *SetWorkspaceSelfCreateResponse) GetWorkspaceSelfCreate() bool {
+	if x != nil {
+		return x.WorkspaceSelfCreate
+	}
+	return false
+}
+
 var File_platform_v1_inventory_proto protoreflect.FileDescriptor
 
 const file_platform_v1_inventory_proto_rawDesc = "" +
@@ -3303,7 +3471,14 @@ const file_platform_v1_inventory_proto_rawDesc = "" +
 	"\amessage\x18\x04 \x01(\tR\amessage\x12+\n" +
 	"\x11network_reachable\x18\x05 \x01(\bR\x10networkReachable\x127\n" +
 	"\x17authentication_accepted\x18\x06 \x01(\bR\x16authenticationAccepted\x12#\n" +
-	"\rread_verified\x18\a \x01(\bR\freadVerified2\xcb\x0e\n" +
+	"\rread_verified\x18\a \x01(\bR\freadVerified\"\x1c\n" +
+	"\x1aGetInstanceSettingsRequest\"Q\n" +
+	"\x1bGetInstanceSettingsResponse\x122\n" +
+	"\x15workspace_self_create\x18\x01 \x01(\bR\x13workspaceSelfCreate\"9\n" +
+	"\x1dSetWorkspaceSelfCreateRequest\x12\x18\n" +
+	"\aenabled\x18\x01 \x01(\bR\aenabled\"T\n" +
+	"\x1eSetWorkspaceSelfCreateResponse\x122\n" +
+	"\x15workspace_self_create\x18\x01 \x01(\bR\x13workspaceSelfCreate2\xa8\x10\n" +
 	"\x10InventoryService\x12J\n" +
 	"\tListNodes\x12\x1d.platform.v1.ListNodesRequest\x1a\x1e.platform.v1.ListNodesResponse\x12D\n" +
 	"\aGetNode\x12\x1b.platform.v1.GetNodeRequest\x1a\x1c.platform.v1.GetNodeResponse\x12M\n" +
@@ -3325,7 +3500,9 @@ const file_platform_v1_inventory_proto_rawDesc = "" +
 	"\x16ListNodeQualifications\x12*.platform.v1.ListNodeQualificationsRequest\x1a+.platform.v1.ListNodeQualificationsResponse\x12e\n" +
 	"\x12SetDomainTLSSecret\x12&.platform.v1.SetDomainTLSSecretRequest\x1a'.platform.v1.SetDomainTLSSecretResponse\x12e\n" +
 	"\x12GetDomainTLSSecret\x12&.platform.v1.GetDomainTLSSecretRequest\x1a'.platform.v1.GetDomainTLSSecretResponse\x12Y\n" +
-	"\x0eVerifyRegistry\x12\".platform.v1.VerifyRegistryRequest\x1a#.platform.v1.VerifyRegistryResponseB<Z:github.com/sunshanpeng/yummy/gen/go/platform/v1;platformv1b\x06proto3"
+	"\x0eVerifyRegistry\x12\".platform.v1.VerifyRegistryRequest\x1a#.platform.v1.VerifyRegistryResponse\x12h\n" +
+	"\x13GetInstanceSettings\x12'.platform.v1.GetInstanceSettingsRequest\x1a(.platform.v1.GetInstanceSettingsResponse\x12q\n" +
+	"\x16SetWorkspaceSelfCreate\x12*.platform.v1.SetWorkspaceSelfCreateRequest\x1a+.platform.v1.SetWorkspaceSelfCreateResponseB<Z:github.com/sunshanpeng/yummy/gen/go/platform/v1;platformv1b\x06proto3"
 
 var (
 	file_platform_v1_inventory_proto_rawDescOnce sync.Once
@@ -3339,7 +3516,7 @@ func file_platform_v1_inventory_proto_rawDescGZIP() []byte {
 	return file_platform_v1_inventory_proto_rawDescData
 }
 
-var file_platform_v1_inventory_proto_msgTypes = make([]protoimpl.MessageInfo, 47)
+var file_platform_v1_inventory_proto_msgTypes = make([]protoimpl.MessageInfo, 51)
 var file_platform_v1_inventory_proto_goTypes = []any{
 	(*ExecutionNode)(nil),                     // 0: platform.v1.ExecutionNode
 	(*RegistryConnection)(nil),                // 1: platform.v1.RegistryConnection
@@ -3387,7 +3564,11 @@ var file_platform_v1_inventory_proto_goTypes = []any{
 	(*GetDomainTLSSecretResponse)(nil),        // 43: platform.v1.GetDomainTLSSecretResponse
 	(*VerifyRegistryRequest)(nil),             // 44: platform.v1.VerifyRegistryRequest
 	(*VerifyRegistryResponse)(nil),            // 45: platform.v1.VerifyRegistryResponse
-	nil,                                       // 46: platform.v1.RegisterNodeQualificationRequest.EvidenceEntry
+	(*GetInstanceSettingsRequest)(nil),        // 46: platform.v1.GetInstanceSettingsRequest
+	(*GetInstanceSettingsResponse)(nil),       // 47: platform.v1.GetInstanceSettingsResponse
+	(*SetWorkspaceSelfCreateRequest)(nil),     // 48: platform.v1.SetWorkspaceSelfCreateRequest
+	(*SetWorkspaceSelfCreateResponse)(nil),    // 49: platform.v1.SetWorkspaceSelfCreateResponse
+	nil,                                       // 50: platform.v1.RegisterNodeQualificationRequest.EvidenceEntry
 }
 var file_platform_v1_inventory_proto_depIdxs = []int32{
 	2,  // 0: platform.v1.ExecutionPolicy.resource_default:type_name -> platform.v1.ExecutionResources
@@ -3409,7 +3590,7 @@ var file_platform_v1_inventory_proto_depIdxs = []int32{
 	4,  // 16: platform.v1.GetWorkspaceAllocationResponse.allocation:type_name -> platform.v1.WorkspaceAllocation
 	4,  // 17: platform.v1.SetWorkspaceAllocationResponse.allocation:type_name -> platform.v1.WorkspaceAllocation
 	5,  // 18: platform.v1.ResolveExecutionResponse.summary:type_name -> platform.v1.ExecutionSummary
-	46, // 19: platform.v1.RegisterNodeQualificationRequest.evidence:type_name -> platform.v1.RegisterNodeQualificationRequest.EvidenceEntry
+	50, // 19: platform.v1.RegisterNodeQualificationRequest.evidence:type_name -> platform.v1.RegisterNodeQualificationRequest.EvidenceEntry
 	32, // 20: platform.v1.RegisterNodeQualificationResponse.qualification:type_name -> platform.v1.NodeQualification
 	32, // 21: platform.v1.RevokeNodeQualificationResponse.qualification:type_name -> platform.v1.NodeQualification
 	32, // 22: platform.v1.ListNodeQualificationsResponse.qualifications:type_name -> platform.v1.NodeQualification
@@ -3435,27 +3616,31 @@ var file_platform_v1_inventory_proto_depIdxs = []int32{
 	40, // 42: platform.v1.InventoryService.SetDomainTLSSecret:input_type -> platform.v1.SetDomainTLSSecretRequest
 	42, // 43: platform.v1.InventoryService.GetDomainTLSSecret:input_type -> platform.v1.GetDomainTLSSecretRequest
 	44, // 44: platform.v1.InventoryService.VerifyRegistry:input_type -> platform.v1.VerifyRegistryRequest
-	7,  // 45: platform.v1.InventoryService.ListNodes:output_type -> platform.v1.ListNodesResponse
-	9,  // 46: platform.v1.InventoryService.GetNode:output_type -> platform.v1.GetNodeResponse
-	11, // 47: platform.v1.InventoryService.CreateNode:output_type -> platform.v1.CreateNodeResponse
-	13, // 48: platform.v1.InventoryService.UpdateNode:output_type -> platform.v1.UpdateNodeResponse
-	15, // 49: platform.v1.InventoryService.ListRegistries:output_type -> platform.v1.ListRegistriesResponse
-	17, // 50: platform.v1.InventoryService.GetRegistry:output_type -> platform.v1.GetRegistryResponse
-	19, // 51: platform.v1.InventoryService.CreateRegistry:output_type -> platform.v1.CreateRegistryResponse
-	21, // 52: platform.v1.InventoryService.UpdateRegistry:output_type -> platform.v1.UpdateRegistryResponse
-	23, // 53: platform.v1.InventoryService.GetExecutionPolicy:output_type -> platform.v1.GetExecutionPolicyResponse
-	25, // 54: platform.v1.InventoryService.SaveExecutionPolicy:output_type -> platform.v1.SaveExecutionPolicyResponse
-	27, // 55: platform.v1.InventoryService.GetWorkspaceAllocation:output_type -> platform.v1.GetWorkspaceAllocationResponse
-	29, // 56: platform.v1.InventoryService.SetWorkspaceAllocation:output_type -> platform.v1.SetWorkspaceAllocationResponse
-	31, // 57: platform.v1.InventoryService.ResolveExecution:output_type -> platform.v1.ResolveExecutionResponse
-	34, // 58: platform.v1.InventoryService.RegisterNodeQualification:output_type -> platform.v1.RegisterNodeQualificationResponse
-	36, // 59: platform.v1.InventoryService.RevokeNodeQualification:output_type -> platform.v1.RevokeNodeQualificationResponse
-	38, // 60: platform.v1.InventoryService.ListNodeQualifications:output_type -> platform.v1.ListNodeQualificationsResponse
-	41, // 61: platform.v1.InventoryService.SetDomainTLSSecret:output_type -> platform.v1.SetDomainTLSSecretResponse
-	43, // 62: platform.v1.InventoryService.GetDomainTLSSecret:output_type -> platform.v1.GetDomainTLSSecretResponse
-	45, // 63: platform.v1.InventoryService.VerifyRegistry:output_type -> platform.v1.VerifyRegistryResponse
-	45, // [45:64] is the sub-list for method output_type
-	26, // [26:45] is the sub-list for method input_type
+	46, // 45: platform.v1.InventoryService.GetInstanceSettings:input_type -> platform.v1.GetInstanceSettingsRequest
+	48, // 46: platform.v1.InventoryService.SetWorkspaceSelfCreate:input_type -> platform.v1.SetWorkspaceSelfCreateRequest
+	7,  // 47: platform.v1.InventoryService.ListNodes:output_type -> platform.v1.ListNodesResponse
+	9,  // 48: platform.v1.InventoryService.GetNode:output_type -> platform.v1.GetNodeResponse
+	11, // 49: platform.v1.InventoryService.CreateNode:output_type -> platform.v1.CreateNodeResponse
+	13, // 50: platform.v1.InventoryService.UpdateNode:output_type -> platform.v1.UpdateNodeResponse
+	15, // 51: platform.v1.InventoryService.ListRegistries:output_type -> platform.v1.ListRegistriesResponse
+	17, // 52: platform.v1.InventoryService.GetRegistry:output_type -> platform.v1.GetRegistryResponse
+	19, // 53: platform.v1.InventoryService.CreateRegistry:output_type -> platform.v1.CreateRegistryResponse
+	21, // 54: platform.v1.InventoryService.UpdateRegistry:output_type -> platform.v1.UpdateRegistryResponse
+	23, // 55: platform.v1.InventoryService.GetExecutionPolicy:output_type -> platform.v1.GetExecutionPolicyResponse
+	25, // 56: platform.v1.InventoryService.SaveExecutionPolicy:output_type -> platform.v1.SaveExecutionPolicyResponse
+	27, // 57: platform.v1.InventoryService.GetWorkspaceAllocation:output_type -> platform.v1.GetWorkspaceAllocationResponse
+	29, // 58: platform.v1.InventoryService.SetWorkspaceAllocation:output_type -> platform.v1.SetWorkspaceAllocationResponse
+	31, // 59: platform.v1.InventoryService.ResolveExecution:output_type -> platform.v1.ResolveExecutionResponse
+	34, // 60: platform.v1.InventoryService.RegisterNodeQualification:output_type -> platform.v1.RegisterNodeQualificationResponse
+	36, // 61: platform.v1.InventoryService.RevokeNodeQualification:output_type -> platform.v1.RevokeNodeQualificationResponse
+	38, // 62: platform.v1.InventoryService.ListNodeQualifications:output_type -> platform.v1.ListNodeQualificationsResponse
+	41, // 63: platform.v1.InventoryService.SetDomainTLSSecret:output_type -> platform.v1.SetDomainTLSSecretResponse
+	43, // 64: platform.v1.InventoryService.GetDomainTLSSecret:output_type -> platform.v1.GetDomainTLSSecretResponse
+	45, // 65: platform.v1.InventoryService.VerifyRegistry:output_type -> platform.v1.VerifyRegistryResponse
+	47, // 66: platform.v1.InventoryService.GetInstanceSettings:output_type -> platform.v1.GetInstanceSettingsResponse
+	49, // 67: platform.v1.InventoryService.SetWorkspaceSelfCreate:output_type -> platform.v1.SetWorkspaceSelfCreateResponse
+	47, // [47:68] is the sub-list for method output_type
+	26, // [26:47] is the sub-list for method input_type
 	26, // [26:26] is the sub-list for extension type_name
 	26, // [26:26] is the sub-list for extension extendee
 	0,  // [0:26] is the sub-list for field type_name
@@ -3473,7 +3658,7 @@ func file_platform_v1_inventory_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_platform_v1_inventory_proto_rawDesc), len(file_platform_v1_inventory_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   47,
+			NumMessages:   51,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
