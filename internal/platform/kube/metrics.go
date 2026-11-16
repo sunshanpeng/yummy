@@ -10,6 +10,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -138,7 +139,9 @@ func (m *MetricsCollector) samples(ctx context.Context, data []byte, at time.Tim
 					key.container = label.GetValue()
 				}
 			}
-			if key.namespace != m.adapter.config.RuntimeNamespace || key.pod == "" || key.container != "app" {
+			// 命名空间按空间派生（prod-<slug>，2026-10-26 设计）：按前缀匹配本环境
+			// 的运行命名空间；旧固定命名空间保留兼容。
+			if !strings.HasPrefix(key.namespace, EnvProd+"-") && key.namespace != m.adapter.config.RuntimeNamespace || key.pod == "" || key.container != "app" {
 				continue
 			}
 			var value float64
@@ -180,7 +183,8 @@ func (m *MetricsCollector) samples(ctx context.Context, data []byte, at time.Tim
 			}
 		}
 	}
-	pods, err := m.adapter.client.CoreV1().Pods(m.adapter.config.RuntimeNamespace).List(ctx, metav1.ListOptions{LabelSelector: labels.SelectorFromSet(map[string]string{LabelManaged: "worker", LabelNodeUID: string(m.adapter.config.Node.UID)}).String()})
+	// 受管 pod 可能分布在按空间派生的多个运行命名空间：按平台标签集群级列出。
+	pods, err := m.adapter.client.CoreV1().Pods("").List(ctx, metav1.ListOptions{LabelSelector: labels.SelectorFromSet(map[string]string{LabelManaged: "worker", LabelNodeUID: string(m.adapter.config.Node.UID)}).String()})
 	if err != nil {
 		return nil, err
 	}

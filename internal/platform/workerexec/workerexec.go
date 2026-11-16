@@ -253,9 +253,14 @@ func dockerConfigJSON(credential *platformv1.WorkerRegistryCredential) ([]byte, 
 
 // listManagedBuildPods 按受管标签列出本 attempt 的构建 Pod；只做发现，
 // 归属与安全核对由 FollowLogs 对 Job/Pod owner UID 重新验证完成。
-func (e *Executor) listManagedBuildPods(ctx context.Context, attemptID string) ([]corev1.Pod, error) {
+func (e *Executor) listManagedBuildPods(ctx context.Context, attemptID string, spaceSlug string) ([]corev1.Pod, error) {
 	selector := kube.LabelManaged + "=worker," + kube.LabelAttempt + "=" + attemptID + "," + kube.LabelNodeUID + "=" + string(e.options.Node.UID)
-	pods, err := e.options.Client.CoreV1().Pods(e.options.BuildNamespace).List(ctx, metav1.ListOptions{LabelSelector: selector})
+	// 构建命名空间按空间派生（旧命令回退安装配置的固定命名空间）。
+	buildNS := e.options.BuildNamespace
+	if spaceSlug != "" {
+		buildNS = kube.BuildNamespaceFor(spaceSlug)
+	}
+	pods, err := e.options.Client.CoreV1().Pods(buildNS).List(ctx, metav1.ListOptions{LabelSelector: selector})
 	if err != nil {
 		return nil, err
 	}
@@ -396,7 +401,7 @@ func (e *Executor) followBuildLogs(ctx context.Context, task kube.BuildTask, emi
 		if ctx.Err() != nil {
 			return false, ctx.Err()
 		}
-		pods, err := e.listManagedBuildPods(ctx, task.AttemptID)
+		pods, err := e.listManagedBuildPods(ctx, task.AttemptID, task.SpaceSlug)
 		if err != nil {
 			return false, err
 		}
@@ -418,7 +423,11 @@ func (e *Executor) followBuildLogs(ctx context.Context, task kube.BuildTask, emi
 			}
 			continue
 		}
-		stream, err := e.options.Adapter.FollowLogs(ctx, task, kube.LogRequest{Namespace: e.options.BuildNamespace, PodName: pod.Name, PodUID: pod.UID, Container: "build", RestartCount: status.RestartCount})
+		followNS := e.options.BuildNamespace
+		if task.SpaceSlug != "" {
+			followNS = kube.BuildNamespaceFor(task.SpaceSlug)
+		}
+		stream, err := e.options.Adapter.FollowLogs(ctx, task, kube.LogRequest{Namespace: followNS, PodName: pod.Name, PodUID: pod.UID, Container: "build", RestartCount: status.RestartCount})
 		if err != nil {
 			return false, err
 		}
