@@ -1,4 +1,4 @@
-// Package qualification 用实例管理员登记的节点验收记录核对worker上报的能力资格。
+// Package qualification 用全局管理员登记的节点验收记录核对worker上报的能力资格。
 // 独立于 inventory 成包：本包 import workergateway（CapabilityVerifier 契约），
 // 而 workergateway 经 build 依赖 inventory，若放在 inventory 内会形成导入环。
 package qualification

@@ -68,7 +68,7 @@ func TestInitializeAndAuthenticate(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := f.service.SetUserStatus(ctx, f.admin, f.admin.UserID, model.UserDisabled); !errors.Is(err, authorization.ErrConflict) {
-		t.Fatalf("最后实例管理员被停用: %v", err)
+		t.Fatalf("最后全局管理员被停用: %v", err)
 	}
 }
 
@@ -99,7 +99,7 @@ func TestTokenIntersectionRevocationAndOwner(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := f.service.RevokeToken(ctx, f.admin, created.Token.ID); !errors.Is(err, authorization.ErrNotFound) {
-		t.Fatalf("实例管理员能撤销他人凭证: %v", err)
+		t.Fatalf("全局管理员能撤销他人凭证: %v", err)
 	}
 	if err := f.db.Where("application_id = ? AND user_id = ?", "app", f.viewer.UserID).Delete(&model.ApplicationMember{}).Error; err != nil {
 		t.Fatal(err)

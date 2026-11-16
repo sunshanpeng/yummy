@@ -64,7 +64,7 @@ type domainRecord struct {
 	WorkspaceID   string
 	ApplicationID string
 	IsDefault     bool
-	// TLSSecretName 是实例管理员预置的入口证书 Secret，空串表示未绑定；
+	// TLSSecretName 是全局管理员预置的入口证书 Secret，空串表示未绑定；
 	// 每次发布领取读取当前值汇聚，不写入发布快照。
 	TLSSecretName string
 	CreatedAt     time.Time

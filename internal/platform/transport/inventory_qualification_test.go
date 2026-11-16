@@ -64,7 +64,7 @@ func TestInventoryNodeQualificationHandlers(t *testing.T) {
 	if len(listed.Msg.GetQualifications()) != 2 {
 		t.Fatalf("列表=%#v", listed.Msg.GetQualifications())
 	}
-	// 非实例管理员：PermissionDenied；未认证：Unauthenticated。
+	// 非全局管理员：PermissionDenied；未认证：Unauthenticated。
 	adminCtx := authorization.WithPrincipal(context.Background(), authorization.Principal{UserID: "admin", AuthVersion: 1})
 	if _, err := h.RegisterNodeQualification(adminCtx, connect.NewRequest(&platformv1.RegisterNodeQualificationRequest{NodeId: node.ID, WorkerId: "worker-1", ClusterNodeUid: "uid-a", QualificationId: "install-accept-3", BuildReady: true})); connect.CodeOf(err) != connect.CodePermissionDenied {
 		t.Fatalf("空间管理员登记=%v", err)

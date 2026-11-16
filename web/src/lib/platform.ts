@@ -96,4 +96,4 @@ export const tokenScopes = ["application:read", "source:read", "source:upload", 
 export const defaultTokenScopes = ["application:read", "build:read", "logs:read", "deployment:read", "runtime:read", "config:read"];
 export const can = (resource: { capabilities: string[] } | undefined, capability: string) => resource?.capabilities.includes(capability) ?? false;
 export const formatTime = (value: string) => value && Number.isFinite(Date.parse(value)) ? new Intl.DateTimeFormat("zh-CN", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "—";
-export const roleLabel = (value: string) => ({ admin: "空间管理员", member: "普通成员", instance_admin: "实例管理员", workspace_admin: "空间管理员", viewer: "查看者", developer: "开发者", maintainer: "维护者" }[value] ?? value);
+export const roleLabel = (value: string) => ({ admin: "空间管理员", member: "普通成员", instance_admin: "全局管理员", workspace_admin: "空间管理员", viewer: "查看者", developer: "开发者", maintainer: "应用管理员" }[value] ?? value);

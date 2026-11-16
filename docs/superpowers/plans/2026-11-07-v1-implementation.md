@@ -120,10 +120,10 @@
 - B 报告的协议缺口：wire 协议 `WorkerDeploymentCommand` 未携带 Ingress TLS Secret 引用/HTTPS 标记，worker 只创建明文路由，不伪造 HTTPS 证据；域名 TLS 由控制面预置证书 + 探测负责。真实 HTTPS 端到端仍未验收（无专用 Linux/AMD64 服务器）。
 - wave 2 进展（GLM flash 子智能体协作）：D 期完成运行日志/指标上行纵切——worker.proto 新增 runtime_log/runtime_metric envelope、deployment.proto 新增 GetRuntimeLogs/GetRuntimeMetrics、迁移 017（幂等键 + 写入事务内配额收敛：日志每应用 ≤4MiB/≤2000 块、采样 24h）、workergateway Emitter/Journal/adapter 扩展、deployment 服务与 transport 查询（键集分页、application:read 鉴权）；时间戳全部数据库时钟。主会话补齐 workerexec 测试桩新接口方法。F 期完成应用详情页运行日志查看器（键集分页=加载更新、Pod/容器过滤、跨块流式 UTF-8 解码、role=log/aria）与 shadcn ChartContainer CPU/内存图表（chartConfig 语义变量 var(--chart-N)、窗口 Tabs、单点降级、未部署空态不发请求）；web 31/31 测试与构建通过、硬编码色值零命中、未新增依赖。E 期完成 workerexec 真实采集：runtimeSidecar 旁路（有界通道不阻塞状态机）、日志按 (pod,container,restart) 流键跟随、每观察间隔每流 ≤1 块、restart 变化自动换流；指标复用 kube.MetricsCollector 同 startup counter 差值、首样本/reset/缺测跳过、按 Pod 严格递增毫秒序号；MetricsEnabled 默认 false 失败关闭（未配 Kubelet 凭据零发射）。三方契约（流键/Seq/单块上限/字段语义）已核对一致；真实 Kubelet 精度、断网重传、日志跨界分块留待实机。
 - wave 2 收尾验证：E/D/F 三方交付后全平台 `go test ./... -race -count=1`（真实 PostgreSQL/Redis）37 包全绿零失败；前端 31/31 测试与生产构建通过。首期代码面（P1-P5 本地可验证部分）至此完整；剩余见"仍未完成"。
-- G 期完成域名 TLS 引用纵切：迁移 018（application_domain_claims 加 tls_secret_name 列）、实例管理员 Set/GetDomainTLSSecret API（DNS1123 校验、审计）、worker/deployment 协议加 https+tls_secret_name、ClaimPending 领取时汇聚——全部冻结域名绑定同一非空 Secret 才下发 HTTPS，缺绑或不一致失败关闭（不猜证书）；绑定是实例级运行设施，取当前值不冻结进 release，证书轮换改绑定即对下次发布生效。真实 Traefik/ACME 与真实集群挂载留待实机。
+- G 期完成域名 TLS 引用纵切：迁移 018（application_domain_claims 加 tls_secret_name 列）、全局管理员 Set/GetDomainTLSSecret API（DNS1123 校验、审计）、worker/deployment 协议加 https+tls_secret_name、ClaimPending 领取时汇聚——全部冻结域名绑定同一非空 Secret 才下发 HTTPS，缺绑或不一致失败关闭（不猜证书）；绑定是实例级运行设施，取当前值不冻结进 release，证书轮换改绑定即对下次发布生效。真实 Traefik/ACME 与真实集群挂载留待实机。
 - G 期发现并由主会话修复既有缺陷：WORKER 类型应用首次发布因空域名 slice→JSONB NULL 违反 application_releases.domains NOT NULL（23502），既有测试从未覆盖 WORKER 发布；已显式落空数组并补 TestWorkerFirstDeploymentPersistsEmptyDomains 回归测试。
 - H 期完成源码过期清理：source.Service.Cleanup(ctx, now, limit)——过期 PENDING/UPLOADED 上传删文件删行；过期快照按引用分类（无引用成对删快照+COMPLETE 上传行、仅终态构建引用删文件置 EXPIRED 墓碑、非终态构建引用绝不删且不占配额）；先文件后行、os.Root 防逃逸、单条失败不中断。审计决策：audit_events.actor_id 有 users 外键，系统操作不伪造 actor，不写审计、计数返回给接线方。主会话已接线 lifecycle 清理循环（10 分钟节奏，limit=100）。server/source 集成回归绿。
-- I 期完成 OAuth 预注册客户端管理 Connect API（OAuthAdminService：Register/List/SetActive，实例管理员专属，复用既有 CIMD/停用即撤权语义，键集分页游标 scope 绑定，重复 client_id 权限先行预检→Aborted，无任何 secret 字段）；主会话已挂入 server /api 路由（oauthService 未装配时不注册，失败关闭）。server/oauth 回归绿。F2 期完成全局管理页「OAuth 客户端」区块（列表键集分页、注册表单、启停二次确认含"停用即撤销全部授权且重启不恢复"警示、非管理员门控沿用）；web 38 用例与构建通过、零硬编码色值、零新依赖。浏览器同意流+CLI 登录端到端联调留待实机。
+- I 期完成 OAuth 预注册客户端管理 Connect API（OAuthAdminService：Register/List/SetActive，全局管理员专属，复用既有 CIMD/停用即撤权语义，键集分页游标 scope 绑定，重复 client_id 权限先行预检→Aborted，无任何 secret 字段）；主会话已挂入 server /api 路由（oauthService 未装配时不注册，失败关闭）。server/oauth 回归绿。F2 期完成全局管理页「OAuth 客户端」区块（列表键集分页、注册表单、启停二次确认含"停用即撤销全部授权且重启不恢复"警示、非管理员门控沿用）；web 38 用例与构建通过、零硬编码色值、零新依赖。浏览器同意流+CLI 登录端到端联调留待实机。
 - G/H/I 三期整合后全平台 `go test ./... -race -count=1`（真实 PostgreSQL/Redis）37 包全绿零失败。
 - J 期完成本地 stdio MCP 业务工具桥接：NewBridgeServer 以 clientcli 已认证客户端为后端暴露 19 个工具（工作空间/应用/构建/部署/运行日志指标/生命周期），工具名与入参 schema 与远程 HTTP MCP 同形（本地 PAT 全局视角增加 workspaceId/applicationId 定位字段，缺省回退 profile 默认）；安全边界（密钥与敏感配置值不回显、secretRefs 仅引用、日志游标分页、PAT 只进请求头）；未登录保持仅 source_preview 失败关闭。真实编辑器 stdio 联调与长会话 token 自动续期未做（已知权衡：过期需重启 MCP）。F2 期同步完成全局管理页 OAuth 客户端区块。整合后全平台 37 包回归再次全绿；web 38 用例全绿。
 - 真实后端 e2e 首次跑通：本机起真实控制面（真实 yummy_e2e 库迁移 + 真实首位管理员初始化 + 真实 Redis 会话 + 嵌入式 Web UI，非 mock 服务），Playwright 5/5 通过（登录页四档响应式 + 真实登录/个人账户/退出/未登录重定向）。验证范围仍限本机 Mac 与真实 Web/身份链路——不含 k3s/构建/HTTPS 实机验收。e2e 跨页流程扩展（全局管理/OAuth 客户端/空间应用创建/运行配置保存/PAT）进行中。
@@ -146,7 +146,7 @@
 
 ## 已确认决定与外部环境
 
-- 2026-11-07 用户确认：实例管理员自动拥有全部工作空间应用业务访问与操作权，包含源码/日志/发布/回滚；仍不得管理他人的个人 PAT/Agent 连接，业务操作记录审计。
+- 2026-11-07 用户确认：全局管理员自动拥有全部工作空间应用业务访问与操作权，包含源码/日志/发布/回滚；仍不得管理他人的个人 PAT/Agent 连接，业务操作记录审计。
 - 用户选择先完成本地开发和自动测试，稍后提供专用服务器用于真实验收。当前不扫描或修改既有集群/仓库。
 - 凭证撤销/自然到期只阻止后续请求，不隐式取消已开始的构建；账号停用取消排队构建并请求停止正在执行的构建，已上线应用不自动关闭。
 - 发布失败自动恢复默认关闭，作为显式实例策略配置；手动恢复/回滚始终要求权限与版本检查。
@@ -163,7 +163,7 @@
 | 1 | 一次性注册码 mTLS 登记（真实 ECDSA P256 CSR→worker-ca 签发 30 天/7 天轮换窗） | ✅通过 | worker-state 四文件 0700/0600；证书登记 serial 28331090ec663b25479f5b350b97561dba94e4e4 |
 | 2 | 注册码重放拒绝 | ✅通过 | 二次使用 HTTP 401 |
 | 3 | state/journal 目录权限失败关闭 | ✅通过 | 0755 的 state-dir 与 journal 均被真实拒绝（unbound/权限检查生效） |
-| 4 | 节点资格链路（实例管理员登记+证据→节点就绪） | ✅通过 | GetNode：ACTIVE，build/runtime/ingress/metrics 全 true，readiness="已核验登记资格证据" |
+| 4 | 节点资格链路（全局管理员登记+证据→节点就绪） | ✅通过 | GetNode：ACTIVE，build/runtime/ingress/metrics 全 true，readiness="已核验登记资格证据" |
 | 5 | 固定镜像 digest 钉住失败关闭 | ✅通过 | worker 拒绝非 digest 引用（node.go pinnedDigest） |
 | 6 | 输出仓库凭据验证链路（新增 VerifyRegistry RPC） | ✅通过 | ok/net/auth/read 全 true，verified_at 落库；失败（错误凭据/引用不存在）不标记（回归测试） |
 | 7 | 真实构建推拉部署闭环——Go HTTP | ✅通过 | 真实源码上传（/transfer/ 反代链路+SHA 校验）→ 宿主 rootless BuildKit 构建 → 推私有仓库 digest 365ae06b → 部署 SUCCEEDED → Pod 运行私有仓库镜像 → 公网 HTTPS 200（"go-http-demo @ ya-823162ef... up ..."） |
@@ -185,7 +185,7 @@
 | # | 缺陷 | 级别 | 修复 |
 |---|---|---|---|
 | ① | 文档化生产部署（§4 反代终止 TLS）下 CSRF 全部 403：gorilla/csrf 的"必须TLS"检查在应用层必然误报（e2e 因 allow-local-http 走豁免分支从未暴露） | 阻断 | 新增 --behind-tls-proxy（仅豁免该检查；Cookie Secure/Host/Origin 校验不变）+ 回归测试 |
-| ② | registry verified_at 无任何写入路径 → 构建闭环死锁（fixture 伪造掩盖） | 阻断 | 新增实例管理员 VerifyRegistry RPC（真实探测+失败关闭标记）+ 测试 |
+| ② | registry verified_at 无任何写入路径 → 构建闭环死锁（fixture 伪造掩盖） | 阻断 | 新增全局管理员 VerifyRegistry RPC（真实探测+失败关闭标记）+ 测试 |
 | ③ | kubelet 挂载 tmpfs 为 root 属主 1777，fsGroup 不改属主 → buildrunner 对挂载根 chmod 必然 EPERM，构建 100% 失败 | 阻断 | ensureOwnedRuntime：在挂载内创建属主为当前用户的私有运行目录 + 测试 |
 | ④ | 架构级：k8s pod 内嵌套 rootless 被 containerd 锁定挂载+默认 seccomp 双重封锁（privileged 方案违背安全不变量）；官方 rootless-in-k8s 文档实际要求 privileged pod | 架构 | 经负责人确认改为方向 D：构建由 worker 在宿主直接驱动节点级 rootless BuildKit 守护（新增 host_build 资格位 + workerexec/hostbuild.go + --buildkit-addr/--buildctl-path）；部署仍走 k8s pod |
 | ⑤ | dockerConfigJSON 用 origin.Hostname()（丢端口）作 auths 键 → 带端口私有仓库推送 401 | 阻断 | 改 origin.Host（host:port 完整形态） |

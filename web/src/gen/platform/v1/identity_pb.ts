@@ -176,7 +176,7 @@ export type GetSessionResponse = Message<"platform.v1.GetSessionResponse"> & {
   csrfToken: string;
 
   /**
-   * 实例管理员恒为真；非实例管理员取决于实例的"自由建空间"开关（SaaS 形态）。
+   * 全局管理员恒为真；非全局管理员取决于实例的"自由建空间"开关（SaaS 形态）。
    * 前端据此决定是否展示创建工作空间入口；授权仍由 CreateWorkspace 服务端判定。
    *
    * @generated from field: bool workspace_self_create = 3;

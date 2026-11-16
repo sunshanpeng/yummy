@@ -1,7 +1,7 @@
 syntax = "proto3";
 package platform.v1;
 option go_package = "github.com/sunshanpeng/yummy/gen/go/platform/v1;platformv1";
-// OAuth 客户端管理属实例级平台管理，仅实例管理员可操作；公共客户端本无 secret，
+// OAuth 客户端管理属实例级平台管理，仅全局管理员可操作；公共客户端本无 secret，
 // 视图不暴露任何凭证字段。
 service OAuthAdminService {
   // 登记预注册公共客户端；client_id 重复返回冲突，不做静默覆盖。

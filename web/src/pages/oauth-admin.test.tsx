@@ -49,7 +49,7 @@ afterEach(() => {
 });
 
 describe("全局管理 OAuth 客户端", () => {
-  it("实例管理员可以看到客户端清单、来源、回调、范围与创建时间", async () => {
+  it("全局管理员可以看到客户端清单、来源、回调、范围与创建时间", async () => {
     mount({ ListOAuthClients: () => ({ clients: [makeClient()], nextCursor: "" }) });
     expect(await screen.findByText("partner-app")).toBeTruthy();
     expect(screen.getByText("合作伙伴客户端")).toBeTruthy();
@@ -136,9 +136,9 @@ describe("全局管理 OAuth 客户端", () => {
     expect(screen.getByRole("button", { name: "启用客户端" })).toBeTruthy();
   });
 
-  it("非实例管理员沿用全局页门控且不发起请求", async () => {
+  it("非全局管理员沿用全局页门控且不发起请求", async () => {
     const calls = mount({}, false);
-    expect(await screen.findByRole("alert")).toHaveProperty("textContent", "此页面仅供实例管理员使用。");
+    expect(await screen.findByRole("alert")).toHaveProperty("textContent", "此页面仅供全局管理员使用。");
     expect(calls.ListOAuthClients).toBeUndefined();
     expect(screen.queryByRole("button", { name: "注册客户端" })).toBeNull();
     expect(screen.queryByRole("button", { name: "停用客户端" })).toBeNull();

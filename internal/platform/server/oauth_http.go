@@ -32,7 +32,7 @@ func (w *consentResponse) Write(data []byte) (int, error) {
 	return w.body.Write(data)
 }
 
-// connectionsHandler 只接受浏览器会话；实例管理员也只能管理自己拥有的连接。
+// connectionsHandler 只接受浏览器会话；全局管理员也只能管理自己拥有的连接。
 func connectionsHandler(service *oauth.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")

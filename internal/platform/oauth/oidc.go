@@ -153,7 +153,7 @@ func (s *Service) CompleteOIDC(ctx context.Context, name, state, code, browserBi
 	return result, err
 }
 
-// BindExternalIdentity 只允许实例管理员把受配置的 issuer/sub 绑定到现有用户。
+// BindExternalIdentity 只允许全局管理员把受配置的 issuer/sub 绑定到现有用户。
 // 不读取 email、不创建用户、不添加空间成员，已有绑定不能被静默转移。
 func (s *Service) BindExternalIdentity(ctx context.Context, p authorization.Principal, providerName, subject, userID string) error {
 	provider, exists := s.oidcProviders[providerName]

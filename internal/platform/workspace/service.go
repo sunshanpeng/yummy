@@ -188,7 +188,7 @@ func (s *Service) Create(ctx context.Context, p authorization.Principal, input C
 	}
 	var result View
 	err = s.Access.Do(ctx, p, true, func(tx *gorm.DB, current authorization.Principal) error {
-		// 授权：实例管理员恒可；非实例管理员仅当实例开启"自由建空间"且为会话
+		// 授权：全局管理员恒可；非全局管理员仅当实例开启"自由建空间"且为会话
 		// 身份（应用范围 PAT 不继承该能力，与实例管理权限同边界）。
 		selfCreate := current.InstanceAdmin && !current.IsBearer()
 		if !current.InstanceAdmin {
@@ -213,7 +213,7 @@ func (s *Service) Create(ctx context.Context, p authorization.Principal, input C
 		if err := audit.Record(tx, current.UserID, "workspace.create", "workspace", id, &id, nil); err != nil {
 			return err
 		}
-		// 视图角色如实反映创建者身份：实例管理员保留其角色；非实例管理员经
+		// 视图角色如实反映创建者身份：全局管理员保留其角色；非全局管理员经
 		// 自由建空间入口创建后即为空间管理员（成员插入已赋予）。
 		creatorRole := "workspace_admin"
 		if current.InstanceAdmin {

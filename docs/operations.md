@@ -12,7 +12,7 @@
 
 1. 准备 PostgreSQL 与 Redis（Redis 仅承担会话与在线 TTL）。
 2. `platform migrate --database-url "postgres://user:pass@host:5432/db?sslmode=disable"`。
-3. 初始化首位实例管理员（无匿名初始化接口）：
+3. 初始化首位全局管理员（无匿名初始化接口）：
    `platform admin init --database-url … --username <管理员> --password-stdin`
 4. 生成三把独立密钥（Base64 32 字节）：`openssl rand -base64 32`，分别作为 session-key / csrf-key / master-key；如需 OAuth 与远程 MCP 再加 oauth-key。
 5. 创建源码持久化目录（`--source-root`，必须预先创建，产品校验可写与 fsync）。
@@ -37,9 +37,9 @@
 ## 3. worker 登记与运行
 
 1. 控制面启用 worker CA（见上）。
-2. 实例管理员创建执行节点并签发一次性注册码（全局管理或 `InventoryService.CreateNode` + `EnrollmentService.CreateNodeRegistration`）。
+2. 全局管理员创建执行节点并签发一次性注册码（全局管理或 `InventoryService.CreateNode` + `EnrollmentService.CreateNodeRegistration`）。
 3. worker 机上：`platform worker register --server https://控制面:8443 --token <一次性码> --state-dir /var/lib/yummy-worker --server-ca-file <控制面CA>`。状态目录 0700（私钥/证书/CA/身份），注册码一次性、不可重放。
-4. 安装资格：实例管理员先在控制面登记节点验收记录（`RegisterNodeQualification`，含 cluster_node_uid/OS/arch/能力位与验收证据）；worker 以 `--qualification-file` 提供同一记录，控制面逐项核对一致才置能力就绪。任何不一致或缺失即失败关闭——不自报即信。
+4. 安装资格：全局管理员先在控制面登记节点验收记录（`RegisterNodeQualification`，含 cluster_node_uid/OS/arch/能力位与验收证据）；worker 以 `--qualification-file` 提供同一记录，控制面逐项核对一致才置能力就绪。任何不一致或缺失即失败关闭——不自报即信。
 5. 运行：`platform worker run`（显式 `--kube-apiserver/--kube-ca-file/--kube-token-file/--node-name/--build-namespace/--runtime-namespace`，可选 `--storage-class/--ingress-class/--runner-image/--buildkit-image`——镜像必须 digest 钉住；`--qualification-file` 缺失时全部能力关闭；`--journal-dir` 持久化事件跨重连）。绝不读取 kubeconfig 或环境默认集群。
 6. 证书轮换：7 天轮换窗（`/worker/rotate` 自动）；轮换与撤销不影响在途构建下载（节点粒度信任），节点全部证书撤销才阻断。
 
@@ -69,7 +69,7 @@
 ### 7.1 实机部署形态补充（2026-11-13/14 tencent-sh 验收实例）
 
 - 公网入口由可信反向代理终止 HTTPS 时，控制面必须加 `--behind-tls-proxy`（豁免 gorilla/csrf 的 TLS 检查；Cookie Secure、Host 与 Origin 校验不变）。不加该标志则所有 Cookie 会话写请求 403。
-- 输出仓库凭据必须先经实例管理员 VerifyRegistry 验证（真实网络/认证探测，可选读取引用），成功才标记 verified；凭据更新会重置标记，需重新验证。构建与部署均以该标记为准。
+- 输出仓库凭据必须先经全局管理员 VerifyRegistry 验证（真实网络/认证探测，可选读取引用），成功才标记 verified；凭据更新会重置标记，需重新验证。构建与部署均以该标记为准。
 - 构建执行形态：k8s pod 内嵌套 rootless 不可行（containerd 锁定挂载+默认 seccomp），采用节点级 rootless BuildKit 守护（worker 资格 `host_build: true` + `allow_privilege_escalation: true`，宿主专用用户 systemd user 服务；需要 uidmap 包与 sysctl `kernel.apparmor_restrict_unprivileged_userns=0`）。worker 启动参数加 `--buildkit-addr`（守护 socket）与 `--buildctl-path`。守护的 buildkitd.toml 需为 docker.io 配置镜像加速（不经 containerd 加速）。
 - 应用镜像必须是 non-root 兼容（构建 pod 固定 uid 1000）：官方 nginx 需换 nginx-unprivileged 变体。
 - 带端口的私有仓库：凭据 auths 键为完整 host:port（缺陷⑤修复后行为）。

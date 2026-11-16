@@ -188,7 +188,7 @@ func openWithDatabase(ctx context.Context, db *gorm.DB, config Config, assets fs
 	mount(transport.NewDeploymentHandler(deploymentService, log))
 	mount(transport.NewEnrollmentHandler(enrollmentService, log))
 	if oauthService != nil {
-		// 实例管理员专用 OAuth 客户端管理；oauthService 未装配（未配置 OAuthKey）时失败关闭不注册。
+		// 全局管理员专用 OAuth 客户端管理；oauthService 未装配（未配置 OAuthKey）时失败关闭不注册。
 		mount(transport.NewOAuthAdminHandler(oauthService, log))
 	}
 	router.GET("/healthz", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"status": "ok"}) })

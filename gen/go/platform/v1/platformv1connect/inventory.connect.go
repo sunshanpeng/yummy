@@ -123,7 +123,7 @@ type InventoryServiceClient interface {
 	// 验证输出仓库当前凭据版本：真实执行网络/认证探测（可选校验指定引用的读取），
 	// 全部通过才标记 verified_at/verified_revision，构建与部署以该标记为准；失败关闭不标记。
 	VerifyRegistry(context.Context, *connect.Request[v1.VerifyRegistryRequest]) (*connect.Response[v1.VerifyRegistryResponse], error)
-	// 实例设置：登录身份均可读（控制台据此决定入口展示），写入仅限实例管理员。
+	// 实例设置：登录身份均可读（控制台据此决定入口展示），写入仅限全局管理员。
 	GetInstanceSettings(context.Context, *connect.Request[v1.GetInstanceSettingsRequest]) (*connect.Response[v1.GetInstanceSettingsResponse], error)
 	SetWorkspaceSelfCreate(context.Context, *connect.Request[v1.SetWorkspaceSelfCreateRequest]) (*connect.Response[v1.SetWorkspaceSelfCreateResponse], error)
 }
@@ -423,7 +423,7 @@ type InventoryServiceHandler interface {
 	// 验证输出仓库当前凭据版本：真实执行网络/认证探测（可选校验指定引用的读取），
 	// 全部通过才标记 verified_at/verified_revision，构建与部署以该标记为准；失败关闭不标记。
 	VerifyRegistry(context.Context, *connect.Request[v1.VerifyRegistryRequest]) (*connect.Response[v1.VerifyRegistryResponse], error)
-	// 实例设置：登录身份均可读（控制台据此决定入口展示），写入仅限实例管理员。
+	// 实例设置：登录身份均可读（控制台据此决定入口展示），写入仅限全局管理员。
 	GetInstanceSettings(context.Context, *connect.Request[v1.GetInstanceSettingsRequest]) (*connect.Response[v1.GetInstanceSettingsResponse], error)
 	SetWorkspaceSelfCreate(context.Context, *connect.Request[v1.SetWorkspaceSelfCreateRequest]) (*connect.Response[v1.SetWorkspaceSelfCreateResponse], error)
 }

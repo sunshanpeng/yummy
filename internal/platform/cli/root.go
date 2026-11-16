@@ -72,7 +72,7 @@ func NewRoot(assets fs.FS) *cobra.Command {
 	admin := &cobra.Command{Use: "admin", Short: "本机实例管理"}
 	var username string
 	var passwordStdin bool
-	initAdmin := &cobra.Command{Use: "init", Short: "在本机创建唯一首位实例管理员", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
+	initAdmin := &cobra.Command{Use: "init", Short: "在本机创建唯一首位全局管理员", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
 		password, err := readPassword(cmd, passwordStdin)
 		if err != nil {
 			return err
@@ -283,7 +283,7 @@ func newWorkerCommand() *cobra.Command {
 		return json.NewEncoder(cmd.OutOrStdout()).Encode(state)
 	}}
 	register.Flags().StringVar(&registerServer, "server", "", "控制面 worker 专用HTTPS入口地址")
-	register.Flags().StringVar(&registerToken, "token", "", "实例管理员签发的一次性注册码")
+	register.Flags().StringVar(&registerToken, "token", "", "全局管理员签发的一次性注册码")
 	register.Flags().StringVar(&registerStateDir, "state-dir", "", "worker状态目录（0700，保存私钥/证书/CA/身份）")
 	register.Flags().StringVar(&registerCAFile, "server-ca-file", "", "可选控制面CA证书PEM路径（自签部署）")
 	for _, name := range []string{"server", "token", "state-dir"} {

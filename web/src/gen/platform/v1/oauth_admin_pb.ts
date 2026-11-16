@@ -202,7 +202,7 @@ export const SetOAuthClientActiveResponseSchema: GenMessage<SetOAuthClientActive
   messageDesc(file_platform_v1_oauth_admin, 6);
 
 /**
- * OAuth 客户端管理属实例级平台管理，仅实例管理员可操作；公共客户端本无 secret，
+ * OAuth 客户端管理属实例级平台管理，仅全局管理员可操作；公共客户端本无 secret，
  * 视图不暴露任何凭证字段。
  *
  * @generated from service platform.v1.OAuthAdminService

@@ -80,7 +80,7 @@ func TestOAuthAdminHandlers(t *testing.T) {
 	if _, err := h.SetOAuthClientActive(ctx, connect.NewRequest(&platformv1.SetOAuthClientActiveRequest{ClientId: "ghost", Active: true})); connect.CodeOf(err) != connect.CodeNotFound {
 		t.Fatalf("停用缺失=%v", err)
 	}
-	// 非实例管理员三入口全拒：PermissionDenied；未认证：Unauthenticated。
+	// 非全局管理员三入口全拒：PermissionDenied；未认证：Unauthenticated。
 	adminCtx := authorization.WithPrincipal(context.Background(), authorization.Principal{UserID: "admin", AuthVersion: 1})
 	registerReq := connect.NewRequest(&platformv1.RegisterOAuthClientRequest{ClientId: "probe", Name: "probe", RedirectUris: []string{"https://probe.example/callback"}, Resources: []string{resource}})
 	if _, err := h.RegisterOAuthClient(adminCtx, registerReq); connect.CodeOf(err) != connect.CodePermissionDenied {

@@ -37,9 +37,9 @@ func clientView(value clientRecord) ClientView {
 	return ClientView{ID: value.ID, Name: value.Name, Source: value.Source, RedirectURIs: slices.Clone(value.RedirectURIs), Scopes: slices.Clone(value.Scopes), Resources: slices.Clone(value.Resources), Active: value.Active, CreatedAt: value.CreatedAt}
 }
 
-// RegisterClientView 复用 RegisterClient 的校验、实例管理员授权与审计事务，
+// RegisterClientView 复用 RegisterClient 的校验、全局管理员授权与审计事务，
 // 并为管理入口补充显式冲突语义：底层登记对重复主键静默幂等，重复登记必须可感知。
-// 冲突预检与实例管理员复核在同一只读事务内先行完成，避免未授权调用者借冲突差异探测 client 存在性；
+// 冲突预检与全局管理员复核在同一只读事务内先行完成，避免未授权调用者借冲突差异探测 client 存在性；
 // 预检与最终写入之间仍存在极小竞窗，数据库主键约束兜底，最坏结果是并发重复登记静默幂等。
 func (s *Service) RegisterClientView(ctx context.Context, p authorization.Principal, input ClientInput) (ClientView, error) {
 	var exists bool

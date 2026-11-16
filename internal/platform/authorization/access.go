@@ -133,7 +133,7 @@ func (a *Access) Refresh(tx *gorm.DB, supplied Principal) (Principal, error) {
 }
 
 func (a *Access) RequireInstance(principal Principal) error {
-	// 应用范围凭证不继承实例管理权限，即便其所有者是实例管理员。
+	// 应用范围凭证不继承实例管理权限，即便其所有者是全局管理员。
 	if !principal.InstanceAdmin || principal.IsBearer() {
 		return ErrDenied
 	}

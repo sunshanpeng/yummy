@@ -32,7 +32,7 @@ describe("正式页面权限与作用域", () => {
   it("普通账户直达全局页不请求用户列表", async () => {
     const list = vi.spyOn(platform.identity, "listUsers");
     mount("/platform/users");
-    expect(await screen.findByRole("alert")).toHaveProperty("textContent", "此页面仅供实例管理员使用。");
+    expect(await screen.findByRole("alert")).toHaveProperty("textContent", "此页面仅供全局管理员使用。");
     expect(list).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: "切换工作空间" })).toBeNull();
   });

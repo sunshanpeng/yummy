@@ -132,7 +132,7 @@ func TestListClientsKeysetPaginationAndCursorScope(t *testing.T) {
 	if _, err := e.service.ListClients(ctx, e.root, 2, "!!!不是游标!!!"); !errors.Is(err, authorization.ErrInvalid) {
 		t.Fatalf("损坏游标=%v", err)
 	}
-	// 非实例管理员列表拒绝。
+	// 非全局管理员列表拒绝。
 	if _, err := e.service.ListClients(ctx, e.p, 2, ""); !errors.Is(err, authorization.ErrDenied) {
 		t.Fatalf("成员列表=%v", err)
 	}

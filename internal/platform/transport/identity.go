@@ -145,7 +145,7 @@ func (h *IdentityHandler) GetSession(ctx context.Context, _ *connect.Request[pla
 	if err != nil {
 		return nil, RPCError(h.Log, err)
 	}
-	// 自由建空间能力位：实例管理员恒真；非实例管理员取决于实例开关（前端据此
+	// 自由建空间能力位：全局管理员恒真；非全局管理员取决于实例开关（前端据此
 	// 展示入口，授权仍由 CreateWorkspace 服务端判定）。未认证用户不返回该位。
 	response.WorkspaceSelfCreate = p.InstanceAdmin || h.Service.WorkspaceSelfCreateEnabled(ctx)
 	user, err := h.Service.Current(ctx, p)

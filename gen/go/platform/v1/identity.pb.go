@@ -329,7 +329,7 @@ type GetSessionResponse struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
 	User      *User                  `protobuf:"bytes,1,opt,name=user,proto3" json:"user,omitempty"`
 	CsrfToken string                 `protobuf:"bytes,2,opt,name=csrf_token,json=csrfToken,proto3" json:"csrf_token,omitempty"`
-	// 实例管理员恒为真；非实例管理员取决于实例的"自由建空间"开关（SaaS 形态）。
+	// 全局管理员恒为真；非全局管理员取决于实例的"自由建空间"开关（SaaS 形态）。
 	// 前端据此决定是否展示创建工作空间入口；授权仍由 CreateWorkspace 服务端判定。
 	WorkspaceSelfCreate bool `protobuf:"varint,3,opt,name=workspace_self_create,json=workspaceSelfCreate,proto3" json:"workspace_self_create,omitempty"`
 	unknownFields       protoimpl.UnknownFields

@@ -1646,7 +1646,7 @@ export const InventoryService: GenService<{
     output: typeof VerifyRegistryResponseSchema;
   },
   /**
-   * 实例设置：登录身份均可读（控制台据此决定入口展示），写入仅限实例管理员。
+   * 实例设置：登录身份均可读（控制台据此决定入口展示），写入仅限全局管理员。
    *
    * @generated from rpc platform.v1.InventoryService.GetInstanceSettings
    */

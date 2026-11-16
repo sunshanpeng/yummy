@@ -182,7 +182,7 @@ func TestTimeoutRequiresStopAndDisabledActorNeverStarts(t *testing.T) {
 	if _, err := e.service.Claim(ctx, e.worker); !errors.Is(err, ErrNoCapacity) {
 		t.Fatal(err)
 	}
-	// 原用户已失效，用实例管理员观察系统取消结果。
+	// 原用户已失效，用全局管理员观察系统取消结果。
 	got, err := e.service.Get(ctx, e.root, "space", "app_one", pending.ID)
 	if err != nil || got.State != Canceled {
 		t.Fatal(got, err)

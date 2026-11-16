@@ -246,13 +246,13 @@ func TestConcurrentDemotionsCannotRemoveBothAdmins(t *testing.T) {
 	}
 }
 
-// 自由建空间（2026-10-26 设计对齐）：开关关→非实例管理员拒绝；开关开→登录身份
+// 自由建空间（2026-10-26 设计对齐）：开关关→非全局管理员拒绝；开关开→登录身份
 // 可建并自动成为空间管理员；保留名单（kube-system 等集群/平台命名空间派生源）一律拒绝。
 func TestWorkspaceSelfCreateToggleAndReservedNames(t *testing.T) {
 	db, service, root, alice := fixture(t)
 	ctx := context.Background()
 
-	// 默认关：非实例管理员创建被拒。
+	// 默认关：非全局管理员创建被拒。
 	if _, err := service.Create(ctx, alice, workspace.CreateInput{Name: "演示空间", Slug: "self-create-1"}); !errors.Is(err, authorization.ErrDenied) {
 		t.Fatalf("默认关闭时应拒绝: %v", err)
 	}
@@ -268,9 +268,9 @@ func TestWorkspaceSelfCreateToggleAndReservedNames(t *testing.T) {
 		t.Fatalf("创建者应成为空间管理员: %s", created.Role)
 	}
 	if _, err := service.Create(ctx, root, workspace.CreateInput{Name: "管理员空间", Slug: "admin-ws"}); err != nil {
-		t.Fatalf("实例管理员创建应继续可用: %v", err)
+		t.Fatalf("全局管理员创建应继续可用: %v", err)
 	}
-	// 保留名单：集群/平台命名空间派生源一律拒绝（实例管理员亦不豁免）。
+	// 保留名单：集群/平台命名空间派生源一律拒绝（全局管理员亦不豁免）。
 	for _, slug := range []string{"kube-system", "default", "yummy-system"} {
 		if _, err := service.Create(ctx, root, workspace.CreateInput{Name: "保留测试", Slug: slug}); !errors.Is(err, authorization.ErrInvalid) {
 			t.Fatalf("保留名 %s 应被拒绝: %v", slug, err)

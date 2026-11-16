@@ -109,7 +109,7 @@ func (s *Service) RevokeToken(ctx context.Context, supplied authorization.Princi
 		if p.IsBearer() {
 			return authorization.ErrDenied
 		}
-		// 即使是实例管理员，也不能撤销或查看其他用户拥有的凭证。
+		// 即使是全局管理员，也不能撤销或查看其他用户拥有的凭证。
 		var token model.AccessToken
 		if err := tx.First(&token, "id = ? AND user_id = ?", tokenID, p.UserID).Error; err != nil {
 			return authorization.ErrNotFound

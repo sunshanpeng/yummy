@@ -66,7 +66,7 @@ func (s *Service) InitializeAdmin(ctx context.Context, username, password string
 	}
 	user := model.User{ID: id, Username: username, PasswordHash: hash, Status: model.UserActive, AuthVersion: 1, InstanceAdmin: true}
 	err = s.Access.PublicMutation(ctx, func(tx *gorm.DB) error {
-		// 所有初始化/实例管理员变更共用事务锁，不能靠先查询后插入保证唯一。
+		// 所有初始化/全局管理员变更共用事务锁，不能靠先查询后插入保证唯一。
 		if err := tx.Exec("SELECT pg_advisory_xact_lock(?)", int64(0x79756d6d7961646d)).Error; err != nil {
 			return err
 		}
@@ -75,7 +75,7 @@ func (s *Service) InitializeAdmin(ctx context.Context, username, password string
 			return err
 		}
 		if count != 0 {
-			return fmt.Errorf("%w: 已初始化实例管理员", authorization.ErrConflict)
+			return fmt.Errorf("%w: 已初始化全局管理员", authorization.ErrConflict)
 		}
 		if err := tx.Create(&user).Error; err != nil {
 			return err
@@ -209,7 +209,7 @@ func (s *Service) SetUserStatus(ctx context.Context, supplied authorization.Prin
 				return err
 			}
 			if count <= 1 {
-				return fmt.Errorf("%w: 不能停用最后一位实例管理员", authorization.ErrConflict)
+				return fmt.Errorf("%w: 不能停用最后一位全局管理员", authorization.ErrConflict)
 			}
 		}
 		if user.Status == status {

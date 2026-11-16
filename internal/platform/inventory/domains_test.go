@@ -30,7 +30,7 @@ func claimFixture(t *testing.T, env testEnvironment) {
 	}
 }
 
-// 域名证书绑定属实例级平台管理；空间管理员、普通成员和PAT都不能代替实例管理员改证书事实。
+// 域名证书绑定属实例级平台管理；空间管理员、普通成员和PAT都不能代替全局管理员改证书事实。
 func TestDomainTLSSetRequiresInstanceAdmin(t *testing.T) {
 	env := setup(t)
 	claimFixture(t, env)

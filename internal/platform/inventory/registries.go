@@ -177,7 +177,7 @@ func (s *Service) GetInstanceSettings(ctx context.Context, p authorization.Princ
 	return value, err
 }
 
-// SetWorkspaceSelfCreate 设置"自由建空间"开关：仅限实例管理员。开启后所有登录
+// SetWorkspaceSelfCreate 设置"自由建空间"开关：仅限全局管理员。开启后所有登录
 // 身份（会话）可在控制台自助创建工作空间并成为空间管理员；关闭恢复为仅实例
 // 管理员可创建。
 func (s *Service) SetWorkspaceSelfCreate(ctx context.Context, p authorization.Principal, enabled bool) (bool, error) {

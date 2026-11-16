@@ -1,6 +1,6 @@
 # Yummy 第一期技术方案：构建基础与 PaaS 运行集成
 
-2026-10-24 交付模型修订：基础设施由实例管理员统一管理，工作空间不能自定义；以 [交付方式与实例边界](2026-10-24-delivery-model-and-instance-boundaries-design.md) 为准。
+2026-10-24 交付模型修订：基础设施由全局管理员统一管理，工作空间不能自定义；以 [交付方式与实例边界](2026-10-24-delivery-model-and-instance-boundaries-design.md) 为准。
 
 状态：待评审草案。初稿：2026-10-22；更新：2026-10-23（两层资源模型、管理入口及内嵌 OAuth）。配套：[产品方案](2026-10-22-agent-first-build-product-design.md)、[前端方案](2026-10-22-agent-first-build-frontend-design.md)。2026-10-24 的资源与字段边界以 [创建与配置边界复核](2026-10-24-application-configuration-boundaries-design.md) 为准。2026-10-26 修订集群/环境/部署、命名与最小 CLI，细则见 [命名、集群与最小 CLI](2026-10-26-naming-cluster-and-minimal-cli-design.md)。本次只进行设计与界面原型，不表示后端功能或集群环境已经验证。
 
@@ -91,7 +91,7 @@ m = g(r.sub, p.sub, r.dom) && r.obj == p.obj && r.act == p.act
 - `dom` 为 `instance`、`workspace:<id>` 或 `application:<id>`；角色绑定有明确领域。
 - `obj/act` 为固定资源类型与动作，如 `build/create`，不是 URL 字符串。
 - 全局 `p` 描述固定角色的动作集合；`g` 描述某用户在某领域的角色。
-- 请求先从数据库解析资源归属，然后依次检查实例管理员、所属空间管理员及所属应用角色。不同领域不通过 ID 猜测或 URL 通配符互通。
+- 请求先从数据库解析资源归属，然后依次检查全局管理员、所属空间管理员及所属应用角色。不同领域不通过 ID 猜测或 URL 通配符互通。
 
 示意策略：
 
@@ -163,7 +163,7 @@ flowchart LR
 ```
 
 - 产品仅控制面与 worker 两类常驻应用进程；调度、恢复、清理以及第一版之后的 OAuth、HTTP MCP 均作为控制面内模块（图中 OAuth 与 HTTP MCP 部分属于第一版之后）。除非存在必要限制，不增加独立服务；新增进程须说明理由与代价，遵循 [AGENTS.md](../../../AGENTS.md)。
-- 首版正式拓扑为一个控制面和一个由实例管理员接入的 k3s 集群（集群内可以有多台机器），构建和应用都在这个集群中运行；不建设跨集群调度平台。
+- 首版正式拓扑为一个控制面和一个由全局管理员接入的 k3s 集群（集群内可以有多台机器），构建和应用都在这个集群中运行；不建设跨集群调度平台。
 - worker 以 Deployment 运行在集群的 `yummy-system` 命名空间，只管理带平台标签的构建 Job 与应用运行资源。集群登记记录 `kube-system` 命名空间的 UID 作为集群标识，防止换了集群仍被当作原集群；机器的加入和移除由 k3s 负责，平台只读展示。
 - 每个工作空间一个构建命名空间 `build-<空间名>` 和一个运行命名空间 `<环境>-<空间名>`（第一版为 `prod-<空间名>`），运行命名空间下发空间隔离网络策略；worker 身份按集群，不按工作空间。命名与策略见 [命名、集群与最小 CLI](2026-10-26-naming-cluster-and-minimal-cli-design.md)。未来全托管共享执行需另做隔离验证。
 - 保留 `platform all/control/worker` 装配方式；`all` 只是控制面与 worker 同进程，不允许在控制面进程里直接执行 Dockerfile Shell。
@@ -198,14 +198,14 @@ flowchart LR
 
 | 表/对象 | 关键字段与约束 |
 |---|---|
-| users | username 唯一、密码散列、状态、auth_version、实例管理员标识 |
+| users | username 唯一、密码散列、状态、auth_version、全局管理员标识 |
 | workspace_members / application_members | 用户、领域、角色、状态；领域内用户唯一；应用访问成员必须是有效空间成员；只有空间管理员可以变更授权，主要入口在对应应用中 |
 | workspaces | name（命名规范，实例内唯一，不可改）、display_name（可改）、状态、配置；只归档不删除，归档后名称继续占用 |
 | invitations / access_tokens | 摘要、用户/空间/应用范围、有效期、撤销；邀请消费用条件更新 |
 | oauth_clients / oauth_requests / oauth_grants / oauth_codes / oauth_access_tokens / oauth_refresh_tokens | 现有 PostgreSQL 内保存协议状态、请求单次消费、资源/scope、授权和刷新族；按协议库存储接口适配，不另建认证数据库服务 |
 | applications | workspace_id、name（命名规范，空间内唯一，不可改）、host_suffix（6 位，创建时生成，不变；`<name>-<host_suffix>` 实例内唯一）、状态、业务构建默认值；不接受 cluster/node/registry/repository/platform 应用覆盖 |
-| instance_execution_policies | 实例、revision、构建集群、输出仓库连接/前缀、默认资源与限额；仅实例管理员维护，历史版本可追踪 |
-| workspace_allocations / entitlements | 平台分配给空间的套餐额度（第一版不按空间分配集群）；系统/实例管理员维护，空间管理员只读 |
+| instance_execution_policies | 实例、revision、构建集群、输出仓库连接/前缀、默认资源与限额；仅全局管理员维护，历史版本可追踪 |
+| workspace_allocations / entitlements | 平台分配给空间的套餐额度（第一版不按空间分配集群）；系统/全局管理员维护，空间管理员只读 |
 | clusters | 实例、名称、worker_id（唯一）、集群标识（kube-system UID）、能力（build/runtime）、状态、证书序列号；第一版每个实例一个 |
 | environments | 标识（小写字母和数字，最长 10 位，保留词除外）、显示名称、运行 cluster_id、应用根域名；第一版只有 prod |
 | application_deployments | application_id、environment_id、name（第一版 default）、首次部署时冻结的 cluster_id 与命名空间、K8s 名称、当前配置版本；替代原 application_placements，属于系统状态，不因环境改绑或策略变更迁移 |
@@ -373,7 +373,7 @@ worker 增量读取 Pod 日志，合并为有序日志块写入自身持久卷�
 | 运行 | GetApplicationStatus、List/Get/CreateDeployment、RollbackDeployment、Restart/Start/StopApplication、Get/SaveRuntimeConfig、ReadRuntimeLogs、QueryRuntimeMetrics |
 | worker | RegisterWorker、Connect；Run/Cancel/Reconcile、状态事件、日志块及 ack |
 
-`CreateApplication` 的用户字段只有 name 与 idempotency_key，空间来自上下文；name 按命名规范校验，创建后不能修改，服务端同时生成 host_suffix 与默认部署记录。创建成功返回完整应用与配置 URL，不执行构建或部署。`CreateWorkspace` 由实例管理员调用，字段为 name 与可选 display_name，name 同样按命名规范校验。`CreateBuild` 包含 application_id、source_snapshot_id、config_revision、expected_policy_revision、允许的业务 overrides、idempotency_key。registry/repository、集群与平台从实例策略解析并固化；cluster/node/registry/repository/platform 等用户覆盖字段明确拒绝。应用或策略版本过期返回冲突，不悄悄使用新配置。
+`CreateApplication` 的用户字段只有 name 与 idempotency_key，空间来自上下文；name 按命名规范校验，创建后不能修改，服务端同时生成 host_suffix 与默认部署记录。创建成功返回完整应用与配置 URL，不执行构建或部署。`CreateWorkspace` 由全局管理员调用，字段为 name 与可选 display_name，name 同样按命名规范校验。`CreateBuild` 包含 application_id、source_snapshot_id、config_revision、expected_policy_revision、允许的业务 overrides、idempotency_key。registry/repository、集群与平台从实例策略解析并固化；cluster/node/registry/repository/platform 等用户覆盖字段明确拒绝。应用或策略版本过期返回冲突，不悄悄使用新配置。
 
 ```json
 {
