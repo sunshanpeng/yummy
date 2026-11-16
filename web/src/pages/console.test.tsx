@@ -38,7 +38,7 @@ describe("正式页面权限与作用域", () => {
   });
   it("创建应用重试复用幂等键，修改名称才生成新键", async () => {
     vi.spyOn(platform.transport, "unary").mockImplementation(async (method) => {
-      const values = method.name === "GetWorkspace" ? { workspace: { id: "w1", name: "空间", capabilities: ["workspace:read", "application:create"] } } : method.name === "ListWorkspaces" ? { workspaces: [] } : { applications: [] };
+      const values = method.name === "GetWorkspace" ? { workspace: { id: "w1", slug: "w1", name: "空间", capabilities: ["workspace:read", "application:create"] } } : method.name === "ListWorkspaces" ? { workspaces: [] } : { applications: [] };
       return { stream: false, service: method.parent, method, header: new Headers(), trailer: new Headers(), message: create(method.output, values) };
     });
     const submit = vi.spyOn(platform.applications, "createApplication").mockRejectedValue(new Error("网络连接中断，结果尚未确认"));
@@ -79,7 +79,7 @@ describe("正式页面权限与作用域", () => {
   });
   it("运行配置保留敏感旧值且不发送掩码", async () => {
     vi.spyOn(platform.transport, "unary").mockImplementation(async (method) => {
-      const values = method.name === "GetWorkspace" ? { workspace: { id: "w1", name: "空间", capabilities: ["workspace:read"] } } : method.name === "ListWorkspaces" ? { workspaces: [] } : method.name === "GetApplication" ? { application: { id: "a1", workspaceId: "w1", name: "app", capabilities: ["config:read", "config:write"] } } : { config: { workspaceId: "w1", applicationId: "a1", revision: 2n, type: "HTTP", port: 8080, variables: [{ name: "API_KEY", sensitive: true, configured: true }], files: [{ path: "/app/secret", sensitive: true, configured: true }] } };
+      const values = method.name === "GetWorkspace" ? { workspace: { id: "w1", slug: "w1", name: "空间", capabilities: ["workspace:read"] } } : method.name === "ListWorkspaces" ? { workspaces: [] } : method.name === "GetApplication" ? { application: { id: "a1", workspaceId: "w1", name: "app", capabilities: ["config:read", "config:write"] } } : { config: { workspaceId: "w1", applicationId: "a1", revision: 2n, type: "HTTP", port: 8080, variables: [{ name: "API_KEY", sensitive: true, configured: true }], files: [{ path: "/app/secret", sensitive: true, configured: true }] } };
       return { stream: false, service: method.parent, method, header: new Headers(), trailer: new Headers(), message: create(method.output, values) };
     });
     const save = vi.spyOn(platform.runtime, "saveRuntimeConfig").mockResolvedValue(create(SaveRuntimeConfigResponseSchema, { config: { revision: 3n } }));

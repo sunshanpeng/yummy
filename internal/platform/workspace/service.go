@@ -129,15 +129,33 @@ func (s *Service) List(ctx context.Context, supplied authorization.Principal, li
 	return result, err
 }
 
-func (s *Service) Get(ctx context.Context, p authorization.Principal, id string) (View, error) {
+// Get 按不可变资源 ID 或唯一空间名（slug）定位工作空间：URL 等面向用户的场景
+// 用 slug（唯一且创建后不可修改），内部引用与 CLI 用 ID；两者都提供时以 ID 为准。
+func (s *Service) Get(ctx context.Context, p authorization.Principal, id, slug string) (View, error) {
+	if (id == "") == (slug == "") {
+		return View{}, fmt.Errorf("%w: 工作空间 ID 与空间名必须二选一", authorization.ErrInvalid)
+	}
 	var result View
 	err := s.Access.Do(ctx, p, false, func(tx *gorm.DB, current authorization.Principal) error {
-		role, err := s.Access.WorkspaceRole(tx, current, id)
+		locator := id
+		if id == "" {
+			// slug → 资源 ID：授权检查与后续读取仍按 ID 执行；slug 唯一且不可变，
+			// 空间名解析结果与资源 ID 一一对应。
+			var value model.Workspace
+			if err := tx.First(&value, "slug = ?", slug).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return authorization.ErrNotFound
+				}
+				return err
+			}
+			locator = value.ID
+		}
+		role, err := s.Access.WorkspaceRole(tx, current, locator)
 		if err != nil {
 			return err
 		}
 		if current.IsBearer() {
-			query, err := s.Access.ApplicationQuery(tx, current, id)
+			query, err := s.Access.ApplicationQuery(tx, current, locator)
 			if err != nil {
 				return err
 			}
@@ -150,7 +168,7 @@ func (s *Service) Get(ctx context.Context, p authorization.Principal, id string)
 			}
 		}
 		var value model.Workspace
-		if err := tx.First(&value, "id = ?", id).Error; err != nil {
+		if err := tx.First(&value, "id = ?", locator).Error; err != nil {
 			return err
 		}
 		result = view(value, role, current)
@@ -226,7 +244,9 @@ func (s *Service) Update(ctx context.Context, p authorization.Principal, id stri
 		if err := tx.First(&value, "id = ?", id).Error; err != nil {
 			return err
 		}
-		if input.Slug != value.Slug {
+		// 空间名（slug）创建后不可修改：非空且与现有值不同即拒绝；空 slug 视为
+		// "未提供，保持不变"（只改名称/说明的客户端不必回传现有 slug）。
+		if input.Slug != "" && input.Slug != value.Slug {
 			return fmt.Errorf("%w: 空间名创建后不可修改", authorization.ErrInvalid)
 		}
 		updated := tx.Model(&model.Workspace{}).Where("id = ? AND revision = ? AND status = ?", id, input.ExpectedRevision, model.ResourceActive).Updates(map[string]any{"name": input.Name, "description": input.Description, "revision": gorm.Expr("revision + 1")})

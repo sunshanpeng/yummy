@@ -42,7 +42,9 @@ message ApplicationMember {
 }
 message ListWorkspacesRequest { int32 limit = 1; string cursor = 2; }
 message ListWorkspacesResponse { repeated Workspace workspaces = 1; string next_cursor = 2; }
-message GetWorkspaceRequest { string workspace_id = 1; }
+// 工作空间定位：workspace_id 与 slug 二选一。URL 等面向用户的场景使用空间名
+// （slug，唯一且创建后不可修改），内部引用与 CLI 继续使用不可变资源 ID。
+message GetWorkspaceRequest { string workspace_id = 1; string slug = 2; }
 message GetWorkspaceResponse { Workspace workspace = 1; }
 message CreateWorkspaceRequest { string name = 1; string slug = 2; string description = 3; }
 message CreateWorkspaceResponse { Workspace workspace = 1; }

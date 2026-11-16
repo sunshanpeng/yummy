@@ -25,7 +25,7 @@ const globalRegistries = createRoute({ getParentRoute: () => authenticated, path
 const globalPolicy = createRoute({ getParentRoute: () => authenticated, path: "/platform/policy", component: lazyRouteComponent(() => import("./pages/platform"), "PlatformPolicyRoute") });
 const globalAllocations = createRoute({ getParentRoute: () => authenticated, path: "/platform/allocations", component: lazyRouteComponent(() => import("./pages/platform"), "PlatformAllocationsRoute") });
 const globalOAuthClients = createRoute({ getParentRoute: () => authenticated, path: "/platform/oauth-clients", validateSearch: search, component: lazyRouteComponent(() => import("./pages/platform"), "PlatformOAuthClientsRoute") });
-const workspace = createRoute({ getParentRoute: () => authenticated, path: "/w/$workspaceId", component: WorkspaceLayout });
+const workspace = createRoute({ getParentRoute: () => authenticated, path: "/w/$workspaceSlug", component: WorkspaceLayout });
 const apps = createRoute({ getParentRoute: () => workspace, path: "apps", validateSearch: search, component: ApplicationsPage });
 const app = createRoute({ getParentRoute: () => workspace, path: "apps/$applicationId", component: ApplicationLayout });
 const overview = createRoute({ getParentRoute: () => app, path: "/", component: lazyRouteComponent(() => import("./pages/overview"), "ApplicationOverview") });
@@ -40,7 +40,7 @@ const deploymentDetail = createRoute({ getParentRoute: () => app, path: "deploym
 const source = createRoute({ getParentRoute: () => app, path: "source", component: lazyRouteComponent(() => import("./pages/source"), "SourcePage") });
 const runtime = createRoute({ getParentRoute: () => app, path: "settings/runtime", component: lazyRouteComponent(() => import("./pages/runtime"), "RuntimePage") });
 const manage = createRoute({ getParentRoute: () => workspace, path: "manage", component: Outlet });
-const manageIndex = createRoute({ getParentRoute: () => manage, path: "/", beforeLoad: ({ params }) => { throw redirect({ to: "/w/$workspaceId/manage/settings", params }); } });
+const manageIndex = createRoute({ getParentRoute: () => manage, path: "/", beforeLoad: ({ params }) => { throw redirect({ to: "/w/$workspaceSlug/manage/settings", params }); } });
 const settings = createRoute({ getParentRoute: () => manage, path: "settings", component: () => <WorkspaceManagement tab="settings" /> });
 const members = createRoute({ getParentRoute: () => manage, path: "members", validateSearch: search, component: () => <WorkspaceManagement tab="members" /> });
 const invitations = createRoute({ getParentRoute: () => manage, path: "invitations", component: () => <WorkspaceManagement tab="invitations" /> });

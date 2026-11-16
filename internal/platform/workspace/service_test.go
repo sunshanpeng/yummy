@@ -73,7 +73,7 @@ func TestCreateWorkspaceRequiresInstanceAdminAndUpdatesUseRevision(t *testing.T)
 	if err := service.Archive(ctx, root, value.ID, 2); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.Get(ctx, root, value.ID); !errors.Is(err, authorization.ErrNotFound) {
+	if _, err := service.Get(ctx, root, value.ID, ""); !errors.Is(err, authorization.ErrNotFound) {
 		t.Fatalf("归档Get=%v", err)
 	}
 }
@@ -132,7 +132,7 @@ func TestWorkspaceListsFilterMembershipBearerScopeAndPagination(t *testing.T) {
 	if err != nil || len(page.Items) != 1 || len(page.Items[0].Capabilities) != 1 {
 		t.Fatalf("PAT只读空间=%#v,%v", page, err)
 	}
-	if _, err := service.Get(ctx, bearer, second.ID); !errors.Is(err, authorization.ErrNotFound) {
+	if _, err := service.Get(ctx, bearer, second.ID, ""); !errors.Is(err, authorization.ErrNotFound) {
 		t.Fatalf("跨PAT范围Get=%v", err)
 	}
 	if _, err := service.ListMembers(ctx, bearer, first.ID, 20, ""); !errors.Is(err, authorization.ErrDenied) {

@@ -54,7 +54,7 @@ func (h *WorkspaceHandler) GetWorkspace(ctx context.Context, req *connect.Reques
 	if err != nil {
 		return nil, RPCError(h.Log, err)
 	}
-	v, err := h.Service.Get(ctx, p, req.Msg.WorkspaceId)
+	v, err := h.Service.Get(ctx, p, req.Msg.WorkspaceId, req.Msg.Slug)
 	if err != nil {
 		return nil, RPCError(h.Log, err)
 	}

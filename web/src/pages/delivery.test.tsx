@@ -26,7 +26,7 @@ function transport() {
   vi.spyOn(platform.runtime, "getRuntimeConfig").mockResolvedValue(create(GetRuntimeConfigResponseSchema, { config: { revision: 5n, confirmed: true } }));
   vi.spyOn(platform.deployments, "getRuntimeStatus").mockResolvedValue(create(GetRuntimeStatusResponseSchema, { status: { generation: 3n, servingReleaseId: "release-old" } }));
   return vi.spyOn(platform.transport, "unary").mockImplementation(async (method) => {
-    const values = method.name === "GetWorkspace" ? { workspace: { id: "w1", name: "空间", capabilities: ["workspace:read"] } }
+    const values = method.name === "GetWorkspace" ? { workspace: { id: "w1", slug: "w1", name: "空间", capabilities: ["workspace:read"] } }
       : method.name === "ListWorkspaces" ? { workspaces: [] }
       : method.name === "GetApplication" ? { application: { id: "a1", workspaceId: "w1", name: "my-app", capabilities } }
       : method.name === "GetBuildConfig" ? { config: { dockerfile: "Dockerfile", context: "." }, revision: 2n }
@@ -113,7 +113,7 @@ describe("构建与发布冻结交互", () => {
     expect(screen.queryByText("应用已上线")).toBeNull();
   });
   it("无secret:write时不显示构建密钥管理或请求密钥列表", async () => {
-    vi.spyOn(platform.transport, "unary").mockImplementation(async (method) => ({ stream: false, service: method.parent, method, header: new Headers(), trailer: new Headers(), message: create(method.output, method.name === "GetApplication" ? { application: { id: "a1", workspaceId: "w1", name: "app", capabilities: ["config:read"] } } : method.name === "GetWorkspace" ? { workspace: { id: "w1" } } : { config: { dockerfile: "Dockerfile", context: "." } }) }));
+    vi.spyOn(platform.transport, "unary").mockImplementation(async (method) => ({ stream: false, service: method.parent, method, header: new Headers(), trailer: new Headers(), message: create(method.output, method.name === "GetApplication" ? { application: { id: "a1", workspaceId: "w1", name: "app", capabilities: ["config:read"] } } : method.name === "GetWorkspace" ? { workspace: { id: "w1", slug: "w1" } } : { config: { dockerfile: "Dockerfile", context: "." } }) }));
     const secrets = vi.spyOn(platform.buildSecrets, "listBuildSecrets");
     mount("/w/w1/apps/a1/settings/build");
     await screen.findByRole("heading", { name: "构建设置" });

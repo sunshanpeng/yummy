@@ -57,7 +57,7 @@ function mount(handlers: Record<string, Handler>) {
 function baseHandlers(observedState: string): Record<string, Handler> {
   return {
     ListWorkspaces: () => create(ListWorkspacesResponseSchema, { workspaces: [] }),
-    GetWorkspace: () => create(GetWorkspaceResponseSchema, { workspace: { id: "w1", name: "空间", capabilities: ["workspace:read"] } }),
+    GetWorkspace: () => create(GetWorkspaceResponseSchema, { workspace: { id: "w1", slug: "w1", name: "空间", capabilities: ["workspace:read"] } }),
     GetApplication: () => create(GetApplicationResponseSchema, { application: { id: "a1", workspaceId: "w1", name: "应用", status: "ACTIVE", revision: 3n, capabilities: ["application:read", "deployment:read", "runtime:read"] } }),
     ListDeployments: () => create(ListDeploymentsResponseSchema, { deployments: [] }),
     GetRuntimeStatus: () => create(GetRuntimeStatusResponseSchema, { status: { workspaceId: "w1", applicationId: "a1", generation: 2n, desiredState: "RUN", observedState, servingReleaseId: "rel-1", observedGeneration: 2n, lastObservedAt: "2026-11-10T10:00:00Z" } }),
