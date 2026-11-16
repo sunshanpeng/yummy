@@ -11,12 +11,16 @@ import (
 )
 
 const (
-	Deploy           = "DEPLOY"
-	Rollback         = "ROLLBACK"
-	Recovery         = "RECOVERY"
-	Restart          = "RESTART"
-	Stop             = "STOP"
-	Start            = "START"
+	Deploy   = "DEPLOY"
+	Rollback = "ROLLBACK"
+	Recovery = "RECOVERY"
+	Restart  = "RESTART"
+	Stop     = "STOP"
+	Start    = "START"
+	// Reconcile 是控制面合成的观察恢复命令：worker 重启丢失内存中的运行采集器
+	// （运行日志/指标）后，按观察停更的 serving release 下发；worker 不动集群
+	// 资源，只重建观察循环与采集器（见 workerexec.Deploy 与 Service.claimResume）。
+	Reconcile        = "RECONCILE"
 	Queued           = "QUEUED"
 	Applying         = "APPLYING"
 	WaitingReady     = "WAITING_READY"

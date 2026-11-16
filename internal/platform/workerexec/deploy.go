@@ -70,6 +70,11 @@ func (e *Executor) Deploy(ctx context.Context, command *platformv1.WorkerDeploym
 		if err := e.runtime.Restart(ctx, change); err != nil {
 			return err
 		}
+	case "RECONCILE":
+		// 观察恢复：worker 重启丢失内存采集器后由控制面按 serving release 合成
+		// 下发。集群资源保持原样（Apply 是幂等核对，但恢复路径绝不写集群），
+		// 直接重建观察循环：观察经 monitoring 路径续传，采集器随循环重新挂载。
+		// 资源实际消失时 Observe 如实上报 LOST，绝不伪造 OBSERVED。
 	case "STOP":
 		e.stopRuntimeCollector(change.Release.ID)
 		if err := e.runtime.Stop(ctx, change); err != nil {

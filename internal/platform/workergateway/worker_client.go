@@ -284,7 +284,7 @@ func (c *WorkerClient) startDeployment(ctx context.Context, command *platformv1.
 		return ErrIdentity
 	}
 	switch command.Action {
-	case "DEPLOY", "ROLLBACK", "RECOVERY", "RESTART", "STOP", "START":
+	case "DEPLOY", "ROLLBACK", "RECOVERY", "RESTART", "STOP", "START", "RECONCILE":
 	default:
 		return ErrProtocol
 	}
@@ -296,7 +296,14 @@ func (c *WorkerClient) startDeployment(ctx context.Context, command *platformv1.
 	if err := c.config.Journal.generation(command.WorkspaceId+":"+command.ApplicationId, command.Generation); err != nil {
 		return err
 	}
-	return c.start(ctx, "deployment:"+command.OperationId, command.Action, fingerprint, func(reconcile bool, emitter Emitter) error {
+	// 观察恢复用独立 journal 执行键：journal spool 跨重启持久化原 DEPLOY 指纹，
+	// RECONCILE 的 Action 不同必然指纹失配（ErrProtocol）；独立键让恢复与原操作
+	// 的重投证据互不干扰，恢复完成与否都不封存原操作。
+	key := "deployment:" + command.OperationId
+	if command.Action == "RECONCILE" {
+		key += ":RECONCILE"
+	}
+	return c.start(ctx, key, command.Action, fingerprint, func(reconcile bool, emitter Emitter) error {
 		return c.config.Executor.Deploy(ctx, command, reconcile, emitter)
 	})
 }

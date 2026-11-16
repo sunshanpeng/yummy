@@ -21,6 +21,7 @@ func (s *Service) ClaimPending(ctx context.Context, worker WorkerIdentity) (Disp
 	var result Dispatch
 	var candidate operationRecord
 	var verifiedRelease releaseRecord
+	resumed := false
 	// 镜像/历史凭据检查在事务外；停止不依赖仓库或旧秘密仍然可读。
 	if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := authenticateWorker(tx, worker); err != nil {
@@ -28,7 +29,16 @@ func (s *Service) ClaimPending(ctx context.Context, worker WorkerIdentity) (Disp
 		}
 		err := tx.Table("deployment_operations AS o").Select("o.*").Joins("JOIN application_placements p ON p.workspace_id = o.workspace_id AND p.application_id = o.application_id").Where("o.active = TRUE AND o.next_dispatch_at <= NOW() AND p.node_id = ? AND p.worker_id = ?", worker.NodeID, worker.WorkerID).Order("CASE WHEN o.action = 'STOP' THEN 0 ELSE 1 END, o.next_dispatch_at, o.id").Take(&candidate).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return ErrNoPending
+			// 无可领取操作时尝试合成观察恢复：worker 重启丢失内存中的运行采集器，
+			// 已完成的部署操作不会重投，恢复只能由控制面按停更事实主动下发。
+			// 恢复命令不动集群资源，不需要镜像校验与第二段事务。
+			resume, resumeErr := s.claimResume(tx, worker)
+			if resumeErr != nil {
+				return resumeErr
+			}
+			result = resume
+			resumed = true
+			return nil
 		}
 		if err != nil {
 			return err
@@ -37,6 +47,9 @@ func (s *Service) ClaimPending(ctx context.Context, worker WorkerIdentity) (Disp
 		return err
 	}); err != nil {
 		return result, err
+	}
+	if resumed {
+		return result, nil
 	}
 	if candidate.Action != Stop {
 		if s.verifier == nil {
@@ -122,6 +135,92 @@ func (s *Service) ClaimPending(ctx context.Context, worker WorkerIdentity) (Disp
 		return tx.Model(&op).Updates(map[string]any{"dispatch_count": gorm.Expr("dispatch_count + 1"), "next_dispatch_at": gorm.Expr("NOW() + INTERVAL '15 seconds'")}).Error
 	})
 	return result, err
+}
+
+const (
+	// resumeStaleAfter：观察停更多久才合成恢复命令，取观察间隔的数倍，容忍
+	// 网络抖动与单次观察失败；resumeBackoffWindow：同节点同发布的合成退避，
+	// 恢复完成前（LastObservedAt 刷新）的周期轮询不重复下发。
+	resumeStaleAfterSeconds = 120
+	resumeBackoffWindow     = time.Minute
+)
+
+// claimResume 在无可领取操作时为观察停更的 serving release 合成观察恢复命令
+// （Action=RECONCILE）：worker 重启丢失内存中的运行采集器（运行日志/指标），
+// 而已完成部署操作不会重投，恢复只能由控制面按停更事实主动下发。worker 收到
+// 后不动集群资源，只重建观察循环与采集器，观察经 monitoring 路径续传
+// （ApplyObservation：op SUCCEEDED、无在飞操作、DesiredState=RUN）。
+// 只排除停止意图（DesiredState != RUN）：停止后的应用不再观察，绝不为它合成。
+func (s *Service) claimResume(tx *gorm.DB, worker WorkerIdentity) (Dispatch, error) {
+	var result Dispatch
+	var candidate struct {
+		WorkspaceID, ApplicationID, ServingReleaseID string
+	}
+	err := tx.Table("application_placements AS p").
+		Select("p.workspace_id, p.application_id, st.serving_release_id").
+		Joins("JOIN application_runtime_states st ON st.workspace_id = p.workspace_id AND st.application_id = p.application_id").
+		Where("p.node_id = ? AND p.worker_id = ?", worker.NodeID, worker.WorkerID).
+		Where("st.serving_release_id IS NOT NULL AND st.serving_release_id <> ''").
+		Where("st.desired_state = ?", Run).
+		Where("st.active_operation_id IS NULL OR st.active_operation_id = ''").
+		Where("st.last_observed_at IS NULL OR st.last_observed_at < NOW() - (? * INTERVAL '1 second')", resumeStaleAfterSeconds).
+		Order("st.last_observed_at ASC NULLS FIRST").
+		Limit(1).
+		Take(&candidate).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return result, ErrNoPending
+		}
+		return result, err
+	}
+	key := worker.NodeID + "|" + candidate.ServingReleaseID
+	s.resumeMu.Lock()
+	if next, ok := s.resumeBackoff[key]; ok && time.Now().Before(next) {
+		s.resumeMu.Unlock()
+		return result, ErrNoPending
+	}
+	if s.resumeBackoff == nil {
+		s.resumeBackoff = map[string]time.Time{}
+	}
+	s.resumeBackoff[key] = time.Now().Add(resumeBackoffWindow)
+	s.resumeMu.Unlock()
+	release, err := readRelease(tx, candidate.WorkspaceID, candidate.ApplicationID, candidate.ServingReleaseID)
+	if err != nil {
+		return result, err
+	}
+	placement := release.PlacementSnapshot
+	if placement.NodeID != worker.NodeID || placement.WorkerID != worker.WorkerID {
+		return result, ErrNoPending
+	}
+	var node nodeRecord
+	if err := tx.First(&node, "id = ?", worker.NodeID).Error; err != nil {
+		return result, err
+	}
+	if node.ClusterNodeUID != placement.ClusterNodeUID {
+		return result, ErrNoPending
+	}
+	// serving 操作即恢复后观察续传的目标操作；绝不为停止意图（STOP serving）
+	// 合成——DesiredState 过滤已挡住，这里再按操作事实兜底。
+	var op operationRecord
+	if err := tx.Where("workspace_id = ? AND application_id = ? AND release_id = ? AND state = ?", candidate.WorkspaceID, candidate.ApplicationID, candidate.ServingReleaseID, Succeeded).Order("created_at DESC").Take(&op).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return result, ErrNoPending
+		}
+		return result, err
+	}
+	material, err := s.materialize(tx, candidate.WorkspaceID, candidate.ApplicationID, release.RuntimeConfigRevision)
+	if err != nil {
+		return result, err
+	}
+	var spaceSlug, appName string
+	if err := tx.Table("workspaces").Select("slug").Where("id = ?", candidate.WorkspaceID).Take(&spaceSlug).Error; err != nil {
+		return result, err
+	}
+	if err := tx.Model(&model.Application{}).Select("name").Where("workspace_id = ? AND id = ?", candidate.WorkspaceID, candidate.ApplicationID).Take(&appName).Error; err != nil {
+		return result, err
+	}
+	result = Dispatch{WorkspaceID: candidate.WorkspaceID, ApplicationID: candidate.ApplicationID, SpaceSlug: spaceSlug, AppName: appName, OperationID: op.ID, ReleaseID: release.ID, Action: Reconcile, Generation: op.Generation, NextEventSeq: op.EventSeq + 1, Placement: release.PlacementSnapshot, Artifact: releaseView(release).Artifact, Config: material, Domains: release.Domains}
+	return result, nil
 }
 
 func (s *Service) ApplyObservation(ctx context.Context, worker WorkerIdentity, event Observation) (Ack, error) {

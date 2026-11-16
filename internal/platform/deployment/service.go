@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -27,6 +28,11 @@ type Service struct {
 	access   *authorization.Access
 	configs  RuntimeConfigs
 	verifier Verifier
+	// resumeMu/resumeBackoff 保护观察恢复命令的合成退避（进程内状态）：同一
+	// 节点同一发布在退避窗口内只合成一次，恢复窗口内的重复轮询不重复下发。
+	// 进程重启后清零重新合成，幂等无害。
+	resumeMu      sync.Mutex
+	resumeBackoff map[string]time.Time
 }
 
 func NewService(db *gorm.DB, access *authorization.Access, configs RuntimeConfigs, verifier Verifier) *Service {

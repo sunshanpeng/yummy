@@ -273,3 +273,36 @@ func TestListRuntimeMetricsWindowAndAccess(t *testing.T) {
 		t.Fatalf("窗口倒置应无效: %v", err)
 	}
 }
+
+func TestClaimPendingSynthesizesObservationResume(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	r := create(t, e, "resume-1")
+	finishHTTP(t, e, r)
+	// 观察新鲜（刚完成发布）时不合成恢复命令。
+	if _, err := e.service.ClaimPending(ctx, e.worker); !errors.Is(err, ErrNoPending) {
+		t.Fatalf("新鲜观察不应合成恢复=%v", err)
+	}
+	// 观察停更超过阈值（worker 重启丢采集器的实机形态）：合成 RECONCILE，
+	// 指向 serving 操作本身，观察从已持久化序号之后续传。
+	mustExec(t, e.db, "UPDATE application_runtime_states SET last_observed_at = NOW() - INTERVAL '3 minutes' WHERE workspace_id='space' AND application_id='app_one'")
+	dispatch, err := e.service.ClaimPending(ctx, e.worker)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dispatch.Action != Reconcile || dispatch.OperationID != r.Operation.ID || dispatch.ReleaseID != r.Release.ID || dispatch.Generation != r.Operation.Generation || dispatch.NextEventSeq != 2 {
+		t.Fatalf("恢复命令字段不符: %+v", dispatch)
+	}
+	if dispatch.Config.View.Revision < 1 || dispatch.SpaceSlug != "space" || dispatch.AppName != "one" {
+		t.Fatalf("恢复命令配置不完整: %+v", dispatch)
+	}
+	// 退避窗口内不重复合成，恢复完成前（LastObservedAt 刷新）的周期轮询安静。
+	if _, err := e.service.ClaimPending(ctx, e.worker); !errors.Is(err, ErrNoPending) {
+		t.Fatalf("退避窗口不应重复合成=%v", err)
+	}
+	// 停止意图（DesiredState=STOP）的应用绝不为它合成恢复。
+	mustExec(t, e.db, "UPDATE application_runtime_states SET desired_state='STOP' WHERE workspace_id='space' AND application_id='app_one'")
+	if _, err := e.service.ClaimPending(ctx, e.worker); !errors.Is(err, ErrNoPending) {
+		t.Fatalf("停止意图不应合成恢复=%v", err)
+	}
+}

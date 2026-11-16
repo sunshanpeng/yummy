@@ -175,7 +175,9 @@ func (g *Gateway) sendDeployment(ctx context.Context, s *session, value deployme
 		return err
 	}
 	message := deploymentCommand(value)
-	if value.Action != deployment.Stop {
+	// RECONCILE 只重建观察循环与采集器，不触碰集群资源与镜像拉取，与 STOP 同样
+	// 不需要仓库凭据；绝不因恢复路径多做一次凭据物化。
+	if value.Action != deployment.Stop && value.Action != deployment.Reconcile {
 		if g.config.DeploymentMaterial == nil {
 			return ErrQualification
 		}
