@@ -428,19 +428,22 @@ func (a *Adapter) BootstrapRuntimeNamespace(ctx context.Context, spaceSlug, work
 		Namespace: name,
 		Labels:    map[string]string{LabelManaged: "worker", LabelWorkspace: workspaceID},
 	}}
+	// 期望 Spec 在 Get 之前构造完整：Update 必须下发同一份完整规则——用空 Spec
+	// 的对象 Update 会把已存在的放行规则抹成"拒绝全部入站"（实机 2026-11-17：
+	// 第二次部署起 Traefik 全部 502，正是此缺陷）。
+	policy.Spec = networkingv1.NetworkPolicySpec{
+		PodSelector: metav1.LabelSelector{},
+		PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
+		Ingress: []networkingv1.NetworkPolicyIngressRule{{
+			From: []networkingv1.NetworkPolicyPeer{
+				{PodSelector: &metav1.LabelSelector{}},
+				{NamespaceSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"kubernetes.io/metadata.name": "kube-system"}},
+					PodSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"app.kubernetes.io/name": "traefik"}}},
+			},
+		}},
+	}
 	_, err := a.client.NetworkingV1().NetworkPolicies(name).Get(ctx, policy.Name, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
-		policy.Spec = networkingv1.NetworkPolicySpec{
-			PodSelector: metav1.LabelSelector{},
-			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
-			Ingress: []networkingv1.NetworkPolicyIngressRule{{
-				From: []networkingv1.NetworkPolicyPeer{
-					{PodSelector: &metav1.LabelSelector{}},
-					{NamespaceSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"kubernetes.io/metadata.name": "kube-system"}},
-						PodSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"app.kubernetes.io/name": "traefik"}}},
-				},
-			}},
-		}
 		_, err = a.client.NetworkingV1().NetworkPolicies(name).Create(ctx, policy, metav1.CreateOptions{})
 	} else if err == nil {
 		_, err = a.client.NetworkingV1().NetworkPolicies(name).Update(ctx, policy, metav1.UpdateOptions{})

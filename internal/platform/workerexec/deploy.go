@@ -75,6 +75,11 @@ func (e *Executor) Deploy(ctx context.Context, command *platformv1.WorkerDeploym
 		// 下发。集群资源保持原样（Apply 是幂等核对，但恢复路径绝不写集群），
 		// 直接重建观察循环：观察经 monitoring 路径续传，采集器随循环重新挂载。
 		// 资源实际消失时 Observe 如实上报 LOST，绝不伪造 OBSERVED。
+		// 命名空间与隔离策略幂等重引导：worker 重启或对象漂移（如隔离策略被
+		// 抹成拒绝全部）都从这里恢复到期望形态。
+		if err := e.options.Adapter.BootstrapRuntimeNamespace(ctx, command.SpaceSlug, command.WorkspaceId); err != nil {
+			return err
+		}
 	case "STOP":
 		e.stopRuntimeCollector(change.Release.ID)
 		if err := e.runtime.Stop(ctx, change); err != nil {

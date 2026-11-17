@@ -308,7 +308,13 @@ func (s *Service) placement(tx *gorm.DB, ws, app string, expectedPolicy int64, c
 	if fresh {
 		out = Placement{WorkspaceID: ws, ApplicationID: app, InstanceID: settings.ID, NodeID: node.ID, WorkerID: node.WorkerID, ClusterNodeUID: node.ClusterNodeUID, PolicyRevision: policy.Revision, RuntimeType: config.Type}
 		if config.Type == runtimeconfig.TypeHTTP {
-			domain, err := runtimeconfig.CanonicalDomain(strings.ReplaceAll(app, "_", "-") + "." + policy.BaseDomain)
+			// 默认地址统一为 <应用名>-<地址后缀>.<应用根域名>（与 inventory
+			// ResolveExecution 同一规则）；地址后缀创建时生成且不可变。
+			var appRow struct{ Name, AddressSuffix string }
+			if err := tx.Model(&model.Application{}).Select("name", "address_suffix").Where("id = ?", app).Take(&appRow).Error; err != nil {
+				return fail(err)
+			}
+			domain, err := runtimeconfig.CanonicalDomain(appRow.Name + "-" + appRow.AddressSuffix + "." + policy.BaseDomain)
 			if err != nil {
 				return fail(ErrNotReady)
 			}

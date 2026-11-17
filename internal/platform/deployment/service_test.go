@@ -1,6 +1,7 @@
 package deployment
 
 import (
+	"regexp"
 	"bytes"
 	"context"
 	"encoding/base64"
@@ -46,7 +47,7 @@ func mustExec(t *testing.T, db *gorm.DB, query string, args ...any) {
 func setup(t *testing.T) environment {
 	t.Helper()
 	db := testkit.OpenDatabase(t)
-	for _, v := range []any{&model.User{ID: "root", Username: "root", PasswordHash: "hash", InstanceAdmin: true}, &model.User{ID: "viewer", Username: "viewer", PasswordHash: "hash"}, &model.Workspace{ID: "space", Name: "空间", Slug: "space"}, &model.WorkspaceMember{WorkspaceID: "space", UserID: "viewer", Role: "member"}, &model.Application{ID: "app_one", WorkspaceID: "space", Name: "one"}, &model.Application{ID: "app_two", WorkspaceID: "space", Name: "two"}, &model.ApplicationMember{WorkspaceID: "space", ApplicationID: "app_one", UserID: "viewer", Role: "viewer"}} {
+	for _, v := range []any{&model.User{ID: "root", Username: "root", PasswordHash: "hash", InstanceAdmin: true}, &model.User{ID: "viewer", Username: "viewer", PasswordHash: "hash"}, &model.Workspace{ID: "space", Name: "空间", Slug: "space"}, &model.WorkspaceMember{WorkspaceID: "space", UserID: "viewer", Role: "member"}, &model.Application{ID: "app_one", WorkspaceID: "space", Name: "one", AddressSuffix: "axk101"}, &model.Application{ID: "app_two", WorkspaceID: "space", Name: "two", AddressSuffix: "bxk202"}, &model.ApplicationMember{WorkspaceID: "space", ApplicationID: "app_one", UserID: "viewer", Role: "viewer"}} {
 		if err := db.Create(v).Error; err != nil {
 			t.Fatal(err)
 		}
@@ -287,6 +288,11 @@ func TestFailedFirstPlacementAndDefaultDomainNeverMigrate(t *testing.T) {
 	}
 	if retry.Release.Placement.NodeID != r.Release.Placement.NodeID || retry.Release.Placement.DefaultDomain != r.Release.Placement.DefaultDomain {
 		t.Fatal("首发失败或全局策略变更使Placement隐式迁移")
+	}
+	// 默认地址统一为 <应用名>-<地址后缀>.<根域名>（与 ResolveExecution 同规则），
+	// 绝不回退为内部资源 ID 形态。
+	if !regexp.MustCompile(`^one-[a-z][a-z0-9]{5}\.apps\.example\.com$`).MatchString(r.Release.Placement.DefaultDomain) {
+		t.Fatalf("默认地址形态不符=%q", r.Release.Placement.DefaultDomain)
 	}
 }
 func TestRollbackFrozenConfigAndDraftPreserved(t *testing.T) {
