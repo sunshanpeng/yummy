@@ -6,18 +6,19 @@ import { SourceService, type SourceSnapshot } from "../gen/platform/v1/source_pb
 import { useRPC } from "../lib/queries";
 import { can, errorMessage, formatTime, platform } from "../lib/platform";
 import { useApplication } from "./workspaces";
+import { buildSubNav } from "./builds";
 import { DataForm, DataTable, Notice, QueryState, required } from "../components/console-kit";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 
 export function SourcePage() {
-  const app = useApplication(); const { workspaceSlug } = useParams({ strict: false }) as { workspaceSlug: string }; const [file, setFile] = useState<File>(); const [stage, setStage] = useState(""); const [snapshot, setSnapshot] = useState<SourceSnapshot>();
+  const app = useApplication(); const { workspaceSlug } = useParams({ strict: false }) as { workspaceSlug: string };; const [file, setFile] = useState<File>(); const [stage, setStage] = useState(""); const [snapshot, setSnapshot] = useState<SourceSnapshot>();
   const controller = useRef<AbortController | undefined>(undefined);
   const session = useRef<{ fingerprint: string; uploadId: string; transferPath: string; transferred: boolean } | undefined>(undefined);
   useEffect(() => () => controller.current?.abort(), []);
   if (!can(app, "source:upload")) return <Notice>当前账户没有上传此应用源码的权限。</Notice>;
-  return <div className="stack max-w-4xl"><div><h2 className="text-lg font-semibold">源码上传与校验</h2><p className="mt-1 text-sm text-muted-foreground">上传当前应用的 tar.gz 源码包，由控制面校验摘要和 Dockerfile。不会自动创建构建或部署。</p></div><Notice>上传完成只表示源码快照已准备好，不代表镜像产出或应用上线。请到应用构建页预览输入后明确创建构建。</Notice><section className="section"><DataForm submitLabel="上传并校验源码" fields={[{ name: "dockerfile", label: "Dockerfile 相对路径", value: "Dockerfile", schema: required.refine((value) => !value.startsWith("/") && !value.split("/").includes("..") && !value.includes("\\"), "使用源码包内的安全相对路径") }]} onSubmit={async (values) => {
+  return <div className="stack max-w-4xl">{buildSubNav(app, workspaceSlug)}<div><h2 className="text-lg font-semibold">源码上传与校验</h2><p className="mt-1 text-sm text-muted-foreground">上传当前应用的 tar.gz 源码包，由控制面校验摘要和 Dockerfile。不会自动创建构建或部署。</p></div><Notice>上传完成只表示源码快照已准备好，不代表镜像产出或应用上线。请到应用构建页预览输入后明确创建构建。</Notice><section className="section"><DataForm submitLabel="上传并校验源码" fields={[{ name: "dockerfile", label: "Dockerfile 相对路径", value: "Dockerfile", schema: required.refine((value) => !value.startsWith("/") && !value.split("/").includes("..") && !value.includes("\\"), "使用源码包内的安全相对路径") }]} onSubmit={async (values) => {
     if (!file) throw new Error("请先选择 tar.gz 源码包。");
     if (file.size <= 0 || file.size > 256 * 1024 * 1024) throw new Error("源码包必须大于 0 且不超过 256 MiB；实例可能设有更严格的限制。");
     if (!file.name.endsWith(".tar.gz") && !file.name.endsWith(".tgz")) throw new Error("请选择 .tar.gz 或 .tgz 格式源码包。");

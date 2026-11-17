@@ -5,8 +5,10 @@ import { z } from "zod";
 import { InventoryService } from "../gen/platform/v1/inventory_pb";
 import { RuntimeConfigService, type RuntimeConfig } from "../gen/platform/v1/runtime_config_pb";
 import { invalidateMethods, useRPC } from "../lib/queries";
+import { useParams } from "@tanstack/react-router";
 import { can, platform } from "../lib/platform";
 import { useApplication } from "./workspaces";
+import { deploySubNav } from "./deployments";
 import { DataForm, Notice, QueryState, type FieldDefinition } from "../components/console-kit";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -24,7 +26,8 @@ export function RuntimePage() {
   const app = useApplication();
   const query = useRPC(RuntimeConfigService.method.getRuntimeConfig, { workspaceId: app.workspaceId, applicationId: app.id }, { enabled: can(app, "config:read") });
   if (!can(app, "config:read")) return <Notice>当前账户没有查看此应用配置的权限。</Notice>;
-  return <QueryState query={query} empty={!query.data?.config}>{query.data?.config && <RuntimeEditor key={`${app.id}:${query.data.config.revision}`} config={query.data.config} />}</QueryState>;
+  const { workspaceSlug } = useParams({ strict: false }) as { workspaceSlug: string };
+  return <div className="stack">{deploySubNav(app, workspaceSlug)}<QueryState query={query} empty={!query.data?.config}>{query.data?.config && <RuntimeEditor key={`${app.id}:${query.data.config.revision}`} config={query.data.config} />}</QueryState></div>;
 }
 // 运行模板：按语言/形态给出建议值（端口、探针、启动方式），用户在此基础上
 // 调整后保存；模板只预填表单值，不新增服务端配置。仅首次进入（尚未保存过
