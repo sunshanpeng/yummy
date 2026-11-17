@@ -60,7 +60,9 @@ message RemoveWorkspaceMemberRequest { string workspace_id = 1; string user_id =
 message RemoveWorkspaceMemberResponse {}
 message ListApplicationsRequest { string workspace_id = 1; int32 limit = 2; string cursor = 3; }
 message ListApplicationsResponse { repeated Application applications = 1; string next_cursor = 2; }
-message GetApplicationRequest { string workspace_id = 1; string application_id = 2; }
+// 应用定位：application_id 与 application_name 二选一。URL 等面向用户的场景
+// 使用应用名（与空间名同一规范、创建后不可修改），内部引用与 CLI 用资源 ID。
+message GetApplicationRequest { string workspace_id = 1; string application_id = 2; string application_name = 3; }
 message GetApplicationResponse { Application application = 1; }
 // 创建只接收名称和幂等键；工作空间是上下文身份，不接收节点、镜像地址或平台覆盖。
 message CreateApplicationRequest { string workspace_id = 1; string name = 2; string idempotency_key = 3; }

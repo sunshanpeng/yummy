@@ -30,7 +30,7 @@ type Config struct {
 // Applications 的 ResolveWorkspace 必须从数据库查找归属并复核应用读取权限。
 type Applications interface {
 	ResolveWorkspace(context.Context, authorization.Principal, string) (string, error)
-	Get(context.Context, authorization.Principal, string, string) (application.View, error)
+	Get(context.Context, authorization.Principal, string, string, string) (application.View, error)
 }
 
 type RuntimeConfigs interface {

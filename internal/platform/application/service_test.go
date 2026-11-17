@@ -158,10 +158,10 @@ func TestApplicationListsAndCapabilitiesRespectMembershipAndTokenScope(t *testin
 	if slices.Contains(page.Items[0].Capabilities, "build:write") {
 		t.Fatal("viewer不能有写权限")
 	}
-	if _, err := service.Get(ctx, alice, "space-a", two.ID); !errors.Is(err, authorization.ErrNotFound) {
+	if _, err := service.Get(ctx, alice, "space-a", two.ID, ""); !errors.Is(err, authorization.ErrNotFound) {
 		t.Fatalf("unauthorized get=%v", err)
 	}
-	if _, err := service.Get(ctx, root, "space-b", one.ID); !errors.Is(err, authorization.ErrNotFound) {
+	if _, err := service.Get(ctx, root, "space-b", one.ID, ""); !errors.Is(err, authorization.ErrNotFound) {
 		t.Fatalf("cross workspace=%v", err)
 	}
 	page, err = service.List(ctx, root, "space-a", 1, "")
@@ -277,11 +277,15 @@ func TestUpdateRevisionAndArchiveBoundaries(t *testing.T) {
 	if err := service.SetMember(ctx, root, "space-a", app.ID, "alice", "maintainer"); err != nil {
 		t.Fatal(err)
 	}
-	updated, err := service.Update(ctx, alice, "space-a", app.ID, application.UpdateInput{Name: "renamed", Description: "说明", ExpectedRevision: 1})
+	// 应用名创建后不可修改：改名请求被拒绝，且不消耗修订号。
+	if _, err := service.Update(ctx, alice, "space-a", app.ID, application.UpdateInput{Name: "renamed", ExpectedRevision: 1}); !errors.Is(err, authorization.ErrInvalid) {
+		t.Fatalf("应用名不可修改=%v", err)
+	}
+	updated, err := service.Update(ctx, alice, "space-a", app.ID, application.UpdateInput{Name: "gateway", Description: "说明", ExpectedRevision: 1})
 	if err != nil || updated.Revision != 2 {
 		t.Fatalf("update=%#v,%v", updated, err)
 	}
-	if _, err := service.Update(ctx, alice, "space-a", app.ID, application.UpdateInput{Name: "old", ExpectedRevision: 1}); !errors.Is(err, authorization.ErrConflict) {
+	if _, err := service.Update(ctx, alice, "space-a", app.ID, application.UpdateInput{Name: "gateway", ExpectedRevision: 1}); !errors.Is(err, authorization.ErrConflict) {
 		t.Fatalf("stale update=%v", err)
 	}
 	if err := service.Archive(ctx, alice, "space-a", app.ID, 2); !errors.Is(err, authorization.ErrDenied) {
@@ -293,7 +297,7 @@ func TestUpdateRevisionAndArchiveBoundaries(t *testing.T) {
 	if err := service.Archive(ctx, root, "space-a", app.ID, 2); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.Get(ctx, root, "space-a", app.ID); !errors.Is(err, authorization.ErrNotFound) {
+	if _, err := service.Get(ctx, root, "space-a", app.ID, ""); !errors.Is(err, authorization.ErrNotFound) {
 		t.Fatalf("archived get=%v", err)
 	}
 	var events int64

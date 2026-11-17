@@ -151,7 +151,7 @@ func (h *ApplicationHandler) GetApplication(ctx context.Context, req *connect.Re
 	if err != nil {
 		return nil, RPCError(h.Log, err)
 	}
-	v, err := h.Service.Get(ctx, p, req.Msg.WorkspaceId, req.Msg.ApplicationId)
+	v, err := h.Service.Get(ctx, p, req.Msg.WorkspaceId, req.Msg.ApplicationId, req.Msg.ApplicationName)
 	if err != nil {
 		return nil, RPCError(h.Log, err)
 	}

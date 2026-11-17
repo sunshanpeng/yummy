@@ -89,10 +89,27 @@ func (s *Service) List(ctx context.Context, p authorization.Principal, workspace
 	return result, err
 }
 
-func (s *Service) Get(ctx context.Context, p authorization.Principal, workspaceID, id string) (View, error) {
+// Get 按不可变资源 ID 或唯一应用名（name）定位应用：URL 等面向用户的场景用
+// 应用名（与空间名同一命名规范、创建后不可修改），内部引用与 CLI 用 ID；
+// 两者都提供时以 ID 为准。授权检查始终按资源 ID 执行。
+func (s *Service) Get(ctx context.Context, p authorization.Principal, workspaceID, id, name string) (View, error) {
+	if (id == "") == (name == "") {
+		return View{}, fmt.Errorf("%w: 应用 ID 与应用名必须二选一", authorization.ErrInvalid)
+	}
 	var result View
 	err := s.Access.Do(ctx, p, false, func(tx *gorm.DB, current authorization.Principal) error {
-		value, role, err := s.Access.Application(tx, current, workspaceID, id, authorization.ApplicationRead)
+		locator := id
+		if id == "" {
+			var value model.Application
+			if err := tx.First(&value, "workspace_id = ? AND name = ?", workspaceID, name).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return authorization.ErrNotFound
+				}
+				return err
+			}
+			locator = value.ID
+		}
+		value, role, err := s.Access.Application(tx, current, workspaceID, locator, authorization.ApplicationRead)
 		if err != nil {
 			return err
 		}
@@ -182,24 +199,26 @@ func (s *Service) Create(ctx context.Context, p authorization.Principal, workspa
 }
 
 func (s *Service) Update(ctx context.Context, p authorization.Principal, workspaceID, id string, input UpdateInput) (View, error) {
-	name, err := normalizeName(input.Name)
-	if err != nil {
-		return View{}, err
-	}
+	// 应用名创建后不可修改（与空间名同一约束）：应用名派生默认地址与访问
+	// URL，改名造成地址漂移；Update 只接受说明变更。空名称视为"未提供，
+	// 保持现状"，只改说明的客户端不必回传现有名称。
 	description := strings.TrimSpace(input.Description)
 	if input.ExpectedRevision < 1 || !utf8.ValidString(description) || utf8.RuneCountInString(description) > 2000 {
 		return View{}, authorization.ErrInvalid
 	}
 	var result View
-	err = s.Access.Do(ctx, p, false, func(tx *gorm.DB, current authorization.Principal) error {
+	err := s.Access.Do(ctx, p, false, func(tx *gorm.DB, current authorization.Principal) error {
 		if current.IsBearer() {
 			return authorization.ErrDenied
 		}
-		_, role, err := s.Access.Application(tx, current, workspaceID, id, authorization.ConfigWrite)
+		value, role, err := s.Access.Application(tx, current, workspaceID, id, authorization.ConfigWrite)
 		if err != nil {
 			return err
 		}
-		updated := tx.Model(&model.Application{}).Where("workspace_id = ? AND id = ? AND revision = ? AND status = ?", workspaceID, id, input.ExpectedRevision, model.ResourceActive).Updates(map[string]any{"name": name, "description": description, "revision": gorm.Expr("revision + 1")})
+		if name := strings.TrimSpace(input.Name); name != "" && name != value.Name {
+			return fmt.Errorf("%w: 应用名创建后不可修改", authorization.ErrInvalid)
+		}
+		updated := tx.Model(&model.Application{}).Where("workspace_id = ? AND id = ? AND revision = ? AND status = ?", workspaceID, id, input.ExpectedRevision, model.ResourceActive).Updates(map[string]any{"description": description, "revision": gorm.Expr("revision + 1")})
 		if updated.Error != nil {
 			return conflict(updated.Error)
 		}
@@ -209,7 +228,6 @@ func (s *Service) Update(ctx context.Context, p authorization.Principal, workspa
 		if err := audit.Record(tx, current.UserID, "application.update", "application", id, &workspaceID, &id); err != nil {
 			return err
 		}
-		var value model.Application
 		if err := tx.First(&value, "workspace_id = ? AND id = ?", workspaceID, id).Error; err != nil {
 			return err
 		}

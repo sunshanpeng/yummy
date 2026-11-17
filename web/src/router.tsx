@@ -27,7 +27,7 @@ const globalAllocations = createRoute({ getParentRoute: () => authenticated, pat
 const globalOAuthClients = createRoute({ getParentRoute: () => authenticated, path: "/platform/oauth-clients", validateSearch: search, component: lazyRouteComponent(() => import("./pages/platform"), "PlatformOAuthClientsRoute") });
 const workspace = createRoute({ getParentRoute: () => authenticated, path: "/w/$workspaceSlug", component: WorkspaceLayout });
 const apps = createRoute({ getParentRoute: () => workspace, path: "apps", validateSearch: search, component: ApplicationsPage });
-const app = createRoute({ getParentRoute: () => workspace, path: "apps/$applicationId", component: ApplicationLayout });
+const app = createRoute({ getParentRoute: () => workspace, path: "apps/$applicationSlug", component: ApplicationLayout });
 const overview = createRoute({ getParentRoute: () => app, path: "/", component: lazyRouteComponent(() => import("./pages/overview"), "ApplicationOverview") });
 const basic = createRoute({ getParentRoute: () => app, path: "settings/basic", component: ApplicationBasic });
 const access = createRoute({ getParentRoute: () => app, path: "settings/access", validateSearch: search, component: ApplicationAccess });

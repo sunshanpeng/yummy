@@ -1395,12 +1395,15 @@ func (x *ListApplicationsResponse) GetNextCursor() string {
 	return ""
 }
 
+// 应用定位：application_id 与 application_name 二选一。URL 等面向用户的场景
+// 使用应用名（与空间名同一规范、创建后不可修改），内部引用与 CLI 用资源 ID。
 type GetApplicationRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	WorkspaceId   string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
-	ApplicationId string                 `protobuf:"bytes,2,opt,name=application_id,json=applicationId,proto3" json:"application_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	WorkspaceId     string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
+	ApplicationId   string                 `protobuf:"bytes,2,opt,name=application_id,json=applicationId,proto3" json:"application_id,omitempty"`
+	ApplicationName string                 `protobuf:"bytes,3,opt,name=application_name,json=applicationName,proto3" json:"application_name,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *GetApplicationRequest) Reset() {
@@ -1443,6 +1446,13 @@ func (x *GetApplicationRequest) GetWorkspaceId() string {
 func (x *GetApplicationRequest) GetApplicationId() string {
 	if x != nil {
 		return x.ApplicationId
+	}
+	return ""
+}
+
+func (x *GetApplicationRequest) GetApplicationName() string {
+	if x != nil {
+		return x.ApplicationName
 	}
 	return ""
 }
@@ -2247,10 +2257,11 @@ const file_platform_v1_resources_proto_rawDesc = "" +
 	"\x18ListApplicationsResponse\x12<\n" +
 	"\fapplications\x18\x01 \x03(\v2\x18.platform.v1.ApplicationR\fapplications\x12\x1f\n" +
 	"\vnext_cursor\x18\x02 \x01(\tR\n" +
-	"nextCursor\"a\n" +
+	"nextCursor\"\x8c\x01\n" +
 	"\x15GetApplicationRequest\x12!\n" +
 	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x12%\n" +
-	"\x0eapplication_id\x18\x02 \x01(\tR\rapplicationId\"T\n" +
+	"\x0eapplication_id\x18\x02 \x01(\tR\rapplicationId\x12)\n" +
+	"\x10application_name\x18\x03 \x01(\tR\x0fapplicationName\"T\n" +
 	"\x16GetApplicationResponse\x12:\n" +
 	"\vapplication\x18\x01 \x01(\v2\x18.platform.v1.ApplicationR\vapplication\"z\n" +
 	"\x18CreateApplicationRequest\x12!\n" +

@@ -32,7 +32,7 @@ func registerApplicationTools(server *sdk.Server, s scope) {
 		if err := s.check(authorization.ApplicationRead); err != nil {
 			return nil, err
 		}
-		out, err := s.services.Applications.Get(ctx, s.principal, s.workspaceID, s.applicationID)
+		out, err := s.services.Applications.Get(ctx, s.principal, s.workspaceID, s.applicationID, "")
 		if err != nil {
 			return nil, failure(err)
 		}

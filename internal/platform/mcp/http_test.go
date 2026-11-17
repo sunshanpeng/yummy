@@ -35,7 +35,7 @@ func (f *fakeApplications) ResolveWorkspace(_ context.Context, p authorization.P
 	}
 	return "ws_a", nil
 }
-func (f *fakeApplications) Get(_ context.Context, p authorization.Principal, ws, app string) (application.View, error) {
+func (f *fakeApplications) Get(_ context.Context, p authorization.Principal, ws, app, name string) (application.View, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.lastApp = app
