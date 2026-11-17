@@ -22,6 +22,25 @@ function mount(path: string, admin = false) {
 }
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 describe("正式页面权限与作用域", () => {
+  it("应用详情顶栏提供交互面包屑，不再渲染页内返回应用行", async () => {
+    vi.spyOn(platform.transport, "unary").mockImplementation(async (method) => {
+      const values = method.name === "GetWorkspace" ? { workspace: { id: "w1", slug: "w1", name: "空间", capabilities: ["workspace:read"] } }
+        : method.name === "ListWorkspaces" ? { workspaces: [] }
+        : method.name === "ListApplications" ? { applications: [{ id: "a1", name: "app1", capabilities: ["workspace:read"] }, { id: "a2", name: "app2", capabilities: [] }] }
+        : method.name === "GetApplication" ? { application: { id: "a1", workspaceId: "w1", name: "app1", capabilities: ["workspace:read", "build:read"] } }
+        : method.name === "ListBuilds" ? { builds: [] }
+        : method.name === "ListDeployments" ? { operations: [] }
+        : method.name === "GetRuntimeStatus" ? { status: { generation: 1n } }
+        : {};
+      return { stream: false, service: method.parent, method, header: new Headers(), trailer: new Headers(), message: create(method.output, values) };
+    });
+    mount("/w/w1/apps/a1");
+    // 空间名就位（GetWorkspace 返回后，面包屑空间段以空间名渲染且可点击）
+    expect(await screen.findByRole("link", { name: "空间" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "切换应用" })).toBeTruthy();
+    expect(screen.queryByText("返回应用")).toBeNull();
+  });
+
   it("个人页不出现空间切换或空间管理", async () => {
     mount("/account");
     await screen.findByRole("heading", { name: /^个人账户$/ });
