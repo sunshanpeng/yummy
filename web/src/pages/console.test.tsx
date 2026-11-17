@@ -110,6 +110,22 @@ describe("正式页面权限与作用域", () => {
     await user.click(screen.getByRole("button", { name: "保存运行配置" }));
     expect(save).toHaveBeenCalledWith(expect.objectContaining({ expectedRevision: 2n, variables: [{ name: "API_KEY", value: "", sensitive: true, keepExisting: true }], files: [{ path: "/app/secret", content: "", sensitive: true, keepExisting: true }] }));
   });
+  it("首次进入运行配置提供语言模板与必填标注", async () => {
+    vi.spyOn(platform.transport, "unary").mockImplementation(async (method) => {
+      const values = method.name === "GetWorkspace" ? { workspace: { id: "w1", slug: "w1", name: "空间", capabilities: ["workspace:read"] } } : method.name === "ListWorkspaces" ? { workspaces: [] } : method.name === "GetApplication" ? { application: { id: "a1", workspaceId: "w1", name: "app", capabilities: ["config:read", "config:write"] } } : method.name === "ResolveExecution" ? { summary: { policyRevision: 1n, ready: true, platform: "linux/amd64" } } : { config: { workspaceId: "w1", applicationId: "a1", revision: 0n, type: "HTTP", port: 8080 } };
+      return { stream: false, service: method.parent, method, header: new Headers(), trailer: new Headers(), message: create(method.output, values) };
+    });
+    mount("/w/w1/apps/a1/settings/runtime");
+    const user = userEvent.setup();
+    // 首次进入（尚未保存配置）展示按语言/形态分组的模板卡片
+    expect(await screen.findByText("从模板开始")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: /Node.js 服务/ }));
+    expect(await screen.findByText(/已按「Node.js 服务」预填/)).toBeTruthy();
+    // 必填字段有视觉标记与 aria-required；提示说明默认值
+    const port = await screen.findByLabelText(/容器监听端口/) as HTMLInputElement;
+    expect(port.getAttribute("aria-required")).toBe("true");
+    expect(port.value).toBe("3000");
+  });
   it("创建PAT显示一次性明文，关闭后不保留在查询缓存", async () => {
     // 列表和选择器通过真实 ConnectQuery 传输层响应，只有写 client 在此组件测试替换。
     vi.spyOn(platform.transport, "unary").mockImplementation(async (method) => {

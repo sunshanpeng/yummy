@@ -29,20 +29,22 @@ export function Heading({ title, description, action }: { title: string; descrip
 export function Empty({ title, description, children }: { title: string; description: string; children?: ReactNode }) {
   return <div className="rounded-lg border border-dashed bg-card px-6 py-14 text-center"><h2 className="text-base font-semibold">{title}</h2><p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">{description}</p>{children && <div className="mt-5">{children}</div>}</div>;
 }
-export type FieldDefinition = { name: string; label: string; value?: string; type?: string; hint?: string; autoComplete?: string; readOnly?: boolean; options?: { value: string; label: string }[]; schema?: z.ZodType<string> };
+export type FieldGroup = { title: string; description?: string; fields: FieldDefinition[] };
+export type FieldDefinition = { name: string; label: string; value?: string; type?: string; hint?: string; autoComplete?: string; readOnly?: boolean; required?: boolean; options?: { value: string; label: string }[]; schema?: z.ZodType<string> };
 export const required = z.string().trim().min(1, "请填写此项");
 // 统一命名规范（2026-10-26 设计）：小写字母开头，最长 30 位，无连续 --，不以 - 结尾。
 export const resourceName = required.regex(/^[a-z](?:-?[a-z0-9]){0,29}$/, "使用小写字母开头的最长 30 位小写字母、数字或中划线（无连续中划线，不以中划线结尾）");
 export const passwordSchema = z.string().refine((v) => { const length = new TextEncoder().encode(v).length; return length >= 12 && length <= 128; }, "密码必须为 12～128 个字节");
 
 // 所有业务表单共用 TanStack Form 生命周期，字段与提交校验由 Zod 执行。
-export function DataForm({ fields, submitLabel = "保存更改", onSubmit, children, disabled = false, successMessage, footer, onValuesChange }: { fields: FieldDefinition[]; submitLabel?: string; onSubmit: (values: Record<string, string>) => Promise<void>; children?: ReactNode; disabled?: boolean; successMessage?: string; footer?: ReactNode; onValuesChange?: () => void }) {
+export function DataForm({ fields, groups, submitLabel = "保存更改", onSubmit, children, disabled = false, successMessage, footer, onValuesChange }: { fields?: FieldDefinition[]; groups?: FieldGroup[]; submitLabel?: string; onSubmit: (values: Record<string, string>) => Promise<void>; children?: ReactNode; disabled?: boolean; successMessage?: string; footer?: ReactNode; onValuesChange?: () => void }) {
   const id = useId();
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
-  const values = useMemo(() => Object.fromEntries(fields.map((f) => [f.name, f.value ?? ""])), []);
+  const allFields = useMemo(() => groups?.length ? groups.flatMap((group) => group.fields) : fields ?? [], [fields, groups]);
+  const values = useMemo(() => Object.fromEntries(allFields.map((f) => [f.name, f.value ?? ""])), [allFields]);
   const schema = z.record(z.string(), z.string()).superRefine((values, context) => {
-    for (const field of fields) {
+    for (const field of allFields) {
       const result = (field.schema ?? z.string()).safeParse(values[field.name]);
       if (!result.success) for (const issue of result.error.issues) context.addIssue({ code: "custom", path: [field.name], message: issue.message });
     }
@@ -56,7 +58,7 @@ export function DataForm({ fields, submitLabel = "保存更改", onSubmit, child
       try {
         await onSubmit(value);
         // 成功后擦除密码输入；普通业务输入保留，失败时所有输入均保留以便修正。
-        for (const field of fields) if (field.type === "password") form.setFieldValue(field.name, "");
+        for (const field of allFields) if (field.type === "password") form.setFieldValue(field.name, "");
         setSuccess(true);
       } catch (reason) { setError(errorMessage(reason)); }
     },
@@ -72,13 +74,17 @@ export function DataForm({ fields, submitLabel = "保存更改", onSubmit, child
       }
     });
   }}>
-    {fields.map((definition) => <form.Field key={definition.name} name={definition.name}>{(field) => {
-      const invalid = field.state.meta.errors.length > 0;
-      const fieldID = `${id}-${definition.name}`;
-      const props = { id: fieldID, name: definition.name, value: field.state.value, disabled: disabled || definition.readOnly, onBlur: field.handleBlur, onChange: (event: { target: { value: string } }) => { field.handleChange(event.target.value); setSuccess(false); onValuesChange?.(); }, "aria-invalid": invalid, "aria-describedby": `${fieldID}-description` };
-      return <div className="space-y-2"><Label htmlFor={fieldID}>{definition.label}</Label>{definition.options ? <select {...props} className="w-full">{definition.options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select> : definition.type === "textarea" ? <Textarea {...props} rows={3} /> : <Input {...props} type={definition.type ?? "text"} autoComplete={definition.autoComplete ?? "off"} />}
-      <div id={`${fieldID}-description`} className={`text-xs ${invalid ? "text-destructive" : "text-muted-foreground"}`}>{invalid ? field.state.meta.errors.map((error) => typeof error === "object" && error && "message" in error ? String(error.message) : String(error)).join("；") : definition.hint}</div></div>;
-    }}</form.Field>)}
+    {(() => {
+      const renderField = (definition: FieldDefinition) => <form.Field key={definition.name} name={definition.name}>{(field) => {
+        const invalid = field.state.meta.errors.length > 0;
+        const fieldID = `${id}-${definition.name}`;
+        const props = { id: fieldID, name: definition.name, value: field.state.value, disabled: disabled || definition.readOnly, onBlur: field.handleBlur, onChange: (event: { target: { value: string } }) => { field.handleChange(event.target.value); setSuccess(false); onValuesChange?.(); }, "aria-invalid": invalid, "aria-describedby": `${fieldID}-description`, "aria-required": definition.required === true };
+        return <div className="space-y-2"><Label htmlFor={fieldID}>{definition.label}{definition.required && <span aria-hidden="true" className="ml-1 text-destructive">*</span>}{definition.required && <span className="sr-only">（必填）</span>}</Label>{definition.options ? <select {...props} className="w-full">{definition.options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select> : definition.type === "textarea" ? <Textarea {...props} rows={3} /> : <Input {...props} type={definition.type ?? "text"} autoComplete={definition.autoComplete ?? "off"} />}
+        <div id={`${fieldID}-description`} className={`text-xs ${invalid ? "text-destructive" : "text-muted-foreground"}`}>{invalid ? field.state.meta.errors.map((error) => typeof error === "object" && error && "message" in error ? String(error.message) : String(error)).join("；") : definition.hint}</div></div>;
+      }}</form.Field>;
+      const sections = groups?.length ? groups : fields?.length ? [{ title: "", fields }] : [];
+      return sections.map((section, index) => <section key={section.title || index} className={index > 0 ? "border-t pt-6" : ""}>{section.title && <h3 className="font-semibold">{section.title}</h3>}{section.description && <p className="mb-4 mt-1 text-xs text-muted-foreground">{section.description}</p>}{(!section.title || section.description) && section.title ? null : null}<div className={section.title ? "mt-4 space-y-5" : "space-y-5"}>{section.fields.map(renderField)}</div></section>);
+    })()}
     {children}{error && <Notice tone="error">{error}</Notice>}{success && successMessage && <Notice tone="success">{successMessage}</Notice>}
     <div className="flex flex-wrap items-center gap-3 pt-1"><form.Subscribe selector={(state) => state.isSubmitting}>{(pending) => <Button disabled={disabled || pending} type="submit">{pending ? <><LoaderCircle className="animate-spin" />正在提交…</> : submitLabel}</Button>}</form.Subscribe>{footer}</div>
   </form>;
