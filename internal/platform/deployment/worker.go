@@ -503,7 +503,10 @@ func (s *Service) ProbeTargets(ctx context.Context, limit int) ([]ProbeTarget, e
 	result := []ProbeTarget{}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var ops []operationRecord
-		if err := tx.Table("deployment_operations AS o").Select("o.*").Joins("JOIN application_runtime_states s ON s.workspace_id = o.workspace_id AND s.application_id = o.application_id AND s.generation = o.generation AND s.desired_release_id = o.release_id").Where("o.kubernetes_ready = TRUE AND o.action <> 'STOP' AND ((o.active = TRUE AND o.state = ?) OR (o.state = ? AND s.active_operation_id IS NULL))", VerifyingIngress, Succeeded).Order("o.id ASC").Limit(limit).Find(&ops).Error; err != nil {
+		// 同代可有多个 SUCCEEDED 操作（同产物重部署）：按应用取最新一条作探测
+		// 目标——历史操作过期后 ApplyProbe 必被拒绝，混入目标会令探测循环卡在
+		// 最旧记录上，永远轮不到当前 serving 操作。
+		if err := tx.Table("deployment_operations AS o").Select("o.*").Joins("JOIN application_runtime_states s ON s.workspace_id = o.workspace_id AND s.application_id = o.application_id AND s.generation = o.generation AND s.desired_release_id = o.release_id").Where("o.kubernetes_ready = TRUE AND o.action <> 'STOP' AND ((o.active = TRUE AND o.state = ?) OR (o.state = ? AND s.active_operation_id IS NULL)) AND o.id = (SELECT MAX(o2.id) FROM deployment_operations o2 WHERE o2.workspace_id = o.workspace_id AND o2.application_id = o.application_id AND o2.generation = o.generation)", VerifyingIngress, Succeeded).Order("o.id ASC").Limit(limit).Find(&ops).Error; err != nil {
 			return err
 		}
 		for _, op := range ops {

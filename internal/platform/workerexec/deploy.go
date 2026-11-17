@@ -49,7 +49,7 @@ func (e *Executor) Deploy(ctx context.Context, command *platformv1.WorkerDeploym
 	// DEPLOY/ROLLBACK/RECOVERY/START 走幂等 Apply；RESTART/STOP 只做幂等 scale。
 	// STOP 仅缩容 replicas=0，不删除模板与 PVC；HTTP 改后台的路由清理由适配器负责。
 	switch command.Action {
-	case "DEPLOY", "ROLLBACK", "RECOVERY", "START":
+	case "DEPLOY", "ROLLBACK", "RECOVERY", "START", "RECONCILE":
 		route := kube.Route{}
 		if material.View.Type == runtimeconfig.TypeHTTP {
 			// 域名属冻结发布快照；TLS 绑定是实例级运行设施的当下事实，控制面领取时
@@ -68,16 +68,6 @@ func (e *Executor) Deploy(ctx context.Context, command *platformv1.WorkerDeploym
 		}
 	case "RESTART":
 		if err := e.runtime.Restart(ctx, change); err != nil {
-			return err
-		}
-	case "RECONCILE":
-		// 观察恢复：worker 重启丢失内存采集器后由控制面按 serving release 合成
-		// 下发。集群资源保持原样（Apply 是幂等核对，但恢复路径绝不写集群），
-		// 直接重建观察循环：观察经 monitoring 路径续传，采集器随循环重新挂载。
-		// 资源实际消失时 Observe 如实上报 LOST，绝不伪造 OBSERVED。
-		// 命名空间与隔离策略幂等重引导：worker 重启或对象漂移（如隔离策略被
-		// 抹成拒绝全部）都从这里恢复到期望形态。
-		if err := e.options.Adapter.BootstrapRuntimeNamespace(ctx, command.SpaceSlug, command.WorkspaceId); err != nil {
 			return err
 		}
 	case "STOP":

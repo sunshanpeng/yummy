@@ -104,7 +104,17 @@ func OpenJournal(directory string, maxBytes int64) (*Journal, error) {
 		root.Close()
 		return nil, ErrProtocol
 	}
-	if journal.state.Version != 1 || journal.state.Sequences == nil || journal.state.LogBytes == nil || journal.state.Truncated == nil || journal.state.Executions == nil || journal.state.Generations == nil {
+	// 版本不匹配 = 指纹算法或状态结构升级：旧 spool 的执行指纹与新代码必然
+	// 失配（ErrProtocol 死循环），重置为新 spool 重新开始——观察与幂等事实在
+	// 控制面持久化，重放只会重执行未完成操作，安全。
+	if journal.state.Version != 1 {
+		journal.state = journalState{Version: 1, Sequences: map[string]int64{}, LogBytes: map[string]int64{}, Truncated: map[string]bool{}, Entries: []journalEntry{}, Executions: map[string]journalExecution{}, Generations: map[string]int64{}}
+		if err := journal.save(); err != nil {
+			root.Close()
+			return nil, err
+		}
+	}
+	if journal.state.Sequences == nil || journal.state.LogBytes == nil || journal.state.Truncated == nil || journal.state.Executions == nil || journal.state.Generations == nil {
 		root.Close()
 		return nil, ErrProtocol
 	}
@@ -413,7 +423,9 @@ func (j *Journal) generation(app string, generation int64) error {
 	return nil
 }
 
-// 指纹只覆盖跨重投不可变字段；源码短期令牌、Job UID 与 action 可能变化。
+// 指纹只覆盖跨重投不可变字段；源码短期令牌、Job UID 可能变化。部署的
+// action 不参与指纹：同一操作的原命令与观察恢复（RECONCILE）命令在此语义
+// 上是同一执行，集群侧已写入的注解指纹按此口径核对。
 // 凭据与明文秘密不写 journal，也不把低熵秘密的摘要持久化。
 func buildFingerprint(value *platformv1.WorkerBuildCommand) (string, error) {
 	frozen := &platformv1.WorkerBuildCommand{BuildId: value.BuildId, AttemptId: value.AttemptId, WorkspaceId: value.WorkspaceId, ApplicationId: value.ApplicationId, NodeId: value.NodeId, WorkerId: value.WorkerId, StableJobName: value.StableJobName, SourceSnapshotId: value.SourceSnapshotId, SourceSha256: value.SourceSha256, Dockerfile: value.Dockerfile, ContextPath: value.ContextPath, Target: value.Target, BuildArgs: value.BuildArgs, Repository: value.Repository, Tag: value.Tag, Platform: value.Platform, DeadlineUnix: value.DeadlineUnix}
@@ -421,7 +433,7 @@ func buildFingerprint(value *platformv1.WorkerBuildCommand) (string, error) {
 }
 
 func deploymentFingerprint(value *platformv1.WorkerDeploymentCommand) (string, error) {
-	frozen := &platformv1.WorkerDeploymentCommand{WorkspaceId: value.WorkspaceId, ApplicationId: value.ApplicationId, OperationId: value.OperationId, ReleaseId: value.ReleaseId, Action: value.Action, Generation: value.Generation, NodeId: value.NodeId, WorkerId: value.WorkerId, ClusterNodeUid: value.ClusterNodeUid, Repository: value.Repository, Digest: value.Digest, Platform: value.Platform, RestartMarker: value.RestartMarker, Config: value.Config}
+	frozen := &platformv1.WorkerDeploymentCommand{WorkspaceId: value.WorkspaceId, ApplicationId: value.ApplicationId, OperationId: value.OperationId, ReleaseId: value.ReleaseId, Generation: value.Generation, NodeId: value.NodeId, WorkerId: value.WorkerId, ClusterNodeUid: value.ClusterNodeUid, Repository: value.Repository, Digest: value.Digest, Platform: value.Platform, RestartMarker: value.RestartMarker, Config: value.Config}
 	return fingerprintMessage(frozen)
 }
 
