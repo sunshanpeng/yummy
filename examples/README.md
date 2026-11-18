@@ -35,8 +35,10 @@
 
 - 应用观察态在 RUNNING 与 UNKNOWN 间短暂交替属正常节奏：HTTP 应用每轮 Pod
   事件后要求入口探测重新确认，探测通过即回到 RUNNING；期间访问始终可用。
-- 实机部署脚本与清理工具在服务器 /opt/yummy/install/（examples-deploy.sh、
-  cleanup-app.sh），可作批量验收参考。
+- [tools/local-examples.sh](tools/local-examples.sh)：在**无执行节点的本地预览
+  实例**建立应用/配置/源码数据（构建/部署止步于资格前置，属如实展示）；
+  源码上传直连 8081 transfer 时需带 Host=公开地址头（session 中间件按公开
+  地址校验）。实机批量部署/清理工具在服务器 /opt/yummy/install/。
 
 ## 约定与注意
 
