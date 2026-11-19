@@ -7,8 +7,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/sunshanpeng/yummy/internal/platform/cli"
-	"github.com/sunshanpeng/yummy/internal/webui"
+	"github.com/sunshanpeng/yummy/internal/controlplane/cli"
+	"github.com/sunshanpeng/yummy/internal/controlplane/webui"
 )
 
 func main() {

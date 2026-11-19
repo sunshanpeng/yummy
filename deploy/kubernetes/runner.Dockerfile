@@ -8,8 +8,8 @@ FROM --platform=$BUILDPLATFORM ${GO_BUILDER} AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
-COPY internal/platform/buildrunner ./internal/platform/buildrunner
-COPY internal/platform/sourcearchive ./internal/platform/sourcearchive
+COPY internal/infra/buildrunner ./internal/infra/buildrunner
+COPY internal/infra/sourcearchive ./internal/infra/sourcearchive
 COPY cmd/build-runner ./cmd/build-runner
 ARG TARGETOS=linux
 ARG TARGETARCH=amd64

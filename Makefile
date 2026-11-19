@@ -5,7 +5,7 @@ PROTOC ?= $(shell command -v protoc 2>/dev/null || echo work/protoc/bin/protoc)
 export GOPROXY ?= https://goproxy.cn,https://proxy.golang.org,direct
 export GOSUMDB ?= sum.golang.google.cn
 
-.PHONY: install generate web-build build test integration-test certs smoke smoke-demo
+.PHONY: install generate web-build build test integration-test smoke
 
 install:
 	pnpm --dir web install --frozen-lockfile
@@ -23,34 +23,26 @@ generate:
 		--connect-go_opt=paths=source_relative \
 		--es_out=web/src/gen \
 		--es_opt=target=ts \
-		api/demo/v1/demo.proto api/platform/v1/*.proto
+		api/platform/v1/*.proto
 
 web-build:
 	pnpm --dir web build
-	rsync -a --delete web/dist/ internal/webui/dist/
+	rsync -a --delete web/dist/ internal/controlplane/webui/dist/
 
 build: web-build
 	mkdir -p bin
 	go build -trimpath -ldflags="-s -w" -o bin/platform ./cmd/platform
-	go build -trimpath -ldflags="-s -w" -o bin/control ./cmd/control
-	go build -trimpath -ldflags="-s -w" -o bin/worker ./cmd/worker
 
 test:
 	go test ./... -race -count=1
 	pnpm --dir web test --run
 
+# 真实存储集成测试：需要 compose 起本机 PostgreSQL 与 Redis（见 compose.yaml）。
 integration-test:
 	TEST_DATABASE_URL="postgres://demo:demo@localhost:5432/demo?sslmode=disable" \
 	TEST_REDIS_ADDR="localhost:6379" \
-	go test ./internal/repository/postgres ./internal/presence/redis ./internal/storage -count=1
-
-certs:
-	./scripts/generate-dev-certs.sh var/certs worker-1
+	go test ./internal/... -count=1
 
 # 产品冒烟：对 bin/platform 做迁移/管理员/登录/建空间/OAuth 元数据最小真实链路验证。
 smoke: build
 	./scripts/smoke-product.sh
-
-# 旧 uppercase demo 冒烟（显式开发模式），保留用于回归 demo 拓扑。
-smoke-demo: certs build
-	./scripts/smoke-demo.sh
