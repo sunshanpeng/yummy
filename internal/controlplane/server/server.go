@@ -57,8 +57,8 @@ type Config struct {
 }
 
 type Server struct {
-	Handler          http.Handler
-	TransferHandler  http.Handler
+	Handler          http.Handler // 公共业务入口：页面、API、OAuth、MCP 与 /transfer 大文件传输
+	AdminHandler     http.Handler // 管理入口：/healthz 与 /metrics，默认只绑回环，不与业务同端口
 	WorkerHandler    http.Handler
 	WorkerGateway    *workergateway.Gateway
 	lifecycle        *lifecycle
@@ -185,11 +185,6 @@ func openWithDatabase(ctx context.Context, db *gorm.DB, config Config, assets fs
 		log.Error("控制面请求发生异常")
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"code": "internal", "message": "控制面内部错误"})
 	}))
-	// pull 通道：装配层启用 MetricsPull 时由这里暴露 Prometheus 抓取端点；
-	// 在 recovery 之后注册，与业务路由共用同一套 panic 兜底。
-	if obs.MetricsHandler != nil {
-		router.Any("/metrics", gin.WrapH(obs.MetricsHandler))
-	}
 	// otelconnect 拦截器只建一次，全部 Connect handler 与远端 MCP 共用。
 	rpcOptions := obs.ConnectOptions()
 	// 不启用默认访问日志，防止token查询串、Cookie或请求正文意外写入日志。
@@ -210,7 +205,6 @@ func openWithDatabase(ctx context.Context, db *gorm.DB, config Config, assets fs
 		// 全局管理员专用 OAuth 客户端管理；oauthService 未装配（未配置 OAuthKey）时失败关闭不注册。
 		mount(transport.NewOAuthAdminHandler(oauthService, log, rpcOptions...))
 	}
-	router.GET("/healthz", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"status": "ok"}) })
 	var remoteMCP http.Handler
 	if oauthService != nil {
 		router.GET("/.well-known/oauth-authorization-server", gin.WrapF(oauthService.Metadata))
@@ -293,7 +287,24 @@ func openWithDatabase(ctx context.Context, db *gorm.DB, config Config, assets fs
 		}
 		userTransfer.ServeHTTP(w, r)
 	})
-	product := &Server{Handler: handler, TransferHandler: transfer, WorkerHandler: workerHTTP, WorkerGateway: gateway, Sources: sources, Inventory: inventoryService, Builds: buildService, BuildSecrets: secretService, RuntimeConfigs: configService, Deployments: deploymentService, Enrollment: enrollmentService, OAuth: oauthService, artifactVerifier: buildVerifier, DB: db, Identity: identityService, Access: access, Sessions: sessions, Log: log, obs: obs, ownObs: ownObs}
+	// 公共入口按前缀分流：/transfer 是源码与构建产物的大文件传输（内部已用
+	// ResponseController 自设 10 分钟绝对截止），不套整体超时；其余业务路由套
+	// 30s 超时预算，等价于原先服务器级 Read/WriteTimeout，二者合一端口后大文件
+	// 传输不再被业务超时截断，业务请求也保留慢速请求防护。
+	public := http.NewServeMux()
+	public.Handle("/transfer/", transfer)
+	public.Handle("/", http.TimeoutHandler(handler, 30*time.Second, "请求处理超时"))
+	// 管理入口与业务分离：healthz 与 /metrics 只在管理监听暴露，公网不可达；
+	// Prometheus 抓取走管理端口或由运维侧代理并做访问控制。
+	admin := http.NewServeMux()
+	admin.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	})
+	if obs.MetricsHandler != nil {
+		admin.Handle("/metrics", obs.MetricsHandler)
+	}
+	product := &Server{Handler: public, AdminHandler: admin, WorkerHandler: workerHTTP, WorkerGateway: gateway, Sources: sources, Inventory: inventoryService, Builds: buildService, BuildSecrets: secretService, RuntimeConfigs: configService, Deployments: deploymentService, Enrollment: enrollmentService, OAuth: oauthService, artifactVerifier: buildVerifier, DB: db, Identity: identityService, Access: access, Sessions: sessions, Log: log, obs: obs, ownObs: ownObs}
 	// 请求外后台循环与 Server 同生命周期；Close 时先停循环再释放数据库与会话。
 	product.lifecycle = product.startLifecycle()
 	return product, nil

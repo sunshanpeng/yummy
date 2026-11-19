@@ -51,13 +51,7 @@ func TestProductHTTPSourceConfigurationBuildAndDeploymentBoundaries(t *testing.T
 	if _, err = product.Identity.InitializeAdmin(context.Background(), "admin", "safe-integration-password"); err != nil {
 		t.Fatal(err)
 	}
-	web.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, "/transfer/") {
-			product.TransferHandler.ServeHTTP(w, r)
-			return
-		}
-		product.Handler.ServeHTTP(w, r)
-	})
+	web.Config.Handler = product.Handler
 	web.Start()
 	t.Cleanup(web.Close)
 	jar, _ := cookiejar.New(nil)

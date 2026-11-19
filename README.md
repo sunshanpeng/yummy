@@ -97,12 +97,12 @@ worker 主动建立长连接，部署在客户网络时通常只需允许它访�
 |---|---|---|
 | `--database-url` / `DATABASE_URL` | `postgres://demo:demo@localhost:5432/demo?sslmode=disable` | PostgreSQL |
 | `--redis-addr` / `REDIS_ADDR` | `localhost:6379` | Redis；支持 `redis://` / `rediss://` URL |
-| `--public-addr` / `PUBLIC_ADDR` | `127.0.0.1:8080` | 页面与公共 ConnectRPC API |
-| `--transfer-addr` / `TRANSFER_ADDR` | `127.0.0.1:8081` | 同进程的文件传输监听（独立避免整体超时截断上传） |
+| `--public-addr` / `PUBLIC_ADDR` | `127.0.0.1:8080` | 页面、ConnectRPC API 与 /transfer 大文件传输 |
+| `--admin-addr` / `ADMIN_ADDR` | `127.0.0.1:8082` | 管理监听：/healthz 与 /metrics，只绑回环，公网不可达 |
 | `--session-key` / `--csrf-key` / `--master-key` | 无（必填） | 三把独立 Base64 32 字节密钥 |
 | `--source-root` / `SOURCE_ROOT` | 无（必填） | 源码归档持久目录，必须预先创建 |
 | `--public-base-url` | 无 | 明确的公开站点根 URL，不从请求头推断 |
-| `--otel-endpoint` / `OTEL_EXPORTER_OTLP_ENDPOINT` | 空 | OTLP push 端点（trace/metric/log），留空关闭；serve 另有 `--metrics-pull` 暴露 `/metrics` |
+| `--otel-endpoint` / `OTEL_EXPORTER_OTLP_ENDPOINT` | 空 | OTLP push 端点（trace/metric/log），留空关闭；serve 另有 `--metrics-pull`（管理端口） 暴露 `/metrics` |
 | `--log-level` / `LOG_LEVEL` | `info` | 日志级别 debug/info/warn/error |
 | `--worker-ca-cert` / `--worker-ca-key` | 空 | worker 签发 CA，留空禁用登记 |
 | `--worker-cert` / `--worker-key` / `--worker-addr` | `127.0.0.1:8443` | worker HTTPS 监听器 |

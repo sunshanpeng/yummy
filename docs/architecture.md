@@ -12,8 +12,8 @@ flowchart TB
     end
 
     subgraph control["控制面进程 bin/platform serve（模块化单体）"]
-        public_listener["公共监听 :8080<br/>页面 + /api Connect RPC + /oauth<br/>+ 远端 MCP（启用 OAuth 时）<br/>+ /metrics（--metrics-pull）"]
-        transfer_listener["传输监听 :8081<br/>源码归档上传（独立超时预算）"]
+        public_listener["公共监听 :8080<br/>页面 + /api Connect RPC + /oauth<br/>+ 远端 MCP（启用 OAuth 时）<br/>+ /transfer 源码与产物传输"]
+        admin_listener["管理监听 :8082（只绑回环）<br/>/healthz + /metrics（--metrics-pull）<br/>公网不可达"]
         worker_listener["worker 网关 :8443<br/>mTLS 双向流长连接"]
         services["业务域服务<br/>账号 / 空间 / 应用 / 构建 / 部署 / 审计<br/>zap JSON 日志 + OTel SDK"]
         public_listener --> services
@@ -51,7 +51,7 @@ flowchart TB
     apprt -->|"pull 镜像"| registry
     visitors["终端用户"] -->|"应用名-后缀.应用根域名"| traefik
     traefik --> apprt
-    prometheus -->|"pull /metrics"| public_listener
+    prometheus -->|"pull /metrics"| admin_listener
     services -.->|"OTLP push（--otel-endpoint）"| collector
     workerproc -.->|"OTLP push"| collector
 ```
@@ -62,7 +62,7 @@ flowchart TB
 |---|---|
 | 常驻进程 | 控制面 ×1 + worker ×N；构建 Pod 按任务拉起、结束即退，不算常驻 |
 | 按需客户端 | CLI（`platform client`）、本地 MCP（`platform mcp --stdio`）——不新增任何常驻服务 |
-| 控制面监听 | :8080 页面与公共 API、:8081 文件传输（独立超时预算）、:8443 worker mTLS |
+| 控制面监听 | :8080 页面/API/传输（传输自带 10 分钟截止，业务 30s 超时预算）、:8082 管理面 /healthz 与 /metrics 只绑回环、:8443 worker mTLS |
 | 数据三件套 | PostgreSQL（事实源）+ source-root（归档）+ master-key，备份必须成套 |
 | 命名约定 | 构建 `build-<空间名>`、运行 `prod-<空间名>`、Deployment `<应用名>-<部署名>`、地址 `<应用名>-<后缀>.<根域名>` |
 | 网络边界 | worker 主动外连控制面，客户网络只需放行控制面 8443 入站；运行命名空间只放行同命名空间与 Traefik 入站 |

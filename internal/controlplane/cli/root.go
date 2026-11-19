@@ -58,7 +58,7 @@ func NewRoot(assets fs.FS, settings map[string]any) *cobra.Command {
 	config.SetDefault("database-url", "postgres://demo:demo@localhost:5432/demo?sslmode=disable")
 	config.SetDefault("redis-addr", "localhost:6379")
 	config.SetDefault("public-addr", "127.0.0.1:8080")
-	config.SetDefault("transfer-addr", "127.0.0.1:8081")
+	config.SetDefault("admin-addr", "127.0.0.1:8082")
 	config.SetDefault("worker-addr", "127.0.0.1:8443")
 	root := &cobra.Command{Use: "platform", Short: "Yummy 应用平台", SilenceUsage: true, SilenceErrors: true}
 	root.SetOut(os.Stdout)
@@ -154,12 +154,13 @@ func NewRoot(assets fs.FS, settings map[string]any) *cobra.Command {
 		} else if config.GetString("worker-cert") != "" || config.GetString("worker-key") != "" {
 			return errors.New("配置 worker HTTPS 证书时必须同时配置 worker CA")
 		}
-		httpServer := &http.Server{Addr: config.GetString("public-addr"), Handler: obs.HTTPHandler("yummy-control-plane", product.Handler), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 2 * time.Minute, MaxHeaderBytes: 64 << 10}
-		// 文件传输与普通API共用控制面进程，但独立监听避免30秒整体超时截断上传。
-		transferServer := &http.Server{Addr: config.GetString("transfer-addr"), Handler: obs.HTTPHandler("yummy-transfer", product.TransferHandler), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 2 * time.Minute, MaxHeaderBytes: 64 << 10}
+		// 业务超时预算在路由层（/transfer 传输自带 10 分钟截止，其余 30s），
+		// 服务器级只保留慢速连接的头部与空闲防护。
+		httpServer := &http.Server{Addr: config.GetString("public-addr"), Handler: obs.HTTPHandler("yummy-control-plane", product.Handler), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 2 * time.Minute, MaxHeaderBytes: 64 << 10}
+		adminServer := &http.Server{Addr: config.GetString("admin-addr"), Handler: product.AdminHandler, ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 2 * time.Minute}
 		errorsChannel := make(chan error, 3)
 		go func() { errorsChannel <- httpServer.ListenAndServe() }()
-		go func() { errorsChannel <- transferServer.ListenAndServe() }()
+		go func() { errorsChannel <- adminServer.ListenAndServe() }()
 		if workerServer != nil {
 			go func() {
 				errorsChannel <- workerServer.ListenAndServeTLS(config.GetString("worker-cert"), config.GetString("worker-key"))
@@ -182,7 +183,7 @@ func NewRoot(assets fs.FS, settings map[string]any) *cobra.Command {
 		if workerServer != nil {
 			workerErr = workerServer.Shutdown(shutdown)
 		}
-		return errors.Join(runErr, workerErr, httpServer.Shutdown(shutdown), transferServer.Shutdown(shutdown))
+		return errors.Join(runErr, workerErr, httpServer.Shutdown(shutdown), adminServer.Shutdown(shutdown))
 	}}
 	for _, flag := range []struct{ name, description string }{
 		{"redis-addr", "Redis 地址或 redis(s) URL"}, {"public-addr", "HTTP 监听地址"}, {"public-base-url", "明确的公开站点根 URL，不从请求头推断"},
@@ -195,14 +196,14 @@ func NewRoot(assets fs.FS, settings map[string]any) *cobra.Command {
 		{"worker-addr", "worker 专用 HTTPS 监听地址（默认127.0.0.1:8443）"},
 		{"worker-cert", "worker 监听器服务端 TLS 证书路径"},
 		{"worker-key", "worker 监听器服务端 TLS 私钥路径"},
-		{"transfer-addr", "同控制面进程的有界文件传输监听地址（默认127.0.0.1:8081）"},
+		{"admin-addr", "管理监听地址：/healthz 与 /metrics，默认只绑回环，公网不可达（默认127.0.0.1:8082）"},
 	} {
 		serve.Flags().String(flag.name, config.GetString(flag.name), flag.description)
 		_ = config.BindPFlag(flag.name, serve.Flags().Lookup(flag.name))
 	}
 	serve.Flags().Bool("allow-local-http", false, "仅开发时允许回环地址HTTP，生产必须HTTPS")
 	_ = config.BindPFlag("allow-local-http", serve.Flags().Lookup("allow-local-http"))
-	serve.Flags().Bool("metrics-pull", config.GetBool("metrics-pull"), "在公共端口暴露 /metrics 供 Prometheus 抓取（pull 通道）")
+	serve.Flags().Bool("metrics-pull", config.GetBool("metrics-pull"), "在管理端口暴露 /metrics 供 Prometheus 抓取（pull 通道）")
 	_ = config.BindPFlag("metrics-pull", serve.Flags().Lookup("metrics-pull"))
 	serve.Flags().Bool("behind-tls-proxy", false, "公网入口由可信反向代理终止HTTPS（docs/operations.md §4），应用收到代理转发请求")
 	_ = config.BindPFlag("behind-tls-proxy", serve.Flags().Lookup("behind-tls-proxy"))

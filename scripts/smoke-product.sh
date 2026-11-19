@@ -7,7 +7,8 @@ container=${YUMMY_SMOKE_PG_CONTAINER:-yummy-postgres-1}
 database=${YUMMY_SMOKE_PG_DATABASE:-yummy_smoke}
 dsn_user=${YUMMY_SMOKE_PG_USER:-demo}
 public_addr=${YUMMY_SMOKE_PUBLIC_ADDR:-127.0.0.1:18080}
-transfer_addr=${YUMMY_SMOKE_TRANSFER_ADDR:-127.0.0.1:18081}
+admin_addr=${YUMMY_SMOKE_ADMIN_ADDR:-127.0.0.1:18082}
+admin_base="http://127.0.0.1:18082"
 base_url="http://127.0.0.1:18080"
 username="smoke-admin"
 password="smoke-only-password-000"
@@ -37,14 +38,14 @@ docker exec "$container" psql -U "$dsn_user" -d postgres -c "CREATE DATABASE $da
 printf '%s' "$password" | "$platform_bin" admin init --database-url "$dsn" --username "$username" --password-stdin >/dev/null
 
 source_root=$(mktemp -d)
-"$platform_bin" serve --database-url "$dsn" --redis-addr localhost:6379 --public-addr "$public_addr" --transfer-addr "$transfer_addr" --public-base-url "$base_url" --session-key "$session_key" --csrf-key "$csrf_key" --master-key "$master_key" --oauth-key "$oauth_key" --source-root "$source_root" --allow-local-http &
+"$platform_bin" serve --database-url "$dsn" --redis-addr localhost:6379 --public-addr "$public_addr" --admin-addr "$admin_addr" --public-base-url "$base_url" --session-key "$session_key" --csrf-key "$csrf_key" --master-key "$master_key" --oauth-key "$oauth_key" --source-root "$source_root" --allow-local-http &
 server_pid=$!
 
 for _ in $(seq 1 80); do
-  curl -fsS "$base_url/healthz" >/dev/null 2>&1 && break
+  curl -fsS "$admin_base/healthz" >/dev/null 2>&1 && break
   sleep 0.1
 done
-curl -fsS "$base_url/healthz" | grep -q '"status":"ok"' || { echo "healthz 未就绪" >&2; exit 1; }
+curl -fsS "$admin_base/healthz" | grep -q '"status":"ok"' || { echo "healthz 未就绪" >&2; exit 1; }
 echo "PASS 迁移与管理员初始化后控制面启动"
 
 cookies=$(mktemp)

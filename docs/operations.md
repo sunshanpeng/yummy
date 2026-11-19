@@ -28,7 +28,7 @@ OAuth、worker TLS、可观测性），键名与命令行 flag 一致，完整�
 | `--database-url` | PostgreSQL 连接地址 |
 | `--redis-addr` | Redis 地址或 redis(s) URL |
 | `--public-addr` | HTTP 监听地址（默认 127.0.0.1:8080） |
-| `--transfer-addr` | 源码传输入口（默认 127.0.0.1:8081，见 §4 反向代理契约） |
+| `--admin-addr` | 管理监听：/healthz 与 /metrics（默认 127.0.0.1:8082，只绑回环，公网不可达，不进反向代理） |
 | `--public-base-url` | 明确的公开站点根 URL，不从请求头推断 |
 | `--session-key` / `--csrf-key` / `--master-key` | 三把独立密钥；master-key 丢失则已加密的源码授权令牌与仓库凭据不可解密，必须随数据库一同备份 |
 | `--oauth-key` | 留空关闭 OAuth 与远程 MCP |
@@ -50,10 +50,9 @@ OAuth、worker TLS、可观测性），键名与命令行 flag 一致，完整�
 
 ## 4. 反向代理与 HTTPS（生产必须）
 
-- 公网入口必须由可信反向代理以 HTTPS 终止，并把 **`/transfer/` 前缀转发到 `--transfer-addr` 且保留原始 Host 头**（传输入口校验 Host 必须等于 `--public-base-url` host，防 DNS 重绑定）。未转发该前缀则源码上传在浏览器端必然 404。
-- 其余路径（`/`、`/api/`、`/oauth/`、`/.well-known/`）转发到 `--public-addr`。
+- 公网入口必须由可信反向代理以 HTTPS 终止，并把全部路径（`/`、`/api/`、`/transfer/`、`/oauth/`、`/.well-known/`）转发到 `--public-addr` 且保留原始 Host 头（传输与会话校验 Host 必须等于 `--public-base-url` host，防 DNS 重绑定）；`/transfer/` 的大文件上传需放宽反代的 body 上限（源码上限见运行配置）。管理监听 `--admin-addr`（/healthz、/metrics）不进反向代理，Prometheus 抓取走管理网络或带访问控制的内部通道。
 - 应用自定义域名 HTTPS：管理员预置 TLS Secret 并通过 `SetDomainTLSSecret` 绑定到域名声明；发布领取时全部域名绑定同一非空 Secret 才下发 HTTPS，否则失败关闭。Traefik/ACME 编排属安装侧职责。
-- 本地开发可用 `--allow-local-http`，但传输入口仍需端口可达（或按 §2 配置后用 e2e 同款转发）。
+- 本地开发可用 `--allow-local-http`。
 
 ## 5. 运行配置与数据保留
 
