@@ -22,6 +22,7 @@
 - 业务按领域划分（工作空间、应用、构建、部署、成员与授权、审计等），域内高内聚（模型、数据访问、服务同域组织）；域间只通过对方显式导出的接口依赖，禁止跨域直查对方数据表或引用对方内部 struct。
 - 基础设施（数据库、Redis、k3s、BuildKit、镜像仓库、OTel）封装在独立适配层，不与业务逻辑混写；业务代码不出现连接串、SQL 字符串、k8s API 对象这类细节。代码布局按本分层落地：`internal/domains/`（业务域）、`internal/infra/`（基础设施适配）、`internal/transport/`（Connect handler 与 worker 网关）、`internal/bff/`（聚合层，现为 MCP 桥）、`internal/controlplane/`（装配：cli/server/webui）；公共类库统一收纳在 `internal/lib/` 下（与 domains/infra 同级成层，现为 `lib/naming`、`lib/observability`、`lib/security`）；新增公共能力默认进 `internal/lib/<名>`，不再新增与 domains 平级的顶层包。lib 内的包必须域无关且不耦合外部系统适配（依赖 gorm/k8s 客户端等的归 infra）。已知例外：部署链（kube/workerexec）共用 runtimeconfig 视图类型，后续以 proto 契约收敛。
 - 数据访问统一走 GORM + gorm.io/gen：常规 CRUD 用生成的 DAO（`store/query`），复杂 SQL（CTE、advisory lock、RETURNING 等）集中到各领域的数据访问文件统一管理；业务代码里不散落手写 SQL 字符串，schema 变更继续走 goose 迁移。
+- 数据库设计规范：每张表必须有单列 `id` TEXT 主键，业务唯一键一律转 UNIQUE 约束保留；id 由应用侧 `security.NewID` 前缀风格生成——`store` 的 Create 回调按模型的 `IDPrefix()` 自动填充空值，业务写入点不手写 id 生成；新表建表即带 id，游标分页与外部引用统一依赖 id。
 - 数据库以 PostgreSQL 为主，但保持可切换 MySQL 的能力：业务代码与迁移默认只用两者通用的 SQL；确需 PG 特有能力（advisory lock、RETURNING、JSONB 操作符、`make_interval` 等）时，收口到领域数据访问文件，并在该 SQL 处加中文注释说明动机与 MySQL 下的替代方案，不散落到业务逻辑里。
 - 需要跨领域聚合的对外接口（如 CMDB、人员与权限、CICD、监控告警这类内部模块的组合查询）由控制面进程内的 BFF 层编排：BFF 只做聚合、裁剪与编排，不写业务规则；领域模块之间不互相直连，前端不直连领域内部接口。BFF 是控制面内的一个分层，不是新进程，不新增常驻服务。现状 MCP 桥即位于 `internal/bff/mcp`。
 

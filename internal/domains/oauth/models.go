@@ -9,7 +9,7 @@ import (
 )
 
 type clientRecord struct {
-	ID           string `gorm:"primaryKey"`
+	ID           string `gorm:"column:id"`
 	Name         string
 	Source       string
 	RedirectURIs []string `gorm:"serializer:json;type:jsonb"`
@@ -25,7 +25,7 @@ func (c clientRecord) fositeClient() fosite.Client {
 }
 
 type consentRecord struct {
-	ID         string     `gorm:"primaryKey"`
+	ID         string     `gorm:"column:id"`
 	Parameters url.Values `gorm:"serializer:json;type:jsonb"`
 	UserID     *string
 	CSRFHash   string
@@ -37,7 +37,7 @@ type consentRecord struct {
 func (consentRecord) TableName() string { return "oauth_requests" }
 
 type grantRecord struct {
-	ID             string `gorm:"primaryKey"`
+	ID             string `gorm:"column:id"`
 	UserID         string
 	ClientID       string
 	Resource       string
@@ -52,34 +52,40 @@ type grantRecord struct {
 func (grantRecord) TableName() string { return "oauth_grants" }
 
 type protocolRecord struct {
-	Kind      string `gorm:"primaryKey"`
-	Signature string `gorm:"primaryKey"`
+	ID        string `gorm:"column:id;primaryKey"`
+	Kind      string `gorm:"column:kind"`
+	Signature string `gorm:"column:signature"`
 	RequestID string
 	Payload   []byte `gorm:"type:jsonb"`
 	Active    bool
 	CreatedAt time.Time
 }
 
+func (protocolRecord) IDPrefix() string  { return "ses" }
 func (protocolRecord) TableName() string { return "oauth_sessions" }
 
 type assertionRecord struct {
-	JTIHash   string `gorm:"primaryKey"`
+	ID        string `gorm:"column:id;primaryKey"`
+	JTIHash   string `gorm:"column:j_t_i_hash"`
 	ExpiresAt time.Time
 }
 
+func (assertionRecord) IDPrefix() string  { return "asn" }
 func (assertionRecord) TableName() string { return "oauth_client_assertions" }
 
 type oidcBindingRecord struct {
-	Issuer    string `gorm:"primaryKey"`
-	Subject   string `gorm:"primaryKey"`
+	ID        string `gorm:"column:id;primaryKey"`
+	Issuer    string `gorm:"column:issuer"`
+	Subject   string `gorm:"column:subject"`
 	UserID    string
 	CreatedAt time.Time
 }
 
+func (oidcBindingRecord) IDPrefix() string  { return "oib" }
 func (oidcBindingRecord) TableName() string { return "oidc_identity_bindings" }
 
 type oidcLoginRecord struct {
-	ID                 string `gorm:"primaryKey"`
+	ID                 string `gorm:"column:id"`
 	ProviderName       string
 	StateHash          string
 	BrowserBindingHash string

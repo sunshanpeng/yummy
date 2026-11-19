@@ -15,7 +15,8 @@ import (
 // domainClaimRecord 只读投影 application_domain_claims；域名占用由发布受理
 // （deployment.claimDomains）维护，inventory 只管理其 TLS 绑定列，不创建/删除声明。
 type domainClaimRecord struct {
-	Domain        string `gorm:"primaryKey"`
+	ID            string `gorm:"column:id;primaryKey"`
+	Domain        string `gorm:"column:domain"`
 	WorkspaceID   string
 	ApplicationID string
 	IsDefault     bool
@@ -23,6 +24,7 @@ type domainClaimRecord struct {
 	CreatedAt     time.Time
 }
 
+func (domainClaimRecord) IDPrefix() string  { return "dcl" }
 func (domainClaimRecord) TableName() string { return "application_domain_claims" }
 
 // DomainTLSView 是域名当前证书绑定的只读视图；空 SecretName 表示未绑定。

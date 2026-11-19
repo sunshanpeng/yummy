@@ -45,13 +45,15 @@ type Workspace struct {
 func (Workspace) TableName() string { return "workspaces" }
 
 type WorkspaceMember struct {
-	WorkspaceID string    `gorm:"column:workspace_id;primaryKey"`
-	UserID      string    `gorm:"column:user_id;primaryKey"`
+	ID          string    `gorm:"column:id;primaryKey"`
+	WorkspaceID string    `gorm:"column:workspace_id"`
+	UserID      string    `gorm:"column:user_id"`
 	Role        string    `gorm:"column:role"`
 	CreatedAt   time.Time `gorm:"column:created_at"`
 	UpdatedAt   time.Time `gorm:"column:updated_at"`
 }
 
+func (WorkspaceMember) IDPrefix() string  { return "wm" }
 func (WorkspaceMember) TableName() string { return "workspace_members" }
 
 type Application struct {
@@ -71,14 +73,16 @@ type Application struct {
 func (Application) TableName() string { return "applications" }
 
 type ApplicationMember struct {
+	ID            string    `gorm:"column:id;primaryKey"`
 	WorkspaceID   string    `gorm:"column:workspace_id"`
-	ApplicationID string    `gorm:"column:application_id;primaryKey"`
-	UserID        string    `gorm:"column:user_id;primaryKey"`
+	ApplicationID string    `gorm:"column:application_id"`
+	UserID        string    `gorm:"column:user_id"`
 	Role          string    `gorm:"column:role"`
 	CreatedAt     time.Time `gorm:"column:created_at"`
 	UpdatedAt     time.Time `gorm:"column:updated_at"`
 }
 
+func (ApplicationMember) IDPrefix() string  { return "am" }
 func (ApplicationMember) TableName() string { return "application_members" }
 
 type Invitation struct {
@@ -114,11 +118,13 @@ func (AccessToken) TableName() string { return "access_tokens" }
 
 // AccessTokenApplication 是授权上限，不代替每次调用时的用户角色和状态校验。
 type AccessTokenApplication struct {
-	TokenID       string `gorm:"column:token_id;primaryKey"`
-	WorkspaceID   string `gorm:"column:workspace_id;primaryKey"`
-	ApplicationID string `gorm:"column:application_id;primaryKey"`
+	ID            string `gorm:"column:id;primaryKey"`
+	TokenID       string `gorm:"column:token_id"`
+	WorkspaceID   string `gorm:"column:workspace_id"`
+	ApplicationID string `gorm:"column:application_id"`
 }
 
+func (AccessTokenApplication) IDPrefix() string  { return "ata" }
 func (AccessTokenApplication) TableName() string { return "access_token_applications" }
 
 // AuditEvent 只记录可公开的操作事实，禁止放入密码、凭证明文或请求正文。
@@ -150,13 +156,15 @@ func (PasswordReset) TableName() string { return "password_resets" }
 
 // IdempotencyKey 与创建的业务资源在同一事务提交，禁止登记没有对应结果的占位行。
 type IdempotencyKey struct {
-	WorkspaceID string    `gorm:"column:workspace_id;primaryKey"`
-	ActorID     string    `gorm:"column:actor_id;primaryKey"`
-	Action      string    `gorm:"column:action;primaryKey"`
-	Key         string    `gorm:"column:key;primaryKey"`
+	ID          string    `gorm:"column:id;primaryKey"`
+	WorkspaceID string    `gorm:"column:workspace_id"`
+	ActorID     string    `gorm:"column:actor_id"`
+	Action      string    `gorm:"column:action"`
+	Key         string    `gorm:"column:key"`
 	Fingerprint string    `gorm:"column:fingerprint"`
 	ResultID    string    `gorm:"column:result_id"`
 	CreatedAt   time.Time `gorm:"column:created_at"`
 }
 
+func (IdempotencyKey) IDPrefix() string  { return "idk" }
 func (IdempotencyKey) TableName() string { return "idempotency_keys" }

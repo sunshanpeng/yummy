@@ -4,7 +4,7 @@ import "time"
 
 // nodeRecord 是 inventory 的只读身份投影；本模块唯一写入是明确的停用/资格撤销动作。
 type nodeRecord struct {
-	ID       string `gorm:"primaryKey"`
+	ID       string `gorm:"column:id"`
 	WorkerID string
 	Status   string
 	Revision int64
@@ -13,7 +13,7 @@ type nodeRecord struct {
 func (nodeRecord) TableName() string { return "execution_nodes" }
 
 type registrationRecord struct {
-	ID         string `gorm:"primaryKey"`
+	ID         string `gorm:"column:id"`
 	NodeID     string
 	TokenHash  string
 	CreatedBy  string
@@ -26,7 +26,8 @@ type registrationRecord struct {
 func (registrationRecord) TableName() string { return "worker_registration_tokens" }
 
 type certificateRecord struct {
-	Serial            string `gorm:"primaryKey"`
+	ID                string `gorm:"column:id;primaryKey"`
+	Serial            string `gorm:"column:serial"`
 	NodeID            string
 	WorkerID          string
 	CertificateSHA256 string
@@ -38,10 +39,11 @@ type certificateRecord struct {
 	RotatedFrom       *string
 }
 
+func (certificateRecord) IDPrefix() string  { return "wct" }
 func (certificateRecord) TableName() string { return "worker_certificates" }
 
 type credentialEvent struct {
-	ID        string `gorm:"primaryKey"`
+	ID        string `gorm:"column:id"`
 	NodeID    string
 	WorkerID  string
 	Serial    string

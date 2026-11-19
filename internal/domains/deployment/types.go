@@ -71,6 +71,7 @@ type RollbackInput struct {
 }
 
 type Placement struct {
+	ID             string    `gorm:"column:id;primaryKey"`
 	WorkspaceID    string    `json:"workspaceId"`
 	ApplicationID  string    `json:"applicationId"`
 	InstanceID     string    `json:"instanceId"`
@@ -83,6 +84,7 @@ type Placement struct {
 	CreatedAt      time.Time `json:"createdAt"`
 }
 
+func (Placement) IDPrefix() string  { return "plc" }
 func (Placement) TableName() string { return "application_placements" }
 
 type ArtifactSnapshot struct {

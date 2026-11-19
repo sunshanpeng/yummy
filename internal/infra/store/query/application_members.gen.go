@@ -28,6 +28,7 @@ func newApplicationMember(db *gorm.DB, opts ...gen.DOOption) applicationMember {
 
 	tableName := _applicationMember.applicationMemberDo.TableName()
 	_applicationMember.ALL = field.NewAsterisk(tableName)
+	_applicationMember.ID = field.NewString(tableName, "id")
 	_applicationMember.WorkspaceID = field.NewString(tableName, "workspace_id")
 	_applicationMember.ApplicationID = field.NewString(tableName, "application_id")
 	_applicationMember.UserID = field.NewString(tableName, "user_id")
@@ -44,6 +45,7 @@ type applicationMember struct {
 	applicationMemberDo applicationMemberDo
 
 	ALL           field.Asterisk
+	ID            field.String
 	WorkspaceID   field.String
 	ApplicationID field.String
 	UserID        field.String
@@ -66,6 +68,7 @@ func (a applicationMember) As(alias string) *applicationMember {
 
 func (a *applicationMember) updateTableName(table string) *applicationMember {
 	a.ALL = field.NewAsterisk(table)
+	a.ID = field.NewString(table, "id")
 	a.WorkspaceID = field.NewString(table, "workspace_id")
 	a.ApplicationID = field.NewString(table, "application_id")
 	a.UserID = field.NewString(table, "user_id")
@@ -100,7 +103,8 @@ func (a *applicationMember) GetFieldByName(fieldName string) (field.OrderExpr, b
 }
 
 func (a *applicationMember) fillFieldMap() {
-	a.fieldMap = make(map[string]field.Expr, 6)
+	a.fieldMap = make(map[string]field.Expr, 7)
+	a.fieldMap["id"] = a.ID
 	a.fieldMap["workspace_id"] = a.WorkspaceID
 	a.fieldMap["application_id"] = a.ApplicationID
 	a.fieldMap["user_id"] = a.UserID

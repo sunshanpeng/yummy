@@ -28,6 +28,7 @@ func newWorkspaceMember(db *gorm.DB, opts ...gen.DOOption) workspaceMember {
 
 	tableName := _workspaceMember.workspaceMemberDo.TableName()
 	_workspaceMember.ALL = field.NewAsterisk(tableName)
+	_workspaceMember.ID = field.NewString(tableName, "id")
 	_workspaceMember.WorkspaceID = field.NewString(tableName, "workspace_id")
 	_workspaceMember.UserID = field.NewString(tableName, "user_id")
 	_workspaceMember.Role = field.NewString(tableName, "role")
@@ -43,6 +44,7 @@ type workspaceMember struct {
 	workspaceMemberDo workspaceMemberDo
 
 	ALL         field.Asterisk
+	ID          field.String
 	WorkspaceID field.String
 	UserID      field.String
 	Role        field.String
@@ -64,6 +66,7 @@ func (w workspaceMember) As(alias string) *workspaceMember {
 
 func (w *workspaceMember) updateTableName(table string) *workspaceMember {
 	w.ALL = field.NewAsterisk(table)
+	w.ID = field.NewString(table, "id")
 	w.WorkspaceID = field.NewString(table, "workspace_id")
 	w.UserID = field.NewString(table, "user_id")
 	w.Role = field.NewString(table, "role")
@@ -97,7 +100,8 @@ func (w *workspaceMember) GetFieldByName(fieldName string) (field.OrderExpr, boo
 }
 
 func (w *workspaceMember) fillFieldMap() {
-	w.fieldMap = make(map[string]field.Expr, 5)
+	w.fieldMap = make(map[string]field.Expr, 6)
+	w.fieldMap["id"] = w.ID
 	w.fieldMap["workspace_id"] = w.WorkspaceID
 	w.fieldMap["user_id"] = w.UserID
 	w.fieldMap["role"] = w.Role

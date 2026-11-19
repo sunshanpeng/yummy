@@ -44,6 +44,8 @@ func Open(ctx context.Context, databaseURL string) (*gorm.DB, error) {
 		_ = sqlDB.Close()
 		return nil, fmt.Errorf("初始化数据库访问层: %w", err)
 	}
+	// 数据库设计规范：每张表必有单列 id 主键，Create 时按模型前缀自动填充。
+	RegisterIDCallback(db)
 	return db, nil
 }
 

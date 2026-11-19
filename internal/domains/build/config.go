@@ -14,11 +14,13 @@ type SecretResolver interface {
 	Resolve(*gorm.DB, string, string, []buildsecret.Ref) ([]buildsecret.Ref, error)
 }
 type secretReferenceRecord struct {
+	ID                                            string `gorm:"column:id;primaryKey"`
 	WorkspaceID, ApplicationID, BuildID, SecretID string
 	Version                                       int64
 	Name                                          string
 }
 
+func (secretReferenceRecord) IDPrefix() string  { return "bsr" }
 func (secretReferenceRecord) TableName() string { return "build_secret_references" }
 func (s *Service) resolveSecrets(tx *gorm.DB, ws, app string, refs []SecretRef) ([]SecretRef, error) {
 	if len(refs) == 0 {

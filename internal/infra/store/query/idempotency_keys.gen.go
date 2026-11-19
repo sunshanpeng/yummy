@@ -28,6 +28,7 @@ func newIdempotencyKey(db *gorm.DB, opts ...gen.DOOption) idempotencyKey {
 
 	tableName := _idempotencyKey.idempotencyKeyDo.TableName()
 	_idempotencyKey.ALL = field.NewAsterisk(tableName)
+	_idempotencyKey.ID = field.NewString(tableName, "id")
 	_idempotencyKey.WorkspaceID = field.NewString(tableName, "workspace_id")
 	_idempotencyKey.ActorID = field.NewString(tableName, "actor_id")
 	_idempotencyKey.Action = field.NewString(tableName, "action")
@@ -45,6 +46,7 @@ type idempotencyKey struct {
 	idempotencyKeyDo idempotencyKeyDo
 
 	ALL         field.Asterisk
+	ID          field.String
 	WorkspaceID field.String
 	ActorID     field.String
 	Action      field.String
@@ -68,6 +70,7 @@ func (i idempotencyKey) As(alias string) *idempotencyKey {
 
 func (i *idempotencyKey) updateTableName(table string) *idempotencyKey {
 	i.ALL = field.NewAsterisk(table)
+	i.ID = field.NewString(table, "id")
 	i.WorkspaceID = field.NewString(table, "workspace_id")
 	i.ActorID = field.NewString(table, "actor_id")
 	i.Action = field.NewString(table, "action")
@@ -103,7 +106,8 @@ func (i *idempotencyKey) GetFieldByName(fieldName string) (field.OrderExpr, bool
 }
 
 func (i *idempotencyKey) fillFieldMap() {
-	i.fieldMap = make(map[string]field.Expr, 7)
+	i.fieldMap = make(map[string]field.Expr, 8)
+	i.fieldMap["id"] = i.ID
 	i.fieldMap["workspace_id"] = i.WorkspaceID
 	i.fieldMap["actor_id"] = i.ActorID
 	i.fieldMap["action"] = i.Action

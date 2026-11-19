@@ -53,12 +53,14 @@ type secretRecord struct {
 func (secretRecord) TableName() string { return "application_build_secrets" }
 
 type versionRecord struct {
-	SecretID       string    `gorm:"column:secret_id;primaryKey"`
-	Version        int64     `gorm:"column:version;primaryKey"`
+	ID             string    `gorm:"column:id;primaryKey"`
+	SecretID       string    `gorm:"column:secret_id"`
+	Version        int64     `gorm:"column:version"`
 	WorkspaceID    string    `gorm:"column:workspace_id"`
 	ApplicationID  string    `gorm:"column:application_id"`
 	EncryptedValue []byte    `gorm:"column:encrypted_value" json:"-"`
 	CreatedAt      time.Time `gorm:"column:created_at"`
 }
 
+func (versionRecord) IDPrefix() string  { return "bsv" }
 func (versionRecord) TableName() string { return "application_build_secret_versions" }

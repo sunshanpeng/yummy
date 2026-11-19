@@ -7,7 +7,7 @@ import (
 )
 
 type releaseRecord struct {
-	ID                                     string `gorm:"primaryKey"`
+	ID                                     string `gorm:"column:id"`
 	WorkspaceID, ApplicationID, ArtifactID string
 	RuntimeConfigRevision                  int64
 	RegistryID                             string
@@ -25,7 +25,7 @@ type releaseRecord struct {
 func (releaseRecord) TableName() string { return "application_releases" }
 
 type operationRecord struct {
-	ID                                              string `gorm:"primaryKey"`
+	ID                                              string `gorm:"column:id"`
 	WorkspaceID, ApplicationID, ReleaseID           string
 	Generation                                      int64
 	Action, State                                   string
@@ -46,7 +46,8 @@ type operationRecord struct {
 func (operationRecord) TableName() string { return "deployment_operations" }
 
 type stateRecord struct {
-	ApplicationID                                         string `gorm:"primaryKey"`
+	ID                                                    string `gorm:"column:id;primaryKey"`
+	ApplicationID                                         string `gorm:"column:application_i_d"`
 	WorkspaceID                                           string
 	Generation                                            int64
 	DesiredState                                          string
@@ -57,10 +58,11 @@ type stateRecord struct {
 	UpdatedAt                                             time.Time
 }
 
+func (stateRecord) IDPrefix() string  { return "ars" }
 func (stateRecord) TableName() string { return "application_runtime_states" }
 
 type domainRecord struct {
-	Domain        string `gorm:"primaryKey"`
+	Domain        string `gorm:"column:domain"`
 	WorkspaceID   string
 	ApplicationID string
 	IsDefault     bool
@@ -73,6 +75,7 @@ type domainRecord struct {
 func (domainRecord) TableName() string { return "application_domain_claims" }
 
 type observationRecord struct {
+	ID                                               string `gorm:"column:id;primaryKey"`
 	WorkspaceID, ApplicationID, OperationID          string
 	Seq                                              int64
 	NodeID, WorkerID, CertificateSerial, PayloadHash string
@@ -80,10 +83,11 @@ type observationRecord struct {
 	CollectedAt, CreatedAt                           time.Time
 }
 
+func (observationRecord) IDPrefix() string  { return "rob" }
 func (observationRecord) TableName() string { return "runtime_observations" }
 
 type probeRecord struct {
-	ID                                      string `gorm:"primaryKey"`
+	ID                                      string `gorm:"column:id"`
 	WorkspaceID, ApplicationID, OperationID string
 	Generation                              int64
 	Domain, Path, PodUID                    string
@@ -95,7 +99,7 @@ func (probeRecord) TableName() string { return "deployment_probe_evidence" }
 
 // runtimeLogChunkRecord 是应用运行日志块的持久化记录；内容上限由数据库 CHECK 约束兜底。
 type runtimeLogChunkRecord struct {
-	ID                                            string `gorm:"primaryKey"`
+	ID                                            string `gorm:"column:id"`
 	WorkspaceID, ApplicationID, PodUID, Container string
 	RestartCount                                  int32
 	Seq                                           int64
@@ -109,7 +113,7 @@ func (runtimeLogChunkRecord) TableName() string { return "runtime_log_chunks" }
 
 // runtimeMetricSampleRecord 是 CPU/内存采样的持久化记录；collected_at 来自 worker 上报。
 type runtimeMetricSampleRecord struct {
-	ID                                                   string `gorm:"primaryKey"`
+	ID                                                   string `gorm:"column:id"`
 	WorkspaceID, ApplicationID, ReleaseID, PodUID        string
 	Generation                                           int64
 	CPUNanoCores, CPUWindowMillis, MemoryWorkingSetBytes int64
@@ -138,6 +142,7 @@ type settingsRecord struct {
 func (settingsRecord) TableName() string { return "instance_settings" }
 
 type policyRecord struct {
+	ID                        string `gorm:"column:id;primaryKey"`
 	InstanceID                string
 	Revision                  int64
 	RuntimeNodeID, BaseDomain string
@@ -145,6 +150,7 @@ type policyRecord struct {
 	AutoRecoveryEnabled       bool
 }
 
+func (policyRecord) IDPrefix() string  { return "iep" }
 func (policyRecord) TableName() string { return "instance_execution_policies" }
 
 type nodeRecord struct {
@@ -156,6 +162,7 @@ type nodeRecord struct {
 func (nodeRecord) TableName() string { return "execution_nodes" }
 
 type allocationRecord struct {
+	ID          string `gorm:"column:id;primaryKey"`
 	WorkspaceID string `gorm:"column:workspace_id"`
 	InstanceID  string `gorm:"column:instance_id"`
 	CPUMillis   int64  `gorm:"column:cpu_millis"`
@@ -163,14 +170,17 @@ type allocationRecord struct {
 	Revision    int64  `gorm:"column:revision"`
 }
 
+func (allocationRecord) IDPrefix() string  { return "wal" }
 func (allocationRecord) TableName() string { return "workspace_allocations" }
 
 type certificateRecord struct {
+	ID                                          string `gorm:"column:id;primaryKey"`
 	Serial, NodeID, WorkerID, CertificateSHA256 string
 	NotBefore, NotAfter                         time.Time
 	RevokedAt                                   *time.Time
 }
 
+func (certificateRecord) IDPrefix() string  { return "wct" }
 func (certificateRecord) TableName() string { return "worker_certificates" }
 
 func optional(value string) *string {

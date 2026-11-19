@@ -28,6 +28,7 @@ func newAccessTokenApplication(db *gorm.DB, opts ...gen.DOOption) accessTokenApp
 
 	tableName := _accessTokenApplication.accessTokenApplicationDo.TableName()
 	_accessTokenApplication.ALL = field.NewAsterisk(tableName)
+	_accessTokenApplication.ID = field.NewString(tableName, "id")
 	_accessTokenApplication.TokenID = field.NewString(tableName, "token_id")
 	_accessTokenApplication.WorkspaceID = field.NewString(tableName, "workspace_id")
 	_accessTokenApplication.ApplicationID = field.NewString(tableName, "application_id")
@@ -41,6 +42,7 @@ type accessTokenApplication struct {
 	accessTokenApplicationDo accessTokenApplicationDo
 
 	ALL           field.Asterisk
+	ID            field.String
 	TokenID       field.String
 	WorkspaceID   field.String
 	ApplicationID field.String
@@ -60,6 +62,7 @@ func (a accessTokenApplication) As(alias string) *accessTokenApplication {
 
 func (a *accessTokenApplication) updateTableName(table string) *accessTokenApplication {
 	a.ALL = field.NewAsterisk(table)
+	a.ID = field.NewString(table, "id")
 	a.TokenID = field.NewString(table, "token_id")
 	a.WorkspaceID = field.NewString(table, "workspace_id")
 	a.ApplicationID = field.NewString(table, "application_id")
@@ -91,7 +94,8 @@ func (a *accessTokenApplication) GetFieldByName(fieldName string) (field.OrderEx
 }
 
 func (a *accessTokenApplication) fillFieldMap() {
-	a.fieldMap = make(map[string]field.Expr, 3)
+	a.fieldMap = make(map[string]field.Expr, 4)
+	a.fieldMap["id"] = a.ID
 	a.fieldMap["token_id"] = a.TokenID
 	a.fieldMap["workspace_id"] = a.WorkspaceID
 	a.fieldMap["application_id"] = a.ApplicationID

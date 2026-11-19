@@ -7,7 +7,7 @@ import (
 )
 
 type buildRecord struct {
-	ID                                                             string `gorm:"primaryKey"`
+	ID                                                             string `gorm:"column:id"`
 	WorkspaceID, ApplicationID, ActorID                            string
 	ActorAuthVersion                                               int64
 	TokenID                                                        *string
@@ -34,7 +34,7 @@ type buildRecord struct {
 func (buildRecord) TableName() string { return "builds" }
 
 type attemptRecord struct {
-	ID                                                                     string `gorm:"primaryKey"`
+	ID                                                                     string `gorm:"column:id"`
 	WorkspaceID, ApplicationID, BuildID, NodeID, WorkerID, JobName, JobUID string
 	Occupied                                                               bool
 	EventSeq, LogSeq                                                       int64
@@ -47,6 +47,7 @@ type attemptRecord struct {
 func (attemptRecord) TableName() string { return "build_attempts" }
 
 type eventRecord struct {
+	ID                                             string `gorm:"column:id;primaryKey"`
 	WorkspaceID, ApplicationID, BuildID, AttemptID string
 	Seq                                            int64
 	PayloadHash                                    string
@@ -54,9 +55,11 @@ type eventRecord struct {
 	CreatedAt                                      time.Time
 }
 
+func (eventRecord) IDPrefix() string  { return "bev" }
 func (eventRecord) TableName() string { return "build_events" }
 
 type logRecord struct {
+	ID                                             string `gorm:"column:id;primaryKey"`
 	WorkspaceID, ApplicationID, BuildID, AttemptID string
 	Seq                                            int64
 	PayloadHash                                    string
@@ -65,10 +68,11 @@ type logRecord struct {
 	CreatedAt                                      time.Time
 }
 
+func (logRecord) IDPrefix() string  { return "blc" }
 func (logRecord) TableName() string { return "build_log_chunks" }
 
 type artifactRecord struct {
-	ID                                                         string `gorm:"primaryKey"`
+	ID                                                         string `gorm:"column:id"`
 	WorkspaceID, ApplicationID, BuildID, AttemptID, RegistryID string
 	CredentialVersion                                          int64
 	Repository, Tag, Digest, Platform, State                   string
@@ -79,6 +83,7 @@ type artifactRecord struct {
 func (artifactRecord) TableName() string { return "build_artifacts" }
 
 type configRecord struct {
+	ID                         string `gorm:"column:id;primaryKey"`
 	WorkspaceID, ApplicationID string
 	Revision                   int64
 	Spec                       Config `gorm:"serializer:json;type:jsonb"`
@@ -86,6 +91,7 @@ type configRecord struct {
 	CreatedAt                  time.Time
 }
 
+func (configRecord) IDPrefix() string  { return "bcr" }
 func (configRecord) TableName() string { return "build_config_revisions" }
 
 // 以下是其他模块表的只读投影，不扩展 central model 或生成查询。
@@ -105,12 +111,14 @@ type settingsRecord struct {
 func (settingsRecord) TableName() string { return "instance_settings" }
 
 type policyRecord struct {
+	ID                                        string `gorm:"column:id;primaryKey"`
 	InstanceID                                string
 	Revision                                  int64
 	BuildNodeID, RegistryID, RepositoryPrefix string
 	ResourceDefault, ResourceLimits           inventory.Resources `gorm:"serializer:json;type:jsonb"`
 }
 
+func (policyRecord) IDPrefix() string  { return "iep" }
 func (policyRecord) TableName() string { return "instance_execution_policies" }
 
 type nodeRecord struct {
@@ -132,10 +140,12 @@ type registryRecord struct {
 func (registryRecord) TableName() string { return "registries" }
 
 type allocationRecord struct {
+	ID                      string `gorm:"column:id;primaryKey"`
 	WorkspaceID, InstanceID string
 	BuildConcurrency        int
 	CPUMillis               int64 `gorm:"column:cpu_millis"`
 	MemoryMiB               int64 `gorm:"column:memory_mib"`
 }
 
+func (allocationRecord) IDPrefix() string  { return "wal" }
 func (allocationRecord) TableName() string { return "workspace_allocations" }
