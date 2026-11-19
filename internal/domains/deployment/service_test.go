@@ -16,9 +16,9 @@ import (
 	"github.com/sunshanpeng/yummy/internal/domains/build"
 	"github.com/sunshanpeng/yummy/internal/domains/inventory"
 	"github.com/sunshanpeng/yummy/internal/domains/runtimeconfig"
-	"github.com/sunshanpeng/yummy/internal/lib/security"
 	"github.com/sunshanpeng/yummy/internal/infra/store/model"
 	"github.com/sunshanpeng/yummy/internal/infra/testkit"
+	"github.com/sunshanpeng/yummy/internal/lib/security"
 	"gorm.io/gorm"
 )
 

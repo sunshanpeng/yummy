@@ -13,7 +13,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sunshanpeng/yummy/internal/bff/mcp"
 	"github.com/sunshanpeng/yummy/internal/domains/application"
-	"github.com/sunshanpeng/yummy/internal/domains/audit"
 	"github.com/sunshanpeng/yummy/internal/domains/authorization"
 	"github.com/sunshanpeng/yummy/internal/domains/build"
 	"github.com/sunshanpeng/yummy/internal/domains/buildsecret"
@@ -27,9 +26,9 @@ import (
 	"github.com/sunshanpeng/yummy/internal/domains/session"
 	"github.com/sunshanpeng/yummy/internal/domains/source"
 	"github.com/sunshanpeng/yummy/internal/domains/workspace"
-	"github.com/sunshanpeng/yummy/internal/lib/security"
 	"github.com/sunshanpeng/yummy/internal/infra/store"
 	"github.com/sunshanpeng/yummy/internal/lib/observability"
+	"github.com/sunshanpeng/yummy/internal/lib/security"
 	"github.com/sunshanpeng/yummy/internal/transport"
 	"github.com/sunshanpeng/yummy/internal/transport/workergateway"
 	"go.uber.org/zap"
@@ -264,20 +263,18 @@ func openWithDatabase(ctx context.Context, db *gorm.DB, config Config, assets fs
 		}
 		protected.ServeHTTP(w, r)
 	})
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		id, err := security.NewID("req")
-		if err != nil {
-			http.Error(w, "无法生成请求编号", http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("X-Request-ID", id)
+	var handler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// 排障标识统一为 W3C trace_id：入口 otelhttp 已解析/生成并写入上下文，
+		// 响应头 X-Trace-Id 由 TraceResponseHeader 输出，日志与审计同源取值；
+		// 原 X-Request-ID 请求编号体系已废除。
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "no-referrer")
-		entry.ServeHTTP(w, r.WithContext(audit.WithRequestID(r.Context(), id)))
+		entry.ServeHTTP(w, r)
 	})
+	handler = observability.TraceResponseHeader(handler)
 	userTransfer := sessions.Middleware(transport.TransferHandler(sources, log))
 	buildTransfer := transport.BuildGrantHandler(sources)
 	transfer := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

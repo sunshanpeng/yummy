@@ -13,8 +13,8 @@ import (
 
 	"github.com/sunshanpeng/yummy/internal/domains/authorization"
 	"github.com/sunshanpeng/yummy/internal/domains/buildsecret"
-	"github.com/sunshanpeng/yummy/internal/lib/security"
 	"github.com/sunshanpeng/yummy/internal/infra/store/model"
+	"github.com/sunshanpeng/yummy/internal/lib/security"
 )
 
 func TestSecretReferencesFreezeVersionAndRejectCrossApplication(t *testing.T) {

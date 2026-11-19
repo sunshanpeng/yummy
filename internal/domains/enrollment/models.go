@@ -46,7 +46,7 @@ type credentialEvent struct {
 	WorkerID  string
 	Serial    string
 	Action    string
-	RequestID string
+	TraceID   string
 	CreatedAt time.Time
 }
 

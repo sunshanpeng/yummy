@@ -12,8 +12,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/sunshanpeng/yummy/internal/domains/authorization"
-	"github.com/sunshanpeng/yummy/internal/lib/security"
 	"github.com/sunshanpeng/yummy/internal/lib/naming"
+	"github.com/sunshanpeng/yummy/internal/lib/security"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )

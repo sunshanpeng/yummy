@@ -26,10 +26,10 @@ import (
 	"github.com/sunshanpeng/yummy/internal/domains/build"
 	"github.com/sunshanpeng/yummy/internal/domains/deployment"
 	"github.com/sunshanpeng/yummy/internal/domains/enrollment"
-	"github.com/sunshanpeng/yummy/internal/lib/security"
 	"github.com/sunshanpeng/yummy/internal/infra/sourcearchive"
 	"github.com/sunshanpeng/yummy/internal/infra/store/model"
 	"github.com/sunshanpeng/yummy/internal/infra/testkit"
+	"github.com/sunshanpeng/yummy/internal/lib/security"
 )
 
 // 使用正式装配与真实 PG/Redis/文件卷；只有节点资格门禁的单独分支显式置测试事实。

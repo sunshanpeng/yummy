@@ -15,12 +15,14 @@ import (
 	"net/http"
 	"os"
 
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	otelprometheus "go.opentelemetry.io/otel/exporters/prometheus"
 	otelmetric "go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/propagation"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -60,6 +62,9 @@ func Start(ctx context.Context, opts Options) (*Runtime, error) {
 		opts.TraceRatio = 1
 	}
 	r := &Runtime{options: opts}
+	// 全局传播器必须显式设置：otel v1.47 起默认全局为空，不设置则 W3C
+	// traceparent 的解析与注入全部失效，跨进程链路断开。
+	otel.SetTextMapPropagator(propagation.TraceContext{})
 
 	res, err := resource.Merge(resource.Default(),
 		resource.NewSchemaless(

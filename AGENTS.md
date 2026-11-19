@@ -29,6 +29,7 @@
 
 - trace / metric / log 三信号统一走 OpenTelemetry SDK，控制面与 worker 共用同一套基建；trace 上下文贯穿 HTTP、Connect RPC、后台任务与 worker 执行。
 - 日志统一 zap 的 JSON 编码输出并桥接 OTel Logs，字段与级别集中管理（level、caller、trace_id/span_id）；不散落 fmt.Print 与标准库 log，不手拼日志文案。
+- 排障标识统一 W3C trace_id：入口 otelhttp 解析/生成 trace（全局 propagator 必须显式设置，otel v1.47 起默认为空），响应头 `X-Trace-Id`、日志 trace_id 字段、审计 `trace_id` 列三者同源取自同一 span 上下文；不使用独立请求编号（原 X-Request-ID 已废除）。
 - 指标同时支持两种导出模式：pull（控制面与 worker 暴露 /metrics 供 Prometheus 抓取，挂在管理监听 `--admin-addr`，不与业务同端口、公网不可达）与 push（OTLP exporter 推送 collector），按实例部署形态可独立启停。
 - 指标命名区分运行时与业务域（HTTP/RPC、构建、部署、队列），构建、部署、健康探测等关键链路必须埋点；tracer/meter 的获取与 SDK 初始化封装进公共库，业务代码只声明指标名与属性。
 - 现状：三信号公共库为 `internal/lib/observability`（zap JSON 编码 + otelzap 桥接 OTel Logs；Prometheus pull 与 OTLP push 双通道；otelhttp/otelconnect 接线）。控制面、worker、build-runner 均已接入：push 用 `--otel-endpoint`（或环境变量 `OTEL_EXPORTER_OTLP_ENDPOINT`），pull 用 serve 的 `--metrics-pull` 在管理监听暴露 `/metrics`；/healthz 同在管理监听，业务公共端口不承载管理端点。

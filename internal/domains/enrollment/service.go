@@ -199,7 +199,7 @@ func (s *Service) recordCredentialEvent(tx *gorm.DB, certificate certificateReco
 	if err != nil {
 		return err
 	}
-	return tx.Create(&credentialEvent{ID: id, NodeID: certificate.NodeID, WorkerID: certificate.WorkerID, Serial: certificate.Serial, Action: action, RequestID: audit.RequestID(tx.Statement.Context), CreatedAt: s.now()}).Error
+	return tx.Create(&credentialEvent{ID: id, NodeID: certificate.NodeID, WorkerID: certificate.WorkerID, Serial: certificate.Serial, Action: action, TraceID: audit.TraceID(tx.Statement.Context), CreatedAt: s.now()}).Error
 }
 
 func registrationError(err error) error {

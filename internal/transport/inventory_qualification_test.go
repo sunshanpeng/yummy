@@ -10,9 +10,9 @@ import (
 	platformv1 "github.com/sunshanpeng/yummy/gen/go/platform/v1"
 	"github.com/sunshanpeng/yummy/internal/domains/authorization"
 	"github.com/sunshanpeng/yummy/internal/domains/inventory"
-	"github.com/sunshanpeng/yummy/internal/lib/security"
 	"github.com/sunshanpeng/yummy/internal/infra/store/model"
 	"github.com/sunshanpeng/yummy/internal/infra/testkit"
+	"github.com/sunshanpeng/yummy/internal/lib/security"
 	"go.uber.org/zap"
 )
 

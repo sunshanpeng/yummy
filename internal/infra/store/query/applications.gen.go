@@ -31,6 +31,7 @@ func newApplication(db *gorm.DB, opts ...gen.DOOption) application {
 	_application.ID = field.NewString(tableName, "id")
 	_application.WorkspaceID = field.NewString(tableName, "workspace_id")
 	_application.Name = field.NewString(tableName, "name")
+	_application.AddressSuffix = field.NewString(tableName, "address_suffix")
 	_application.Description = field.NewString(tableName, "description")
 	_application.Status = field.NewString(tableName, "status")
 	_application.Revision = field.NewInt64(tableName, "revision")
@@ -45,15 +46,16 @@ func newApplication(db *gorm.DB, opts ...gen.DOOption) application {
 type application struct {
 	applicationDo applicationDo
 
-	ALL         field.Asterisk
-	ID          field.String
-	WorkspaceID field.String
-	Name        field.String
-	Description field.String
-	Status      field.String
-	Revision    field.Int64
-	CreatedAt   field.Time
-	UpdatedAt   field.Time
+	ALL           field.Asterisk
+	ID            field.String
+	WorkspaceID   field.String
+	Name          field.String
+	AddressSuffix field.String
+	Description   field.String
+	Status        field.String
+	Revision      field.Int64
+	CreatedAt     field.Time
+	UpdatedAt     field.Time
 
 	fieldMap map[string]field.Expr
 }
@@ -73,6 +75,7 @@ func (a *application) updateTableName(table string) *application {
 	a.ID = field.NewString(table, "id")
 	a.WorkspaceID = field.NewString(table, "workspace_id")
 	a.Name = field.NewString(table, "name")
+	a.AddressSuffix = field.NewString(table, "address_suffix")
 	a.Description = field.NewString(table, "description")
 	a.Status = field.NewString(table, "status")
 	a.Revision = field.NewInt64(table, "revision")
@@ -104,10 +107,11 @@ func (a *application) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (a *application) fillFieldMap() {
-	a.fieldMap = make(map[string]field.Expr, 8)
+	a.fieldMap = make(map[string]field.Expr, 9)
 	a.fieldMap["id"] = a.ID
 	a.fieldMap["workspace_id"] = a.WorkspaceID
 	a.fieldMap["name"] = a.Name
+	a.fieldMap["address_suffix"] = a.AddressSuffix
 	a.fieldMap["description"] = a.Description
 	a.fieldMap["status"] = a.Status
 	a.fieldMap["revision"] = a.Revision

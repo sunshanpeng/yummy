@@ -133,7 +133,7 @@ func RPCError(log *zap.Logger, err error) error {
 			log.Error("产品接口内部操作失败", zap.String("type", "internal"))
 		}
 	}
-	return connect.NewError(connect.CodeInternal, errors.New("控制面内部错误，请提供请求编号联系管理员"))
+	return connect.NewError(connect.CodeInternal, errors.New("控制面内部错误，请提供响应头 X-Trace-Id 中的追踪标识联系管理员"))
 }
 
 func (h *IdentityHandler) GetSession(ctx context.Context, _ *connect.Request[platformv1.GetSessionRequest]) (*connect.Response[platformv1.GetSessionResponse], error) {

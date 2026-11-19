@@ -11,8 +11,8 @@ import (
 
 	"github.com/sunshanpeng/yummy/internal/domains/audit"
 	"github.com/sunshanpeng/yummy/internal/domains/authorization"
-	"github.com/sunshanpeng/yummy/internal/lib/security"
 	"github.com/sunshanpeng/yummy/internal/infra/sourcearchive"
+	"github.com/sunshanpeng/yummy/internal/lib/security"
 )
 
 // Upload 仅接受上传会话既定的一份完整内容。中断不会修改会话状态，可以整包重传。

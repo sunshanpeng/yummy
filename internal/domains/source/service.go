@@ -13,8 +13,8 @@ import (
 
 	"github.com/sunshanpeng/yummy/internal/domains/audit"
 	"github.com/sunshanpeng/yummy/internal/domains/authorization"
-	"github.com/sunshanpeng/yummy/internal/lib/security"
 	"github.com/sunshanpeng/yummy/internal/infra/sourcearchive"
+	"github.com/sunshanpeng/yummy/internal/lib/security"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )

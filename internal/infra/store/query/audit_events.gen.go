@@ -36,7 +36,7 @@ func newAuditEvent(db *gorm.DB, opts ...gen.DOOption) auditEvent {
 	_auditEvent.ObjectType = field.NewString(tableName, "object_type")
 	_auditEvent.ObjectID = field.NewString(tableName, "object_id")
 	_auditEvent.Result = field.NewString(tableName, "result")
-	_auditEvent.RequestID = field.NewString(tableName, "request_id")
+	_auditEvent.TraceID = field.NewString(tableName, "trace_id")
 	_auditEvent.CreatedAt = field.NewTime(tableName, "created_at")
 
 	_auditEvent.fillFieldMap()
@@ -56,7 +56,7 @@ type auditEvent struct {
 	ObjectType    field.String
 	ObjectID      field.String
 	Result        field.String
-	RequestID     field.String
+	TraceID       field.String
 	CreatedAt     field.Time
 
 	fieldMap map[string]field.Expr
@@ -82,7 +82,7 @@ func (a *auditEvent) updateTableName(table string) *auditEvent {
 	a.ObjectType = field.NewString(table, "object_type")
 	a.ObjectID = field.NewString(table, "object_id")
 	a.Result = field.NewString(table, "result")
-	a.RequestID = field.NewString(table, "request_id")
+	a.TraceID = field.NewString(table, "trace_id")
 	a.CreatedAt = field.NewTime(table, "created_at")
 
 	a.fillFieldMap()
@@ -119,7 +119,7 @@ func (a *auditEvent) fillFieldMap() {
 	a.fieldMap["object_type"] = a.ObjectType
 	a.fieldMap["object_id"] = a.ObjectID
 	a.fieldMap["result"] = a.Result
-	a.fieldMap["request_id"] = a.RequestID
+	a.fieldMap["trace_id"] = a.TraceID
 	a.fieldMap["created_at"] = a.CreatedAt
 }
 

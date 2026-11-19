@@ -131,7 +131,7 @@ type AuditEvent struct {
 	ObjectType    string    `gorm:"column:object_type"`
 	ObjectID      string    `gorm:"column:object_id"`
 	Result        string    `gorm:"column:result"`
-	RequestID     string    `gorm:"column:request_id"`
+	TraceID       string    `gorm:"column:trace_id"`
 	CreatedAt     time.Time `gorm:"column:created_at"`
 }
 
