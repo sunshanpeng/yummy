@@ -3,6 +3,7 @@ package build
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/sunshanpeng/yummy/internal/domains/authorization"
 	"github.com/sunshanpeng/yummy/internal/domains/buildsecret"
@@ -18,6 +19,10 @@ type secretReferenceRecord struct {
 	WorkspaceID, ApplicationID, BuildID, SecretID string
 	Version                                       int64
 	Name                                          string
+	CreatedAt                                     time.Time `gorm:"column:created_at"`
+	UpdatedAt                                     time.Time `gorm:"column:updated_at"`
+	CreatedBy                                     string    `gorm:"column:created_by"`
+	UpdatedBy                                     string    `gorm:"column:updated_by"`
 }
 
 func (secretReferenceRecord) IDPrefix() string  { return "bsr" }

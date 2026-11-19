@@ -89,6 +89,8 @@ type configRecord struct {
 	Spec                       Config `gorm:"serializer:json;type:jsonb"`
 	CreatedBy                  string
 	CreatedAt                  time.Time
+	UpdatedAt                  time.Time `gorm:"column:updated_at"`
+	UpdatedBy                  string    `gorm:"column:updated_by"`
 }
 
 func (configRecord) IDPrefix() string  { return "bcr" }
@@ -116,6 +118,10 @@ type policyRecord struct {
 	Revision                                  int64
 	BuildNodeID, RegistryID, RepositoryPrefix string
 	ResourceDefault, ResourceLimits           inventory.Resources `gorm:"serializer:json;type:jsonb"`
+	CreatedAt                                 time.Time           `gorm:"column:created_at"`
+	UpdatedAt                                 time.Time           `gorm:"column:updated_at"`
+	CreatedBy                                 string              `gorm:"column:created_by"`
+	UpdatedBy                                 string              `gorm:"column:updated_by"`
 }
 
 func (policyRecord) IDPrefix() string  { return "iep" }
@@ -143,8 +149,12 @@ type allocationRecord struct {
 	ID                      string `gorm:"column:id;primaryKey"`
 	WorkspaceID, InstanceID string
 	BuildConcurrency        int
-	CPUMillis               int64 `gorm:"column:cpu_millis"`
-	MemoryMiB               int64 `gorm:"column:memory_mib"`
+	CPUMillis               int64     `gorm:"column:cpu_millis"`
+	MemoryMiB               int64     `gorm:"column:memory_mib"`
+	CreatedAt               time.Time `gorm:"column:created_at"`
+	UpdatedAt               time.Time `gorm:"column:updated_at"`
+	CreatedBy               string    `gorm:"column:created_by"`
+	UpdatedBy               string    `gorm:"column:updated_by"`
 }
 
 func (allocationRecord) IDPrefix() string  { return "wal" }

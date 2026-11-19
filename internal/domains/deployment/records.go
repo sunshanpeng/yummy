@@ -47,7 +47,7 @@ func (operationRecord) TableName() string { return "deployment_operations" }
 
 type stateRecord struct {
 	ID                                                    string `gorm:"column:id;primaryKey"`
-	ApplicationID                                         string `gorm:"column:application_i_d"`
+	ApplicationID                                         string `gorm:"column:application_id"`
 	WorkspaceID                                           string
 	Generation                                            int64
 	DesiredState                                          string
@@ -56,12 +56,16 @@ type stateRecord struct {
 	ObservedState, DeploymentUID, PodUID                  string
 	LastObservedAt                                        *time.Time
 	UpdatedAt                                             time.Time
+	CreatedAt                                             time.Time `gorm:"column:created_at"`
+	CreatedBy                                             string    `gorm:"column:created_by"`
+	UpdatedBy                                             string    `gorm:"column:updated_by"`
 }
 
 func (stateRecord) IDPrefix() string  { return "ars" }
 func (stateRecord) TableName() string { return "application_runtime_states" }
 
 type domainRecord struct {
+	ID            string `gorm:"column:id;primaryKey"`
 	Domain        string `gorm:"column:domain"`
 	WorkspaceID   string
 	ApplicationID string
@@ -72,6 +76,7 @@ type domainRecord struct {
 	CreatedAt     time.Time
 }
 
+func (domainRecord) IDPrefix() string  { return "dcl" }
 func (domainRecord) TableName() string { return "application_domain_claims" }
 
 type observationRecord struct {
@@ -148,6 +153,10 @@ type policyRecord struct {
 	RuntimeNodeID, BaseDomain string
 	ResourceLimits            inventory.Resources `gorm:"serializer:json;type:jsonb"`
 	AutoRecoveryEnabled       bool
+	CreatedAt                 time.Time `gorm:"column:created_at"`
+	UpdatedAt                 time.Time `gorm:"column:updated_at"`
+	CreatedBy                 string    `gorm:"column:created_by"`
+	UpdatedBy                 string    `gorm:"column:updated_by"`
 }
 
 func (policyRecord) IDPrefix() string  { return "iep" }
@@ -162,12 +171,16 @@ type nodeRecord struct {
 func (nodeRecord) TableName() string { return "execution_nodes" }
 
 type allocationRecord struct {
-	ID          string `gorm:"column:id;primaryKey"`
-	WorkspaceID string `gorm:"column:workspace_id"`
-	InstanceID  string `gorm:"column:instance_id"`
-	CPUMillis   int64  `gorm:"column:cpu_millis"`
-	MemoryMiB   int64  `gorm:"column:memory_mib"`
-	Revision    int64  `gorm:"column:revision"`
+	ID          string    `gorm:"column:id;primaryKey"`
+	WorkspaceID string    `gorm:"column:workspace_id"`
+	InstanceID  string    `gorm:"column:instance_id"`
+	CPUMillis   int64     `gorm:"column:cpu_millis"`
+	MemoryMiB   int64     `gorm:"column:memory_mib"`
+	Revision    int64     `gorm:"column:revision"`
+	CreatedAt   time.Time `gorm:"column:created_at"`
+	UpdatedAt   time.Time `gorm:"column:updated_at"`
+	CreatedBy   string    `gorm:"column:created_by"`
+	UpdatedBy   string    `gorm:"column:updated_by"`
 }
 
 func (allocationRecord) IDPrefix() string  { return "wal" }
@@ -178,6 +191,10 @@ type certificateRecord struct {
 	Serial, NodeID, WorkerID, CertificateSHA256 string
 	NotBefore, NotAfter                         time.Time
 	RevokedAt                                   *time.Time
+	CreatedAt                                   time.Time `gorm:"column:created_at"`
+	UpdatedAt                                   time.Time `gorm:"column:updated_at"`
+	CreatedBy                                   string    `gorm:"column:created_by"`
+	UpdatedBy                                   string    `gorm:"column:updated_by"`
 }
 
 func (certificateRecord) IDPrefix() string  { return "wct" }

@@ -37,6 +37,8 @@ func newApplication(db *gorm.DB, opts ...gen.DOOption) application {
 	_application.Revision = field.NewInt64(tableName, "revision")
 	_application.CreatedAt = field.NewTime(tableName, "created_at")
 	_application.UpdatedAt = field.NewTime(tableName, "updated_at")
+	_application.CreatedBy = field.NewString(tableName, "created_by")
+	_application.UpdatedBy = field.NewString(tableName, "updated_by")
 
 	_application.fillFieldMap()
 
@@ -56,6 +58,8 @@ type application struct {
 	Revision      field.Int64
 	CreatedAt     field.Time
 	UpdatedAt     field.Time
+	CreatedBy     field.String
+	UpdatedBy     field.String
 
 	fieldMap map[string]field.Expr
 }
@@ -81,6 +85,8 @@ func (a *application) updateTableName(table string) *application {
 	a.Revision = field.NewInt64(table, "revision")
 	a.CreatedAt = field.NewTime(table, "created_at")
 	a.UpdatedAt = field.NewTime(table, "updated_at")
+	a.CreatedBy = field.NewString(table, "created_by")
+	a.UpdatedBy = field.NewString(table, "updated_by")
 
 	a.fillFieldMap()
 
@@ -107,7 +113,7 @@ func (a *application) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (a *application) fillFieldMap() {
-	a.fieldMap = make(map[string]field.Expr, 9)
+	a.fieldMap = make(map[string]field.Expr, 11)
 	a.fieldMap["id"] = a.ID
 	a.fieldMap["workspace_id"] = a.WorkspaceID
 	a.fieldMap["name"] = a.Name
@@ -117,6 +123,8 @@ func (a *application) fillFieldMap() {
 	a.fieldMap["revision"] = a.Revision
 	a.fieldMap["created_at"] = a.CreatedAt
 	a.fieldMap["updated_at"] = a.UpdatedAt
+	a.fieldMap["created_by"] = a.CreatedBy
+	a.fieldMap["updated_by"] = a.UpdatedBy
 }
 
 func (a application) clone(db *gorm.DB) application {

@@ -33,6 +33,8 @@ type nodeRecord struct {
 	Revision        int64      `gorm:"column:revision"`
 	CreatedAt       time.Time  `gorm:"column:created_at"`
 	UpdatedAt       time.Time  `gorm:"column:updated_at"`
+	CreatedBy       string     `gorm:"column:created_by"`
+	UpdatedBy       string     `gorm:"column:updated_by"`
 }
 
 func (nodeRecord) TableName() string { return "execution_nodes" }
@@ -55,6 +57,8 @@ type qualificationRecord struct {
 	CreatedBy       string         `gorm:"column:created_by"`
 	CreatedAt       time.Time      `gorm:"column:created_at"`
 	RevokedAt       *time.Time     `gorm:"column:revoked_at"`
+	UpdatedAt       time.Time      `gorm:"column:updated_at"`
+	UpdatedBy       string         `gorm:"column:updated_by"`
 }
 
 func (qualificationRecord) TableName() string { return "node_qualifications" }
@@ -74,6 +78,8 @@ type registryRecord struct {
 	VerifiedRevision  *int64     `gorm:"column:verified_revision"`
 	CreatedAt         time.Time  `gorm:"column:created_at"`
 	UpdatedAt         time.Time  `gorm:"column:updated_at"`
+	CreatedBy         string     `gorm:"column:created_by"`
+	UpdatedBy         string     `gorm:"column:updated_by"`
 }
 
 func (registryRecord) TableName() string { return "registries" }
@@ -87,6 +93,9 @@ type credentialRecord struct {
 	Username          string    `gorm:"column:username"`
 	EncryptedPassword []byte    `gorm:"column:encrypted_password" json:"-"`
 	CreatedAt         time.Time `gorm:"column:created_at"`
+	UpdatedAt         time.Time `gorm:"column:updated_at"`
+	CreatedBy         string    `gorm:"column:created_by"`
+	UpdatedBy         string    `gorm:"column:updated_by"`
 }
 
 func (credentialRecord) IDPrefix() string  { return "rcv" }
@@ -105,6 +114,9 @@ type policyRecord struct {
 	ResourceLimits      Resources `gorm:"column:resource_limits;type:jsonb;serializer:json"`
 	AutoRecoveryEnabled bool      `gorm:"column:auto_recovery_enabled"`
 	CreatedAt           time.Time `gorm:"column:created_at"`
+	UpdatedAt           time.Time `gorm:"column:updated_at"`
+	CreatedBy           string    `gorm:"column:created_by"`
+	UpdatedBy           string    `gorm:"column:updated_by"`
 }
 
 func (policyRecord) IDPrefix() string  { return "iep" }
@@ -121,16 +133,22 @@ type allocationRecord struct {
 	Revision         int64     `gorm:"column:revision"`
 	CreatedAt        time.Time `gorm:"column:created_at"`
 	UpdatedAt        time.Time `gorm:"column:updated_at"`
+	CreatedBy        string    `gorm:"column:created_by"`
+	UpdatedBy        string    `gorm:"column:updated_by"`
 }
 
 func (allocationRecord) IDPrefix() string  { return "wal" }
 func (allocationRecord) TableName() string { return "workspace_allocations" }
 
 type allocationNodeRecord struct {
-	ID          string `gorm:"column:id;primaryKey"`
-	WorkspaceID string `gorm:"column:workspace_id"`
-	InstanceID  string `gorm:"column:instance_id"`
-	NodeID      string `gorm:"column:node_id"`
+	ID          string    `gorm:"column:id;primaryKey"`
+	WorkspaceID string    `gorm:"column:workspace_id"`
+	InstanceID  string    `gorm:"column:instance_id"`
+	NodeID      string    `gorm:"column:node_id"`
+	CreatedAt   time.Time `gorm:"column:created_at"`
+	UpdatedAt   time.Time `gorm:"column:updated_at"`
+	CreatedBy   string    `gorm:"column:created_by"`
+	UpdatedBy   string    `gorm:"column:updated_by"`
 }
 
 func (allocationNodeRecord) IDPrefix() string  { return "wan" }

@@ -39,6 +39,8 @@ func newInvitation(db *gorm.DB, opts ...gen.DOOption) invitation {
 	_invitation.ConsumedBy = field.NewString(tableName, "consumed_by")
 	_invitation.RevokedAt = field.NewTime(tableName, "revoked_at")
 	_invitation.CreatedAt = field.NewTime(tableName, "created_at")
+	_invitation.UpdatedAt = field.NewTime(tableName, "updated_at")
+	_invitation.UpdatedBy = field.NewString(tableName, "updated_by")
 
 	_invitation.fillFieldMap()
 
@@ -60,6 +62,8 @@ type invitation struct {
 	ConsumedBy  field.String
 	RevokedAt   field.Time
 	CreatedAt   field.Time
+	UpdatedAt   field.Time
+	UpdatedBy   field.String
 
 	fieldMap map[string]field.Expr
 }
@@ -87,6 +91,8 @@ func (i *invitation) updateTableName(table string) *invitation {
 	i.ConsumedBy = field.NewString(table, "consumed_by")
 	i.RevokedAt = field.NewTime(table, "revoked_at")
 	i.CreatedAt = field.NewTime(table, "created_at")
+	i.UpdatedAt = field.NewTime(table, "updated_at")
+	i.UpdatedBy = field.NewString(table, "updated_by")
 
 	i.fillFieldMap()
 
@@ -113,7 +119,7 @@ func (i *invitation) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (i *invitation) fillFieldMap() {
-	i.fieldMap = make(map[string]field.Expr, 11)
+	i.fieldMap = make(map[string]field.Expr, 13)
 	i.fieldMap["id"] = i.ID
 	i.fieldMap["workspace_id"] = i.WorkspaceID
 	i.fieldMap["username"] = i.Username
@@ -125,6 +131,8 @@ func (i *invitation) fillFieldMap() {
 	i.fieldMap["consumed_by"] = i.ConsumedBy
 	i.fieldMap["revoked_at"] = i.RevokedAt
 	i.fieldMap["created_at"] = i.CreatedAt
+	i.fieldMap["updated_at"] = i.UpdatedAt
+	i.fieldMap["updated_by"] = i.UpdatedBy
 }
 
 func (i invitation) clone(db *gorm.DB) invitation {

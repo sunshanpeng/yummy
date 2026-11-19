@@ -82,6 +82,9 @@ type Placement struct {
 	RuntimeType    string    `json:"runtimeType"`
 	DefaultDomain  string    `json:"defaultDomain"`
 	CreatedAt      time.Time `json:"createdAt"`
+	UpdatedAt      time.Time `gorm:"column:updated_at"`
+	CreatedBy      string    `gorm:"column:created_by"`
+	UpdatedBy      string    `gorm:"column:updated_by"`
 }
 
 func (Placement) IDPrefix() string  { return "plc" }

@@ -27,6 +27,8 @@ type User struct {
 	InstanceAdmin bool      `gorm:"column:instance_admin"`
 	CreatedAt     time.Time `gorm:"column:created_at"`
 	UpdatedAt     time.Time `gorm:"column:updated_at"`
+	CreatedBy     string    `gorm:"column:created_by"`
+	UpdatedBy     string    `gorm:"column:updated_by"`
 }
 
 func (User) TableName() string { return "users" }
@@ -40,6 +42,8 @@ type Workspace struct {
 	Revision    int64     `gorm:"column:revision;default:1"`
 	CreatedAt   time.Time `gorm:"column:created_at"`
 	UpdatedAt   time.Time `gorm:"column:updated_at"`
+	CreatedBy   string    `gorm:"column:created_by"`
+	UpdatedBy   string    `gorm:"column:updated_by"`
 }
 
 func (Workspace) TableName() string { return "workspaces" }
@@ -51,6 +55,8 @@ type WorkspaceMember struct {
 	Role        string    `gorm:"column:role"`
 	CreatedAt   time.Time `gorm:"column:created_at"`
 	UpdatedAt   time.Time `gorm:"column:updated_at"`
+	CreatedBy   string    `gorm:"column:created_by"`
+	UpdatedBy   string    `gorm:"column:updated_by"`
 }
 
 func (WorkspaceMember) IDPrefix() string  { return "wm" }
@@ -68,6 +74,8 @@ type Application struct {
 	Revision      int64     `gorm:"column:revision;default:1"`
 	CreatedAt     time.Time `gorm:"column:created_at"`
 	UpdatedAt     time.Time `gorm:"column:updated_at"`
+	CreatedBy     string    `gorm:"column:created_by"`
+	UpdatedBy     string    `gorm:"column:updated_by"`
 }
 
 func (Application) TableName() string { return "applications" }
@@ -80,6 +88,8 @@ type ApplicationMember struct {
 	Role          string    `gorm:"column:role"`
 	CreatedAt     time.Time `gorm:"column:created_at"`
 	UpdatedAt     time.Time `gorm:"column:updated_at"`
+	CreatedBy     string    `gorm:"column:created_by"`
+	UpdatedBy     string    `gorm:"column:updated_by"`
 }
 
 func (ApplicationMember) IDPrefix() string  { return "am" }
@@ -97,6 +107,8 @@ type Invitation struct {
 	ConsumedBy  *string    `gorm:"column:consumed_by"`
 	RevokedAt   *time.Time `gorm:"column:revoked_at"`
 	CreatedAt   time.Time  `gorm:"column:created_at"`
+	UpdatedAt   time.Time  `gorm:"column:updated_at"`
+	UpdatedBy   string     `gorm:"column:updated_by"`
 }
 
 func (Invitation) TableName() string { return "invitations" }
@@ -112,16 +124,23 @@ type AccessToken struct {
 	RevokedAt   *time.Time `gorm:"column:revoked_at"`
 	CreatedAt   time.Time  `gorm:"column:created_at"`
 	LastUsedAt  *time.Time `gorm:"column:last_used_at"`
+	UpdatedAt   time.Time  `gorm:"column:updated_at"`
+	CreatedBy   string     `gorm:"column:created_by"`
+	UpdatedBy   string     `gorm:"column:updated_by"`
 }
 
 func (AccessToken) TableName() string { return "access_tokens" }
 
 // AccessTokenApplication 是授权上限，不代替每次调用时的用户角色和状态校验。
 type AccessTokenApplication struct {
-	ID            string `gorm:"column:id;primaryKey"`
-	TokenID       string `gorm:"column:token_id"`
-	WorkspaceID   string `gorm:"column:workspace_id"`
-	ApplicationID string `gorm:"column:application_id"`
+	ID            string    `gorm:"column:id;primaryKey"`
+	TokenID       string    `gorm:"column:token_id"`
+	WorkspaceID   string    `gorm:"column:workspace_id"`
+	ApplicationID string    `gorm:"column:application_id"`
+	CreatedAt     time.Time `gorm:"column:created_at"`
+	UpdatedAt     time.Time `gorm:"column:updated_at"`
+	CreatedBy     string    `gorm:"column:created_by"`
+	UpdatedBy     string    `gorm:"column:updated_by"`
 }
 
 func (AccessTokenApplication) IDPrefix() string  { return "ata" }
@@ -150,6 +169,9 @@ type PasswordReset struct {
 	ExpiresAt  time.Time  `gorm:"column:expires_at"`
 	ConsumedAt *time.Time `gorm:"column:consumed_at"`
 	CreatedAt  time.Time  `gorm:"column:created_at"`
+	UpdatedAt  time.Time  `gorm:"column:updated_at"`
+	CreatedBy  string     `gorm:"column:created_by"`
+	UpdatedBy  string     `gorm:"column:updated_by"`
 }
 
 func (PasswordReset) TableName() string { return "password_resets" }
@@ -164,6 +186,9 @@ type IdempotencyKey struct {
 	Fingerprint string    `gorm:"column:fingerprint"`
 	ResultID    string    `gorm:"column:result_id"`
 	CreatedAt   time.Time `gorm:"column:created_at"`
+	UpdatedAt   time.Time `gorm:"column:updated_at"`
+	CreatedBy   string    `gorm:"column:created_by"`
+	UpdatedBy   string    `gorm:"column:updated_by"`
 }
 
 func (IdempotencyKey) IDPrefix() string  { return "idk" }

@@ -36,6 +36,9 @@ func newIdempotencyKey(db *gorm.DB, opts ...gen.DOOption) idempotencyKey {
 	_idempotencyKey.Fingerprint = field.NewString(tableName, "fingerprint")
 	_idempotencyKey.ResultID = field.NewString(tableName, "result_id")
 	_idempotencyKey.CreatedAt = field.NewTime(tableName, "created_at")
+	_idempotencyKey.UpdatedAt = field.NewTime(tableName, "updated_at")
+	_idempotencyKey.CreatedBy = field.NewString(tableName, "created_by")
+	_idempotencyKey.UpdatedBy = field.NewString(tableName, "updated_by")
 
 	_idempotencyKey.fillFieldMap()
 
@@ -54,6 +57,9 @@ type idempotencyKey struct {
 	Fingerprint field.String
 	ResultID    field.String
 	CreatedAt   field.Time
+	UpdatedAt   field.Time
+	CreatedBy   field.String
+	UpdatedBy   field.String
 
 	fieldMap map[string]field.Expr
 }
@@ -78,6 +84,9 @@ func (i *idempotencyKey) updateTableName(table string) *idempotencyKey {
 	i.Fingerprint = field.NewString(table, "fingerprint")
 	i.ResultID = field.NewString(table, "result_id")
 	i.CreatedAt = field.NewTime(table, "created_at")
+	i.UpdatedAt = field.NewTime(table, "updated_at")
+	i.CreatedBy = field.NewString(table, "created_by")
+	i.UpdatedBy = field.NewString(table, "updated_by")
 
 	i.fillFieldMap()
 
@@ -106,7 +115,7 @@ func (i *idempotencyKey) GetFieldByName(fieldName string) (field.OrderExpr, bool
 }
 
 func (i *idempotencyKey) fillFieldMap() {
-	i.fieldMap = make(map[string]field.Expr, 8)
+	i.fieldMap = make(map[string]field.Expr, 11)
 	i.fieldMap["id"] = i.ID
 	i.fieldMap["workspace_id"] = i.WorkspaceID
 	i.fieldMap["actor_id"] = i.ActorID
@@ -115,6 +124,9 @@ func (i *idempotencyKey) fillFieldMap() {
 	i.fieldMap["fingerprint"] = i.Fingerprint
 	i.fieldMap["result_id"] = i.ResultID
 	i.fieldMap["created_at"] = i.CreatedAt
+	i.fieldMap["updated_at"] = i.UpdatedAt
+	i.fieldMap["created_by"] = i.CreatedBy
+	i.fieldMap["updated_by"] = i.UpdatedBy
 }
 
 func (i idempotencyKey) clone(db *gorm.DB) idempotencyKey {

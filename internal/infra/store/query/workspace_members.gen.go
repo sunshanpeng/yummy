@@ -34,6 +34,8 @@ func newWorkspaceMember(db *gorm.DB, opts ...gen.DOOption) workspaceMember {
 	_workspaceMember.Role = field.NewString(tableName, "role")
 	_workspaceMember.CreatedAt = field.NewTime(tableName, "created_at")
 	_workspaceMember.UpdatedAt = field.NewTime(tableName, "updated_at")
+	_workspaceMember.CreatedBy = field.NewString(tableName, "created_by")
+	_workspaceMember.UpdatedBy = field.NewString(tableName, "updated_by")
 
 	_workspaceMember.fillFieldMap()
 
@@ -50,6 +52,8 @@ type workspaceMember struct {
 	Role        field.String
 	CreatedAt   field.Time
 	UpdatedAt   field.Time
+	CreatedBy   field.String
+	UpdatedBy   field.String
 
 	fieldMap map[string]field.Expr
 }
@@ -72,6 +76,8 @@ func (w *workspaceMember) updateTableName(table string) *workspaceMember {
 	w.Role = field.NewString(table, "role")
 	w.CreatedAt = field.NewTime(table, "created_at")
 	w.UpdatedAt = field.NewTime(table, "updated_at")
+	w.CreatedBy = field.NewString(table, "created_by")
+	w.UpdatedBy = field.NewString(table, "updated_by")
 
 	w.fillFieldMap()
 
@@ -100,13 +106,15 @@ func (w *workspaceMember) GetFieldByName(fieldName string) (field.OrderExpr, boo
 }
 
 func (w *workspaceMember) fillFieldMap() {
-	w.fieldMap = make(map[string]field.Expr, 6)
+	w.fieldMap = make(map[string]field.Expr, 8)
 	w.fieldMap["id"] = w.ID
 	w.fieldMap["workspace_id"] = w.WorkspaceID
 	w.fieldMap["user_id"] = w.UserID
 	w.fieldMap["role"] = w.Role
 	w.fieldMap["created_at"] = w.CreatedAt
 	w.fieldMap["updated_at"] = w.UpdatedAt
+	w.fieldMap["created_by"] = w.CreatedBy
+	w.fieldMap["updated_by"] = w.UpdatedBy
 }
 
 func (w workspaceMember) clone(db *gorm.DB) workspaceMember {

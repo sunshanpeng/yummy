@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sunshanpeng/yummy/internal/infra/store"
 	"github.com/sunshanpeng/yummy/internal/infra/store/model"
 	"gorm.io/gorm"
 )
@@ -50,7 +51,8 @@ func (a *Access) Do(ctx context.Context, supplied Principal, exclusive bool, fn 
 		if err != nil {
 			return err
 		}
-		return fn(tx, current)
+		// 操作者写入上下文：写路径回调据此填充 created_by/updated_by。
+		return fn(tx.WithContext(store.WithActor(tx.Statement.Context, current.UserID)), current)
 	})
 }
 
@@ -63,6 +65,7 @@ func (a *Access) DoInTx(ctx context.Context, supplied Principal, tx *gorm.DB, fn
 	if err != nil {
 		return err
 	}
+	tx = tx.WithContext(store.WithActor(ctx, current.UserID))
 	return fn(tx.WithContext(ctx), current)
 }
 

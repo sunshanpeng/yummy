@@ -32,6 +32,10 @@ func newAccessTokenApplication(db *gorm.DB, opts ...gen.DOOption) accessTokenApp
 	_accessTokenApplication.TokenID = field.NewString(tableName, "token_id")
 	_accessTokenApplication.WorkspaceID = field.NewString(tableName, "workspace_id")
 	_accessTokenApplication.ApplicationID = field.NewString(tableName, "application_id")
+	_accessTokenApplication.CreatedAt = field.NewTime(tableName, "created_at")
+	_accessTokenApplication.UpdatedAt = field.NewTime(tableName, "updated_at")
+	_accessTokenApplication.CreatedBy = field.NewString(tableName, "created_by")
+	_accessTokenApplication.UpdatedBy = field.NewString(tableName, "updated_by")
 
 	_accessTokenApplication.fillFieldMap()
 
@@ -46,6 +50,10 @@ type accessTokenApplication struct {
 	TokenID       field.String
 	WorkspaceID   field.String
 	ApplicationID field.String
+	CreatedAt     field.Time
+	UpdatedAt     field.Time
+	CreatedBy     field.String
+	UpdatedBy     field.String
 
 	fieldMap map[string]field.Expr
 }
@@ -66,6 +74,10 @@ func (a *accessTokenApplication) updateTableName(table string) *accessTokenAppli
 	a.TokenID = field.NewString(table, "token_id")
 	a.WorkspaceID = field.NewString(table, "workspace_id")
 	a.ApplicationID = field.NewString(table, "application_id")
+	a.CreatedAt = field.NewTime(table, "created_at")
+	a.UpdatedAt = field.NewTime(table, "updated_at")
+	a.CreatedBy = field.NewString(table, "created_by")
+	a.UpdatedBy = field.NewString(table, "updated_by")
 
 	a.fillFieldMap()
 
@@ -94,11 +106,15 @@ func (a *accessTokenApplication) GetFieldByName(fieldName string) (field.OrderEx
 }
 
 func (a *accessTokenApplication) fillFieldMap() {
-	a.fieldMap = make(map[string]field.Expr, 4)
+	a.fieldMap = make(map[string]field.Expr, 8)
 	a.fieldMap["id"] = a.ID
 	a.fieldMap["token_id"] = a.TokenID
 	a.fieldMap["workspace_id"] = a.WorkspaceID
 	a.fieldMap["application_id"] = a.ApplicationID
+	a.fieldMap["created_at"] = a.CreatedAt
+	a.fieldMap["updated_at"] = a.UpdatedAt
+	a.fieldMap["created_by"] = a.CreatedBy
+	a.fieldMap["updated_by"] = a.UpdatedBy
 }
 
 func (a accessTokenApplication) clone(db *gorm.DB) accessTokenApplication {

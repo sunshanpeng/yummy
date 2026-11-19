@@ -49,7 +49,7 @@ func TestBuildGrantBoundToAttemptAndRevocable(t *testing.T) {
 	}{
 		{"UPDATE execution_nodes SET cluster_node_uid='node-uid',os='linux',arch='amd64',last_seen=NOW(),build_ready=TRUE WHERE id=?", []any{node.ID}},
 		{"UPDATE registries SET verified_at=NOW(),verified_revision=revision WHERE id=?", []any{registry.ID}},
-		{"INSERT INTO worker_certificates(serial,node_id,worker_id,certificate_sha256,public_key_sha256,not_before,not_after) VALUES ('a1',?,?,?,?,NOW()-INTERVAL '1 minute',NOW()+INTERVAL '1 day')", []any{node.ID, node.WorkerID, strings.Repeat("1", 64), strings.Repeat("2", 64)}},
+		{"INSERT INTO worker_certificates(id,serial,node_id,worker_id,certificate_sha256,public_key_sha256,not_before,not_after) VALUES ('a1','a1',?,?,?,?,NOW()-INTERVAL '1 minute',NOW()+INTERVAL '1 day')", []any{node.ID, node.WorkerID, strings.Repeat("1", 64), strings.Repeat("2", 64)}},
 	} {
 		if err := e.db.Exec(item.query, item.args...).Error; err != nil {
 			t.Fatal(err)
@@ -196,7 +196,7 @@ func TestBuildGrantSurvivesCertificateRotation(t *testing.T) {
 	}
 	insertCert := func(serial, sha1, sha2 string) {
 		t.Helper()
-		if err := e.db.Exec("INSERT INTO worker_certificates(serial,node_id,worker_id,certificate_sha256,public_key_sha256,not_before,not_after) VALUES (?,?,?,?,?,NOW()-INTERVAL '1 minute',NOW()+INTERVAL '1 day')", serial, node.ID, node.WorkerID, sha1, sha2).Error; err != nil {
+		if err := e.db.Exec("INSERT INTO worker_certificates(id,serial,node_id,worker_id,certificate_sha256,public_key_sha256,not_before,not_after) VALUES ('wct-'||?, ?, ?, ?, ?, ?, NOW()-INTERVAL '1 minute',NOW()+INTERVAL '1 day')", serial, serial, node.ID, node.WorkerID, sha1, sha2).Error; err != nil {
 			t.Fatal(err)
 		}
 	}

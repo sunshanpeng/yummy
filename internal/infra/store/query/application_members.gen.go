@@ -35,6 +35,8 @@ func newApplicationMember(db *gorm.DB, opts ...gen.DOOption) applicationMember {
 	_applicationMember.Role = field.NewString(tableName, "role")
 	_applicationMember.CreatedAt = field.NewTime(tableName, "created_at")
 	_applicationMember.UpdatedAt = field.NewTime(tableName, "updated_at")
+	_applicationMember.CreatedBy = field.NewString(tableName, "created_by")
+	_applicationMember.UpdatedBy = field.NewString(tableName, "updated_by")
 
 	_applicationMember.fillFieldMap()
 
@@ -52,6 +54,8 @@ type applicationMember struct {
 	Role          field.String
 	CreatedAt     field.Time
 	UpdatedAt     field.Time
+	CreatedBy     field.String
+	UpdatedBy     field.String
 
 	fieldMap map[string]field.Expr
 }
@@ -75,6 +79,8 @@ func (a *applicationMember) updateTableName(table string) *applicationMember {
 	a.Role = field.NewString(table, "role")
 	a.CreatedAt = field.NewTime(table, "created_at")
 	a.UpdatedAt = field.NewTime(table, "updated_at")
+	a.CreatedBy = field.NewString(table, "created_by")
+	a.UpdatedBy = field.NewString(table, "updated_by")
 
 	a.fillFieldMap()
 
@@ -103,7 +109,7 @@ func (a *applicationMember) GetFieldByName(fieldName string) (field.OrderExpr, b
 }
 
 func (a *applicationMember) fillFieldMap() {
-	a.fieldMap = make(map[string]field.Expr, 7)
+	a.fieldMap = make(map[string]field.Expr, 9)
 	a.fieldMap["id"] = a.ID
 	a.fieldMap["workspace_id"] = a.WorkspaceID
 	a.fieldMap["application_id"] = a.ApplicationID
@@ -111,6 +117,8 @@ func (a *applicationMember) fillFieldMap() {
 	a.fieldMap["role"] = a.Role
 	a.fieldMap["created_at"] = a.CreatedAt
 	a.fieldMap["updated_at"] = a.UpdatedAt
+	a.fieldMap["created_by"] = a.CreatedBy
+	a.fieldMap["updated_by"] = a.UpdatedBy
 }
 
 func (a applicationMember) clone(db *gorm.DB) applicationMember {

@@ -38,6 +38,9 @@ func newAccessToken(db *gorm.DB, opts ...gen.DOOption) accessToken {
 	_accessToken.RevokedAt = field.NewTime(tableName, "revoked_at")
 	_accessToken.CreatedAt = field.NewTime(tableName, "created_at")
 	_accessToken.LastUsedAt = field.NewTime(tableName, "last_used_at")
+	_accessToken.UpdatedAt = field.NewTime(tableName, "updated_at")
+	_accessToken.CreatedBy = field.NewString(tableName, "created_by")
+	_accessToken.UpdatedBy = field.NewString(tableName, "updated_by")
 
 	_accessToken.fillFieldMap()
 
@@ -58,6 +61,9 @@ type accessToken struct {
 	RevokedAt   field.Time
 	CreatedAt   field.Time
 	LastUsedAt  field.Time
+	UpdatedAt   field.Time
+	CreatedBy   field.String
+	UpdatedBy   field.String
 
 	fieldMap map[string]field.Expr
 }
@@ -84,6 +90,9 @@ func (a *accessToken) updateTableName(table string) *accessToken {
 	a.RevokedAt = field.NewTime(table, "revoked_at")
 	a.CreatedAt = field.NewTime(table, "created_at")
 	a.LastUsedAt = field.NewTime(table, "last_used_at")
+	a.UpdatedAt = field.NewTime(table, "updated_at")
+	a.CreatedBy = field.NewString(table, "created_by")
+	a.UpdatedBy = field.NewString(table, "updated_by")
 
 	a.fillFieldMap()
 
@@ -110,7 +119,7 @@ func (a *accessToken) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (a *accessToken) fillFieldMap() {
-	a.fieldMap = make(map[string]field.Expr, 10)
+	a.fieldMap = make(map[string]field.Expr, 13)
 	a.fieldMap["id"] = a.ID
 	a.fieldMap["user_id"] = a.UserID
 	a.fieldMap["name"] = a.Name
@@ -121,6 +130,9 @@ func (a *accessToken) fillFieldMap() {
 	a.fieldMap["revoked_at"] = a.RevokedAt
 	a.fieldMap["created_at"] = a.CreatedAt
 	a.fieldMap["last_used_at"] = a.LastUsedAt
+	a.fieldMap["updated_at"] = a.UpdatedAt
+	a.fieldMap["created_by"] = a.CreatedBy
+	a.fieldMap["updated_by"] = a.UpdatedBy
 }
 
 func (a accessToken) clone(db *gorm.DB) accessToken {

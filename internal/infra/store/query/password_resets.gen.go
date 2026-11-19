@@ -34,6 +34,9 @@ func newPasswordReset(db *gorm.DB, opts ...gen.DOOption) passwordReset {
 	_passwordReset.ExpiresAt = field.NewTime(tableName, "expires_at")
 	_passwordReset.ConsumedAt = field.NewTime(tableName, "consumed_at")
 	_passwordReset.CreatedAt = field.NewTime(tableName, "created_at")
+	_passwordReset.UpdatedAt = field.NewTime(tableName, "updated_at")
+	_passwordReset.CreatedBy = field.NewString(tableName, "created_by")
+	_passwordReset.UpdatedBy = field.NewString(tableName, "updated_by")
 
 	_passwordReset.fillFieldMap()
 
@@ -50,6 +53,9 @@ type passwordReset struct {
 	ExpiresAt  field.Time
 	ConsumedAt field.Time
 	CreatedAt  field.Time
+	UpdatedAt  field.Time
+	CreatedBy  field.String
+	UpdatedBy  field.String
 
 	fieldMap map[string]field.Expr
 }
@@ -72,6 +78,9 @@ func (p *passwordReset) updateTableName(table string) *passwordReset {
 	p.ExpiresAt = field.NewTime(table, "expires_at")
 	p.ConsumedAt = field.NewTime(table, "consumed_at")
 	p.CreatedAt = field.NewTime(table, "created_at")
+	p.UpdatedAt = field.NewTime(table, "updated_at")
+	p.CreatedBy = field.NewString(table, "created_by")
+	p.UpdatedBy = field.NewString(table, "updated_by")
 
 	p.fillFieldMap()
 
@@ -100,13 +109,16 @@ func (p *passwordReset) GetFieldByName(fieldName string) (field.OrderExpr, bool)
 }
 
 func (p *passwordReset) fillFieldMap() {
-	p.fieldMap = make(map[string]field.Expr, 6)
+	p.fieldMap = make(map[string]field.Expr, 9)
 	p.fieldMap["id"] = p.ID
 	p.fieldMap["user_id"] = p.UserID
 	p.fieldMap["token_hash"] = p.TokenHash
 	p.fieldMap["expires_at"] = p.ExpiresAt
 	p.fieldMap["consumed_at"] = p.ConsumedAt
 	p.fieldMap["created_at"] = p.CreatedAt
+	p.fieldMap["updated_at"] = p.UpdatedAt
+	p.fieldMap["created_by"] = p.CreatedBy
+	p.fieldMap["updated_by"] = p.UpdatedBy
 }
 
 func (p passwordReset) clone(db *gorm.DB) passwordReset {

@@ -22,6 +22,9 @@ type domainClaimRecord struct {
 	IsDefault     bool
 	TLSSecretName string
 	CreatedAt     time.Time
+	UpdatedAt     time.Time `gorm:"column:updated_at"`
+	CreatedBy     string    `gorm:"column:created_by"`
+	UpdatedBy     string    `gorm:"column:updated_by"`
 }
 
 func (domainClaimRecord) IDPrefix() string  { return "dcl" }

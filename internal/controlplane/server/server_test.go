@@ -221,7 +221,7 @@ func TestProductHTTPSourceConfigurationBuildAndDeploymentBoundaries(t *testing.T
 	if err != nil || queued.Msg.Build.State != "QUEUED" {
 		t.Fatalf("排队: %v", err)
 	}
-	if err := db.Exec("INSERT INTO worker_certificates(serial,node_id,worker_id,certificate_sha256,public_key_sha256,not_before,not_after) VALUES ('a1',?,?,?,?,NOW()-INTERVAL '1 minute',NOW()+INTERVAL '1 day')", node.Msg.Node.Id, node.Msg.Node.WorkerId, strings.Repeat("1", 64), strings.Repeat("2", 64)).Error; err != nil {
+	if err := db.Exec("INSERT INTO worker_certificates(id,serial,node_id,worker_id,certificate_sha256,public_key_sha256,not_before,not_after) VALUES ('a1','a1',?,?,?,?,NOW()-INTERVAL '1 minute',NOW()+INTERVAL '1 day')", node.Msg.Node.Id, node.Msg.Node.WorkerId, strings.Repeat("1", 64), strings.Repeat("2", 64)).Error; err != nil {
 		t.Fatal(err)
 	}
 	worker := build.WorkerIdentity{NodeID: node.Msg.Node.Id, WorkerID: node.Msg.Node.WorkerId, CertificateSerial: "a1"}
@@ -308,10 +308,10 @@ func TestProductHTTPSourceConfigurationBuildAndDeploymentBoundaries(t *testing.T
 		{"UPDATE worker_certificates SET certificate_sha256=? WHERE serial='a1'", []any{hex.EncodeToString(certificateHash[:])}},
 		{"UPDATE builds SET state='SUCCEEDED', desired_state='RUN', finished_at=NOW() WHERE id=?", []any{queued.Msg.Build.Id}},
 		{"INSERT INTO build_artifacts(id,workspace_id,application_id,build_id,attempt_id,registry_id,credential_version,repository,tag,digest,platform,state,verified_at) SELECT 'artifact-test',workspace_id,application_id,id,?,registry_id,credential_version,repository,tag,?,'linux/amd64','VERIFIED',NOW() FROM builds WHERE id=?", []any{dispatch.AttemptID, "sha256:" + strings.Repeat("b", 64), queued.Msg.Build.Id}},
-		{"INSERT INTO application_placements(application_id,workspace_id,instance_id,node_id,worker_id,cluster_node_uid,policy_revision,runtime_type,default_domain) SELECT ?,?,instance_id,?,?, 'test-node-uid',revision,'HTTP','test.apps.example.com' FROM instance_execution_policies WHERE revision=1", []any{app, ws, node.Msg.Node.Id, node.Msg.Node.WorkerId}},
+		{"INSERT INTO application_placements(id,application_id,workspace_id,instance_id,node_id,worker_id,cluster_node_uid,policy_revision,runtime_type,default_domain) SELECT 'plc-'||?, ?, ?, instance_id, ?, ?, 'test-node-uid', revision, 'HTTP', 'test.apps.example.com' FROM instance_execution_policies WHERE revision=1", []any{app, app, ws, node.Msg.Node.Id, node.Msg.Node.WorkerId}},
 		{"INSERT INTO application_releases(id,workspace_id,application_id,artifact_id,runtime_config_revision,registry_id,credential_version,repository,digest,platform,placement_snapshot,domains,source,actor_id) SELECT 'release-test',workspace_id,application_id,'artifact-test',1,registry_id,credential_version,repository,?,'linux/amd64','{}','[]','DEPLOY',actor_id FROM builds WHERE id=?", []any{"sha256:" + strings.Repeat("b", 64), queued.Msg.Build.Id}},
 		{"INSERT INTO deployment_operations(id,workspace_id,application_id,release_id,generation,action,state,actor_id,idempotency_key,fingerprint) SELECT 'operation-test',workspace_id,application_id,'release-test',1,'DEPLOY','QUEUED',actor_id,'test',? FROM builds WHERE id=?", []any{strings.Repeat("c", 64), queued.Msg.Build.Id}},
-		{"INSERT INTO application_runtime_states(application_id,workspace_id,generation,desired_state,desired_release_id,active_operation_id,observed_state) VALUES (?,?,1,'RUN','release-test','operation-test','PENDING')", []any{app, ws}},
+		{"INSERT INTO application_runtime_states(id,application_id,workspace_id,generation,desired_state,desired_release_id,active_operation_id,observed_state) VALUES ('ars-'||$1, $2, $3, 1,'RUN','release-test','operation-test','PENDING')", []any{app, app, ws}},
 	}
 	for _, item := range fixture {
 		if err := db.Exec(item.query, item.args...).Error; err != nil {

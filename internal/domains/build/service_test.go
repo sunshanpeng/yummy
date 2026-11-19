@@ -78,7 +78,7 @@ func setup(t *testing.T) environment {
 	// 只有测试显式写入 ready/verified 事实；不声称本机执行了 Linux BuildKit 或仓库验证。
 	mustExec(t, db, "UPDATE execution_nodes SET cluster_node_uid='node-uid', os='linux',arch='amd64',last_seen=NOW(),build_ready=TRUE WHERE id=?", e.node.ID)
 	mustExec(t, db, "UPDATE registries SET verified_at=NOW(),verified_revision=revision WHERE id=?", e.registry.ID)
-	mustExec(t, db, "INSERT INTO worker_certificates(serial,node_id,worker_id,certificate_sha256,public_key_sha256,not_before,not_after) VALUES ('a1',?,?,?, ?,NOW()-INTERVAL '1 minute',NOW()+INTERVAL '1 day')", e.node.ID, e.node.WorkerID, strings.Repeat("1", 64), strings.Repeat("2", 64))
+	mustExec(t, db, "INSERT INTO worker_certificates(id,serial,node_id,worker_id,certificate_sha256,public_key_sha256,not_before,not_after) VALUES ('a1','a1',?,?,?, ?,NOW()-INTERVAL '1 minute',NOW()+INTERVAL '1 day')", e.node.ID, e.node.WorkerID, strings.Repeat("1", 64), strings.Repeat("2", 64))
 	e.worker = WorkerIdentity{NodeID: e.node.ID, WorkerID: e.node.WorkerID, CertificateSerial: "a1"}
 	fixtureSource(t, e, "app_one", "source_one", time.Now().Add(time.Hour))
 	fixtureSource(t, e, "app_two", "source_two", time.Now().Add(time.Hour))

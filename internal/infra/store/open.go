@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -36,16 +37,21 @@ func Open(ctx context.Context, databaseURL string) (*gorm.DB, error) {
 		_ = sqlDB.Close()
 		return nil, err
 	}
+	// SQL 参数可能含密码散列或令牌摘要，默认不写入 ORM 日志；
+	// 设置 YUMMY_GORM_DEBUG=1 时输出全部 SQL，用于排障。
+	logMode := logger.Silent
+	if os.Getenv("YUMMY_GORM_DEBUG") == "1" {
+		logMode = logger.Info
+	}
 	db, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{
-		// SQL 参数可能含密码散列或令牌摘要，默认不写入 ORM 日志。
-		Logger: logger.Default.LogMode(logger.Silent),
+		Logger: logger.Default.LogMode(logMode),
 	})
 	if err != nil {
 		_ = sqlDB.Close()
 		return nil, fmt.Errorf("初始化数据库访问层: %w", err)
 	}
-	// 数据库设计规范：每张表必有单列 id 主键，Create 时按模型前缀自动填充。
-	RegisterIDCallback(db)
+	// 数据库设计规范：每张表必有单列 id 主键与审计列，Create/Update 时自动填充。
+	RegisterModelHooks(db)
 	return db, nil
 }
 

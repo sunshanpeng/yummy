@@ -342,10 +342,13 @@ func claimDomains(tx *gorm.DB, ws, app, defaultDomain string, domains []string) 
 		if err = tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&v).Error; err != nil {
 			return err
 		}
-		if err = tx.First(&v, "domain = ?", domain).Error; err != nil {
+		// 用全新实例查询：复用 Create 后的实例会带上回调已填充的 id 主键，
+		// gorm 会把非零主键并入条件，同域名的第二次占用将查不到已存在行。
+		var occupied domainRecord
+		if err = tx.First(&occupied, "domain = ?", domain).Error; err != nil {
 			return err
 		}
-		if v.WorkspaceID != ws || v.ApplicationID != app {
+		if occupied.WorkspaceID != ws || occupied.ApplicationID != app {
 			return fmt.Errorf("%w: 域名已被其他应用占用", authorization.ErrConflict)
 		}
 	}

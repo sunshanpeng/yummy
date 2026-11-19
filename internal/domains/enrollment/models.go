@@ -37,6 +37,10 @@ type certificateRecord struct {
 	IssuedAt          time.Time
 	RevokedAt         *time.Time
 	RotatedFrom       *string
+	CreatedAt         time.Time `gorm:"column:created_at"`
+	UpdatedAt         time.Time `gorm:"column:updated_at"`
+	CreatedBy         string    `gorm:"column:created_by"`
+	UpdatedBy         string    `gorm:"column:updated_by"`
 }
 
 func (certificateRecord) IDPrefix() string  { return "wct" }

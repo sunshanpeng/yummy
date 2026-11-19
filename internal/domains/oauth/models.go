@@ -68,6 +68,7 @@ type assertionRecord struct {
 	ID        string `gorm:"column:id;primaryKey"`
 	JTIHash   string `gorm:"column:j_t_i_hash"`
 	ExpiresAt time.Time
+	CreatedAt time.Time `gorm:"column:created_at"`
 }
 
 func (assertionRecord) IDPrefix() string  { return "asn" }

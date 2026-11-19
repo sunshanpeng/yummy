@@ -20,11 +20,11 @@ func claimFixture(t *testing.T, env testEnvironment) {
 		t.Fatal(err)
 	}
 	node, _, _ := configure(t, env)
-	if err := env.db.Exec(`INSERT INTO application_placements (application_id, workspace_id, instance_id, node_id, worker_id, cluster_node_uid, policy_revision, runtime_type, default_domain) VALUES ('app_123','space',?,?,'worker-1','uid-a',1,'HTTP','app.apps.example.com')`, instanceID, node.ID).Error; err != nil {
+	if err := env.db.Exec(`INSERT INTO application_placements (id, application_id, workspace_id, instance_id, node_id, worker_id, cluster_node_uid, policy_revision, runtime_type, default_domain) VALUES ('plc-app_123','app_123','space',?,?,'worker-1','uid-a',1,'HTTP','app.apps.example.com')`, instanceID, node.ID).Error; err != nil {
 		t.Fatal(err)
 	}
 	for _, domain := range []string{"app.example.com", "extra.example.com"} {
-		if err := env.db.Exec(`INSERT INTO application_domain_claims (domain, workspace_id, application_id, is_default) VALUES (?,'space','app_123',FALSE)`, domain).Error; err != nil {
+		if err := env.db.Exec(`INSERT INTO application_domain_claims (id, domain, workspace_id, application_id, is_default) VALUES (CONCAT('dcl-', ?::text), ?, 'space','app_123',FALSE)`, domain, domain).Error; err != nil {
 			t.Fatal(err)
 		}
 	}
