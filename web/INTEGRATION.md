@@ -2,7 +2,7 @@
 
 ## 本轮边界
 
-仅修改 `web/`，不编辑 `web/src/gen/` 或后端。正式入口为 `index.html`，旧 uppercase 演示保留于 `demo.html` 独立多入口，旧组件测试保留。
+仅修改 `web/`，不编辑 `web/src/gen/` 或后端。正式入口为 `index.html`，旧 uppercase 演示入口已移除。
 
 已接线页面均调用真实生成描述和 Connect API，生产代码没有 mock 数据、模拟成功定时器或演示部署。测试中的传输响应替身仅位于 `.test.tsx/.test.ts`。
 

@@ -18,7 +18,7 @@ export default defineConfig({
     },
   },
   build: {
-    rollupOptions: { input: { main: "index.html", demo: "demo.html" } },
+    rollupOptions: { input: { main: "index.html" } },
   },
   test: {
     environment: "jsdom",

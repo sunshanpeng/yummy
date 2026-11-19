@@ -18,4 +18,4 @@ Lucide React 统一图标；TanStack Table 使用已安装 v9 的 `tableFeatures
 
 本版选择克制的工具型界面：中性浅色、细边界、14px 正文、明确留白与导航作用域。正式入口使用 `console.css`，色值仅定义在语义 token 中，不提供主题切换入口，不加载外部字体，不显示装饰图表或示例运行结果。
 
-旧 uppercase 演示及原测试保留于 `demo.html` 独立构建入口，其原有 CSS 与正式入口隔离。原有演示样式未扩大或加入正式界面。
+旧 uppercase 演示及原测试（`demo.html`、`demo-main.tsx`、`App.tsx`、`api.ts`、`styles.css`）已移除，原型阶段结束。正式入口为 `index.html`（`src/main.tsx`），样式仅 `src/console.css`，色值只定义在语义 token 中。
