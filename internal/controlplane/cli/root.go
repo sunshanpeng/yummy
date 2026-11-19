@@ -42,12 +42,16 @@ import (
 const workerVersion = "yummy-worker/1"
 
 func Execute(ctx context.Context, args []string, assets fs.FS) error {
-	command := NewRoot(assets)
+	settings, err := loadStartupConfig(args)
+	if err != nil {
+		return err
+	}
+	command := NewRoot(assets, settings)
 	command.SetArgs(args)
 	return command.ExecuteContext(ctx)
 }
 
-func NewRoot(assets fs.FS) *cobra.Command {
+func NewRoot(assets fs.FS, settings map[string]any) *cobra.Command {
 	config := viper.New()
 	config.SetEnvKeyReplacer(envKeyReplacer())
 	config.AutomaticEnv()
@@ -59,6 +63,15 @@ func NewRoot(assets fs.FS) *cobra.Command {
 	root := &cobra.Command{Use: "platform", Short: "Yummy 应用平台", SilenceUsage: true, SilenceErrors: true}
 	root.SetOut(os.Stdout)
 	root.SetErr(os.Stderr)
+	root.PersistentFlags().StringP("config", "c", "", "启动配置文件路径（yaml/toml/json），未指定时依次查找 ./config.yaml、/etc/yummy/config.yaml")
+	// 配置文件在 flag 解析之后归并（PersistentPreRunE）：显式 flag > 配置文件 >
+	// 环境变量 > 内置默认。文件里的键与 flag 同名，未知键也照常写入供后续读取。
+	if len(settings) > 0 {
+		root.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {
+			applyConfigSettings(config, settings, cmd.Flags())
+			return nil
+		}
+	}
 	root.PersistentFlags().String("database-url", config.GetString("database-url"), "PostgreSQL 连接地址")
 	_ = config.BindPFlag("database-url", root.PersistentFlags().Lookup("database-url"))
 	// OTLP 端点兼容标准环境变量：--otel-endpoint 未显式提供时回退 OTEL_EXPORTER_OTLP_ENDPOINT，

@@ -10,3 +10,6 @@ bin/
 
 # debug file
 __debug_*
+# 实例启动配置文件（可能含密钥，仓库只保留 config.example.yaml）
+/config.yaml
+/config.yml
