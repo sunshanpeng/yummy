@@ -14,6 +14,25 @@
 - 调度、恢复与清理，以及第一版之后的远程 HTTP MCP 入口，都在控制面内按模块组织；执行任务由现有 worker 承担。
 - 本地 CLI / stdio MCP 是按需启动的客户端，不新增常驻服务。PostgreSQL、Redis、k3s、镜像仓库等既有基础设施与按任务运行的 BuildKit 保持现有职责；新增基础设施仍需说明必要性，不能借此绕过简化部署的约束。
 
+## 后端代码分层与模块化
+
+- 当前处于开发阶段，允许破坏式修改：API 契约、数据库 schema、包结构都可以重排，不为兼容旧结构保留过渡代码和弃用标记，一切按长期迭代的最优形态演进。
+- 后端代码按「公共库 / 基础设施 / 业务领域 / 传输与聚合」归类，依赖单向：入口装配 → 传输（Connect、gin handler）→ 业务领域 → 基础设施与公共库；领域代码不 import 传输层与装配细节，公共库不依赖任何业务域。
+- 公共横切能力（错误码、分页、ID 与时间、校验、配置加载、可观测性埋点）沉淀为独立库供各领域复用，不在各领域复制粘贴；领域无关的纯工具库与业务代码分开归属。
+- 业务按领域划分（工作空间、应用、构建、部署、成员与授权、审计等），域内高内聚（模型、数据访问、服务同域组织）；域间只通过对方显式导出的接口依赖，禁止跨域直查对方数据表或引用对方内部 struct。
+- 基础设施（数据库、Redis、k3s、BuildKit、镜像仓库、OTel）封装在独立适配层，不与业务逻辑混写；业务代码不出现连接串、SQL 字符串、k8s API 对象这类细节。代码布局按本分层落地：`internal/domains/`（业务域）、`internal/infra/`（基础设施适配）、`internal/transport/`（Connect handler 与 worker 网关）、`internal/bff/`（聚合层，现为 MCP 桥）、`internal/controlplane/`（装配：cli/server/webui）；公共类库统一收纳在 `internal/lib/` 下（与 domains/infra 同级成层，现为 `lib/naming`、`lib/observability`、`lib/security`）；新增公共能力默认进 `internal/lib/<名>`，不再新增与 domains 平级的顶层包。lib 内的包必须域无关且不耦合外部系统适配（依赖 gorm/k8s 客户端等的归 infra）。已知例外：部署链（kube/workerexec）共用 runtimeconfig 视图类型，后续以 proto 契约收敛。
+- 数据访问统一走 GORM + gorm.io/gen：常规 CRUD 用生成的 DAO（`store/query`），复杂 SQL（CTE、advisory lock、RETURNING 等）集中到各领域的数据访问文件统一管理；业务代码里不散落手写 SQL 字符串，schema 变更继续走 goose 迁移。
+- 数据库以 PostgreSQL 为主，但保持可切换 MySQL 的能力：业务代码与迁移默认只用两者通用的 SQL；确需 PG 特有能力（advisory lock、RETURNING、JSONB 操作符、`make_interval` 等）时，收口到领域数据访问文件，并在该 SQL 处加中文注释说明动机与 MySQL 下的替代方案，不散落到业务逻辑里。
+- 需要跨领域聚合的对外接口（如 CMDB、人员与权限、CICD、监控告警这类内部模块的组合查询）由控制面进程内的 BFF 层编排：BFF 只做聚合、裁剪与编排，不写业务规则；领域模块之间不互相直连，前端不直连领域内部接口。BFF 是控制面内的一个分层，不是新进程，不新增常驻服务。现状 MCP 桥即位于 `internal/bff/mcp`。
+
+## 可观测性
+
+- trace / metric / log 三信号统一走 OpenTelemetry SDK，控制面与 worker 共用同一套基建；trace 上下文贯穿 HTTP、Connect RPC、后台任务与 worker 执行。
+- 日志统一 zap 的 JSON 编码输出并桥接 OTel Logs，字段与级别集中管理（level、caller、trace_id/span_id）；不散落 fmt.Print 与标准库 log，不手拼日志文案。
+- 指标同时支持两种导出模式：pull（控制面与 worker 暴露 /metrics 供 Prometheus 抓取）与 push（OTLP exporter 推送 collector），按实例部署形态可独立启停。
+- 指标命名区分运行时与业务域（HTTP/RPC、构建、部署、队列），构建、部署、健康探测等关键链路必须埋点；tracer/meter 的获取与 SDK 初始化封装进公共库，业务代码只声明指标名与属性。
+- 现状：三信号公共库为 `internal/lib/observability`（zap JSON 编码 + otelzap 桥接 OTel Logs；Prometheus pull 与 OTLP push 双通道；otelhttp/otelconnect 接线）。控制面、worker、build-runner 均已接入：push 用 `--otel-endpoint`（或环境变量 `OTEL_EXPORTER_OTLP_ENDPOINT`），pull 用 serve 的 `--metrics-pull` 暴露 `/metrics`。
+
 ## 产品层级与界面
 
 - 业务组织仅保留“工作空间 → 应用”两层，应用直接归属工作空间；不增加 Project 中间层或 project_id。
@@ -26,7 +45,7 @@
 ## 配置分层与多语言
 
 - 实例配置按“何时加载、能否运行中修改”分两层，新增配置先归层再落位：
-  - **启动时加载且运行中不可变**（数据库连接、加密密钥、监听地址、worker CA 等）：环境变量 / 命令行参数 / 配置文件，改配置等于重启进程；不得放进数据库。
+  - **启动时加载且运行中不可变**（数据库连接、加密密钥、监听地址、worker CA 等）：环境变量 / 命令行参数 / 配置文件（viper，`--config` 指定或默认查找 `./config.yaml`、`/etc/yummy/config.yaml`，示例见 `config.example.yaml`），读取优先级为显式命令行参数 > 配置文件 > 环境变量 > 内置默认；改配置等于重启进程；不得放进数据库。
   - **运行中可修改**（功能开关、平台策略、限额这类）：数据库全局配置表 `instance_settings`（单行表，迁移加列），仅全局管理员可写（RPC + 审计），登录身份可读；“谁是管理员”属于成员关系与授权数据，不进配置表。
 - 多语言扩展：第一版界面中文直出，不引入 i18n 运行时或语言切换入口（与“第一版无主题切换”同一精神）；新增文案集中放置、避免与逻辑拼接组合（为后续抽取消息目录预留），错误消息与提示语保持完整句子，多语言落地时另立设计再做。
 
@@ -48,7 +67,7 @@
 - 组件使用 shadcn/ui（Radix 系 primitive），按需引入、源码入库；图标统一 Lucide React，图表用 shadcn Chart + Recharts，不自研图表引擎。
 - 路由 / 服务端状态 / 表格 / 表单分别用 TanStack Router、Query（+ Connect 适配）、Table、Form + Zod；不并装 React Hook Form，不引入 Redux/Zustand。
 - 验证保留 Vitest/Testing Library，并用 Playwright 覆盖跨页流程与响应式。完整表格、版本锁定与边界说明见 [前端设计](docs/superpowers/specs/2026-10-22-agent-first-build-frontend-design.md#6-前端技术选型)。
-- 现状提醒：`web/` 目前仍是原型 demo（单文件 `src/styles.css`，无 Tailwind/shadcn 依赖），上述选型尚未落地；新增 UI 时按选型实施，不继续给 demo 的硬编码 CSS 加料。
+- 现状：`web/` 已按上述选型落地（Tailwind 4 + shadcn 组件源码在 `web/src/components/ui/`），正式入口为 `web/index.html`；新增 UI 继续按选型实施，组件优先从 shadcn registry 取源码。
 
 ## 页面制作
 

@@ -5,10 +5,15 @@
 ## 1. 构建与依赖
 
 - 工具链：Go（go.mod 声明版本，工具链 1.27.3 验证）、Node（^22/^24/≥26，pnpm 10）、make、openssl（证书）、docker（本地基础设施，可选）。
-- 构建：`make build`（先 `pnpm --dir web install`）。产物：`bin/platform`（控制面 + 管理命令）、`bin/control`、`bin/worker`（旧 demo 拓扑，显式开发模式）。
+- 构建：`make build`（先 `pnpm --dir web install`）。产物：`bin/platform`（控制面 `serve`、worker `worker run` 与全部按需管理命令；构建 Pod 内的一次性 runner 由 `cmd/build-runner` 打成镜像，非常驻服务）。
 - 数据库迁移：goose 版本化迁移，进程内带锁执行；`platform migrate --database-url …`。禁止 AutoMigrate。
 
 ## 2. 控制面安装与启动
+
+配置文件（可选）：`--config /etc/yummy/config.yaml` 承载全部启动参数（数据库、Redis、监听、密钥、
+OAuth、worker TLS、可观测性），键名与命令行 flag 一致，完整示例见仓库 `config.example.yaml`。
+读取优先级：显式命令行参数 > 配置文件 > 环境变量 > 内置默认值；未指定 `--config` 时依次查找
+`./config.yaml` 与 `/etc/yummy/config.yaml`。含密钥的文件权限设为 0600；改配置文件需重启进程生效。
 
 1. 准备 PostgreSQL 与 Redis（Redis 仅承担会话与在线 TTL）。
 2. `platform migrate --database-url "postgres://user:pass@host:5432/db?sslmode=disable"`。

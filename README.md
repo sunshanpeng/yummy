@@ -1,36 +1,34 @@
-# React + Go 多拓扑部署 Demo
+# Yummy 应用平台
 
-这个 Demo 使用同一套 React、Go 和 Protocol Buffers 代码，演示三种运行方式：
-
-1. `platform` 不带子命令，默认 `all`：React、控制面和本地 worker 合并为一个进程；
-2. Vite + `platform all`：前端开发服务器与 Go 后端分开运行；
-3. `control` + `worker`：控制面和执行节点拆成独立进程，worker 可从客户机器经公网主动连接控制面。
-
-目前只实现安全的内置 `uppercase` 任务，不执行任意 Shell 命令。任务数据以 PostgreSQL 为准，Redis 仅保存带 TTL 的 worker 在线状态。
+Yummy 是一个把源码构建成镜像并部署到 k3s 运行的应用平台：React 控制台与公共 API 由
+控制面进程提供，构建与部署执行由 worker 承担，构建 Pod 内的一次性 runner 进程调用
+BuildKit 完成镜像构建。全部能力打进一个 `bin/platform` 二进制（含嵌入控制台）。
 
 ## 架构
 
 ```mermaid
 flowchart LR
-    UI["React 控制台"] -->|"ConnectRPC Unary /api"| CP["Go 控制面"]
-    CP --> PG[("PostgreSQL<br/>任务与状态")]
-    CP --> Redis[("Redis<br/>在线状态 TTL")]
-    CP --> Bus{"CommandBus"}
-    Bus -->|"all 模式：函数调用"| Local["本地 worker runtime"]
-    Bus -->|"拆分模式：ConnectRPC 双向流<br/>HTTP/2 + mTLS"| Remote["远程 worker / agent"]
-    Local -->|"领域事件"| CP
-    Remote -->|"Accepted / Progress / Result"| CP
+    UI["React 控制台"] -->|"ConnectRPC /api"| CP["控制面<br/>bin/platform serve"]
+    CP --> PG[("PostgreSQL<br/>业务事实源")]
+    CP --> Redis[("Redis<br/>会话与在线状态")]
+    CP --> SRC[("源码归档目录")]
+    CP -->|"mTLS 双向流"| W["worker<br/>bin/platform worker run"]
+    W --> K3S["k3s 集群"]
+    K3S --> BP["构建 Pod<br/>BuildKit runner"]
+    K3S --> RT["应用运行时 Deployment"]
 ```
 
-控制面只依赖稳定的 `CommandBus`、repository 和 presence 接口。三种拓扑的差异集中在 `internal/bootstrap` 的装配层，业务代码和协议不分叉。
+- **控制面**：登录与会话、工作空间/应用/构建/部署/OAuth 的 Connect API、审计与授权、
+  本地 CLI/MCP 入口，全部在一个进程内按模块组织。
+- **worker**：以注册身份经 mTLS 长连接接入控制面，负责构建 Job、部署与运行时观察、
+  节点指标采集；事件经 journal 保证不丢、重投幂等。
+- **构建 runner**：`cmd/build-runner` 只由构建 Pod 启动，不是常驻服务。
 
 ## 前置条件
 
 - Go 1.26 或更高版本；`go.mod` 指定了 `toolchain go1.27.3`，默认的 `GOTOOLCHAIN=auto` 会自动下载并使用该版本；
 - Node.js 22.13+、24 或 26+（推荐 24 LTS）、pnpm 10；
 - Docker Compose；
-- OpenSSL；
-- rsync；
 - 仅在重新生成协议代码时需要 `protoc`。
 
 ## 首次准备
@@ -38,123 +36,87 @@ flowchart LR
 ```bash
 pnpm --dir web install --frozen-lockfile
 docker compose up -d postgres redis
-make certs build
+make build
 ```
 
-开发证书会写入 `var/certs`，只用于本地演示。生产或公网部署应由正式 CA 签发证书，并妥善保护 worker 私钥。worker 证书的 CN 即 worker ID，只能包含字母、数字、点、下划线和连字符，最长 128 个字符。
+compose 使用 PostgreSQL 18 和 Redis 8。PostgreSQL 18 镜像的数据目录与 17 不兼容，如果本机还留着旧版本创建的容器，先执行 `docker compose down -v` 删除旧容器和数据，再重新启动。
 
-compose 使用 PostgreSQL 18 和 Redis 8。PostgreSQL 18 镜像的数据目录与 17 不兼容，如果本机还留着旧版本创建的容器，先执行 `docker compose down -v` 删除旧容器和演示数据，再重新启动。
-
-## 方式一：单二进制、单进程
+## 快速开始（单机开发）
 
 ```bash
-./bin/platform
+# 三把独立密钥（Base64 32 字节），master-key 必须随数据库一同备份
+openssl rand -base64 32   # SESSION_KEY
+openssl rand -base64 32   # CSRF_KEY
+openssl rand -base64 32   # MASTER_KEY
+mkdir -p var/source
+
+./bin/platform migrate
+./bin/platform admin init --username admin
+SESSION_KEY=... CSRF_KEY=... MASTER_KEY=... SOURCE_ROOT=var/source \
+  ./bin/platform serve --allow-local-http
 ```
 
-不指定子命令时默认等价于：
+打开 <http://127.0.0.1:8080>，用 `admin init` 创建的账号登录。`--allow-local-http`
+只允许回环地址明文访问，生产部署必须 HTTPS（见 `docs/operations.md`）。
+
+## 控制面与 worker 分离
+
+控制面启用 worker 登记（生成 CA 与服务端证书）：
 
 ```bash
-./bin/platform all
+./bin/platform serve --worker-ca-cert var/worker-ca.crt --worker-ca-key var/worker-ca.key \
+  --worker-cert var/worker.crt --worker-key var/worker.key --worker-addr :8443
 ```
 
-打开 <http://localhost:8080>。页面、公共 API、控制面和 `local-worker` 都在同一个 Go 进程中。公共端口默认只监听 `127.0.0.1`。
-
-## 方式二：前后端分离
-
-终端一启动 Go 后端：
+worker 所在节点先登记身份再运行执行内核：
 
 ```bash
-./bin/platform all
+./bin/platform worker register --server control.example.com:8443 --token <一次性注册码> --state-dir /var/lib/yummy-worker
+./bin/platform worker run --state-dir /var/lib/yummy-worker \
+  --kube-apiserver https://10.0.0.5:6443 --kube-ca-file ca.crt --kube-token-file token \
+  --node-name node-1 --build-namespace build-demo --runtime-namespace prod-demo
 ```
 
-终端二启动 React 开发服务器：
+worker 主动建立长连接，部署在客户网络时通常只需允许它访问控制面的 worker HTTPS 端口。
+
+## CLI 与 MCP
 
 ```bash
-pnpm --dir web dev
+./bin/platform client auth login        # PAT 登录
+./bin/platform client workspace list    # 工作空间与应用操作
+./bin/platform mcp --stdio              # 本地 stdio MCP（源码预览 + 已登录桥接业务工具）
 ```
-
-打开 <http://localhost:5173>。Vite 将 `/api` 代理到 `http://127.0.0.1:8080`。如后端使用其他地址：
-
-```bash
-VITE_CONTROL_PROXY=http://127.0.0.1:19081 pnpm --dir web dev
-```
-
-生产环境可以将 `web/dist` 放到 Nginx、对象存储或 CDN，并参考 `deploy/nginx.conf` 将 `/api/` 转发给 Go 后端。此时 Go 后端需要用 `PUBLIC_ADDR=:8080`（或具体内网地址）监听反向代理可达的地址。`platform` 自带的嵌入页面在这种拓扑下可以不使用。
-
-## 方式三：控制面和 worker 分离
-
-先启动控制面：
-
-```bash
-./bin/control
-```
-
-再启动独立 worker：
-
-```bash
-./bin/worker --worker-id worker-1
-```
-
-也可以只分发万能二进制：
-
-```bash
-./bin/platform control
-./bin/platform worker --worker-id worker-1
-```
-
-公共控制台/API 默认只监听 `127.0.0.1:8080`；只供 worker 使用的 mTLS HTTP/2 端口默认监听所有网卡的 `:8443`。worker 主动建立长连接，因此部署在客户网络时通常只需允许它访问控制面的公网 `8443` 端口。
 
 ## 常用配置
 
-| 环境变量 / 参数 | 默认值 | 用途 |
+同一配置项的读取优先级：**显式命令行参数 > 配置文件 > 环境变量 > 内置默认值**。
+配置文件用 `--config`（或 `-c`）指定，未指定时依次查找 `./config.yaml`、`/etc/yummy/config.yaml`；
+键名与 flag 一致，完整示例见 [config.example.yaml](config.example.yaml)。
+
+| 参数（环境变量为对应大写下划线形式） | 默认值 | 用途 |
 |---|---|---|
-| `DATABASE_URL` / `--database-url` | `postgres://demo:demo@localhost:5432/demo?sslmode=disable` | PostgreSQL |
-| `REDIS_ADDR` / `--redis-addr` | `localhost:6379` | Redis；也支持 `redis://` / `rediss://` URL，可携带用户名、密码并启用 TLS |
-| `PUBLIC_ADDR` / `--public-addr` | `127.0.0.1:8080` | 页面与公共 ConnectRPC API；公共 API 暂无认证，默认只监听本机 |
-| `AGENT_ADDR` / `--agent-addr` | `:8443` | worker mTLS 双向流 |
-| `CONTROL_URL` / `--control-url` | `https://localhost:8443` | worker 回连地址 |
-| `WORKER_ID` / `--worker-id` | `worker-1` | worker ID，必须与客户端证书 CN 一致；只能包含字母、数字、点、下划线和连字符，最长 128 个字符 |
-| `WORKER_VERSION` / `--worker-version` | `demo` | worker 版本号，最长 128 字节 |
-| `CERT_DIR` / `--cert-dir` | `var/certs` | CA、服务端和 worker 证书目录 |
-| `TLS_SERVER_NAME` / `--tls-server-name` | `localhost` | worker 校验的服务端证书名称 |
-
-示例：
-
-```bash
-CONTROL_URL=https://control.example.com:8443 \
-TLS_SERVER_NAME=control.example.com \
-CERT_DIR=/etc/platform/certs \
-./bin/worker --worker-id customer-a-worker-1
-```
-
-需要先为该 worker 生成或签发 CN 为 `customer-a-worker-1` 的客户端证书，并放置为：
-
-```text
-/etc/platform/certs/ca.crt
-/etc/platform/certs/customer-a-worker-1.crt
-/etc/platform/certs/customer-a-worker-1.key
-```
+| `--database-url` / `DATABASE_URL` | `postgres://demo:demo@localhost:5432/demo?sslmode=disable` | PostgreSQL |
+| `--redis-addr` / `REDIS_ADDR` | `localhost:6379` | Redis；支持 `redis://` / `rediss://` URL |
+| `--public-addr` / `PUBLIC_ADDR` | `127.0.0.1:8080` | 页面与公共 ConnectRPC API |
+| `--transfer-addr` / `TRANSFER_ADDR` | `127.0.0.1:8081` | 同进程的文件传输监听（独立避免整体超时截断上传） |
+| `--session-key` / `--csrf-key` / `--master-key` | 无（必填） | 三把独立 Base64 32 字节密钥 |
+| `--source-root` / `SOURCE_ROOT` | 无（必填） | 源码归档持久目录，必须预先创建 |
+| `--public-base-url` | 无 | 明确的公开站点根 URL，不从请求头推断 |
+| `--otel-endpoint` / `OTEL_EXPORTER_OTLP_ENDPOINT` | 空 | OTLP push 端点（trace/metric/log），留空关闭；serve 另有 `--metrics-pull` 暴露 `/metrics` |
+| `--log-level` / `LOG_LEVEL` | `info` | 日志级别 debug/info/warn/error |
+| `--worker-ca-cert` / `--worker-ca-key` | 空 | worker 签发 CA，留空禁用登记 |
+| `--worker-cert` / `--worker-key` / `--worker-addr` | `127.0.0.1:8443` | worker HTTPS 监听器 |
+| worker run：`--state-dir` `--kube-apiserver` `--kube-ca-file` `--kube-token-file` `--node-name` `--build-namespace` `--runtime-namespace` | 无（必填） | worker 执行内核连接参数 |
 
 ## 开发命令
 
-如 `go mod download` 或 `make build` 访问 `proxy.golang.org` 超时，Makefile 已默认启用国内镜像：
-
-```bash
-# 默认：goproxy.cn → proxy.golang.org → direct
-make build
-
-# 临时改用其他镜像
-GOPROXY=https://goproxy.io,direct make build
-```
-
-也可写入 shell 配置：`export GOPROXY=https://goproxy.cn,direct`。
-
 ```bash
 make test              # Go race 测试 + React 组件测试
-make integration-test  # 使用本机 PostgreSQL/Redis 的存储集成测试
-make build             # 构建前端并生成三个二进制
+make integration-test  # 使用本机 PostgreSQL/Redis 的真实存储集成测试
+make build             # 构建前端并生成 bin/platform
+make web-build         # 仅构建前端并同步到 Go 嵌入目录
 make generate          # 重新生成 Go/TypeScript 协议代码
-make smoke             # 自动验证三种拓扑
+make smoke             # 产品冒烟：迁移/管理员/登录/建空间/OAuth 元数据最小真实链路
 ```
 
 `make generate` 默认使用系统 `protoc`；本仓库当前也会识别 `work/protoc/bin/protoc`。生成器由 Go tool 依赖和前端 `protoc-gen-es` 提供。
@@ -162,17 +124,13 @@ make smoke             # 自动验证三种拓扑
 ## 数据检查
 
 ```bash
-docker compose exec postgres psql -U demo -d demo -c \
-  "SELECT id, worker_id, status, output, updated_at FROM commands ORDER BY created_at DESC LIMIT 10;"
-
-docker compose exec redis redis-cli --scan --pattern 'demo:worker:*'
+docker compose exec postgres psql -U demo -d demo -c '\dt'
+docker compose exec redis redis-cli --scan --pattern 'session:*'
 ```
 
-## 当前边界与后续 HA
+## 文档
 
-- 公共 API 还没有用户认证和授权。默认只监听本机只能缩小暴露面，挡不住浏览器 DNS rebinding 这类本机访问；对外提供前必须先补上认证，或放在带认证的入口之后，`deploy/nginx.conf` 只是转发示例。
-- 任务文本上限为 16 KiB；worker 只能上报属于自己的任务事件，身份以 mTLS 客户端证书为准。
-- 当前控制面是单实例；同一个进程内的 registry 保存它所连接的 worker。
-- 未来多控制面实例需要给 worker 连接增加 owner/租约，并让任务路由到持有该连接的控制面实例，可使用 PostgreSQL/Redis 协调或引入消息系统。
-- PostgreSQL 已是唯一任务事实来源，后续可增加 outbox、重试与幂等键；接入 AI 时也便于使用 `pgvector` 等扩展。
-- 当前没有证书签发后台、自动任务重投、用户认证和任意代码执行能力。
+- 架构总览（部署架构图 + 代码模块分层图）：[docs/architecture.md](docs/architecture.md)
+- 部署与运维：[docs/operations.md](docs/operations.md)
+- 设计文档：[docs/superpowers/specs/](docs/superpowers/specs/)
+- 项目约定：[AGENTS.md](AGENTS.md)
