@@ -18,11 +18,9 @@ import (
 	"sync"
 	"time"
 
-	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	platformv1 "github.com/sunshanpeng/yummy/gen/go/platform/v1"
-	platformmcp "github.com/sunshanpeng/yummy/internal/bff/mcp"
 	"github.com/sunshanpeng/yummy/internal/controlplane/server"
 	"github.com/sunshanpeng/yummy/internal/domains/authorization"
 	"github.com/sunshanpeng/yummy/internal/domains/identity"
@@ -207,34 +205,7 @@ func NewRoot(assets fs.FS, settings map[string]any) *cobra.Command {
 	_ = config.BindPFlag("metrics-pull", serve.Flags().Lookup("metrics-pull"))
 	serve.Flags().Bool("behind-tls-proxy", false, "公网入口由可信反向代理终止HTTPS（docs/operations.md §4），应用收到代理转发请求")
 	_ = config.BindPFlag("behind-tls-proxy", serve.Flags().Lookup("behind-tls-proxy"))
-	var allowRoots []string
-	var stdio bool
-	localMCP := &cobra.Command{Use: "mcp", Short: "启动按需本地 MCP（源码预览；已登录时桥接业务工具）", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
-		if !stdio {
-			return errors.New("必须显式指定 --stdio；远程 MCP 由控制面提供")
-		}
-		// 已登录（存在用户凭证）时以用户 PAT 经控制面 API 桥接业务工具；
-		// 未登录时保持只读 source_preview 并在 stderr 说明。凭证不打印。
-		bridge := platformmcp.BridgeConfig{}
-		client, err := clientcli.ResolveClient(cmd.Context(), clientcli.ClientOptions{})
-		var clientErr *clientcli.Error
-		switch {
-		case err == nil:
-			bridge.Client = client
-		case errors.As(err, &clientErr) && clientErr.Code == "UNAUTHENTICATED":
-			_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "未检测到有效凭证，本次只提供 source_preview；业务工具需要先执行 platform client auth login 或 auth token，然后重新启动。")
-		default:
-			return err
-		}
-		server, err := platformmcp.NewBridgeServer(bridge, platformmcp.LocalConfig{AllowRoots: allowRoots})
-		if err != nil {
-			return err
-		}
-		return server.Run(cmd.Context(), &sdkmcp.StdioTransport{})
-	}}
-	localMCP.Flags().BoolVar(&stdio, "stdio", false, "使用标准输入输出运行本地 MCP")
-	localMCP.Flags().StringSliceVar(&allowRoots, "allow-root", nil, "显式授权读取的绝对目录，可重复")
-	root.AddCommand(migrate, admin, serve, clientcli.Command(), localMCP)
+	root.AddCommand(migrate, admin, serve, clientcli.Command())
 	root.AddCommand(newWorkerCommand(config))
 	root.RunE = func(cmd *cobra.Command, _ []string) error { return cmd.Help() }
 	return root

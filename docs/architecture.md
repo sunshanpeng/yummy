@@ -8,7 +8,7 @@
 flowchart TB
     subgraph clients["客户端"]
         browser["浏览器：React 控制台<br/>（二进制内嵌，无需单独前端部署）"]
-        agent["CLI / 本地 stdio MCP / Agent<br/>（PAT 认证，按需启动）"]
+        agent["CLI / Agent<br/>（PAT 认证，按需启动）"]
     end
 
     subgraph control["控制面进程 bin/platform serve（模块化单体）"]
@@ -61,7 +61,7 @@ flowchart TB
 | 项 | 说明 |
 |---|---|
 | 常驻进程 | 控制面 ×1 + worker ×N；构建 Pod 按任务拉起、结束即退，不算常驻 |
-| 按需客户端 | CLI（`platform client`）、本地 MCP（`platform mcp --stdio`）——不新增任何常驻服务 |
+| 按需客户端 | CLI（`platform client`）——不新增任何常驻服务 |
 | 控制面监听 | :8080 页面/API/传输（传输自带 10 分钟截止，业务 30s 超时预算）、:8082 管理面 /healthz 与 /metrics 只绑回环、:8443 worker mTLS |
 | 数据三件套 | PostgreSQL（事实源）+ source-root（归档）+ master-key，备份必须成套 |
 | 命名约定 | 构建 `build-<空间名>`、运行 `prod-<空间名>`、Deployment `<应用名>-<部署名>`、地址 `<应用名>-<后缀>.<根域名>` |
@@ -85,7 +85,7 @@ flowchart TB
         tr["transport<br/>11 个 Connect handler"]
         wg["transport/workergateway<br/>worker mTLS 网关 + 事件 journal"]
         ccli["transport/clientcli<br/>CLI 客户端"]
-        mcp["bff/mcp<br/>MCP 桥（跨域聚合）"]
+        mcp["bff/mcp<br/>远程 MCP（OAuth，单应用绑定）"]
     end
 
     subgraph domains["③ 业务领域 internal/domains（15 域）"]

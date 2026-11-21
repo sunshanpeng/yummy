@@ -1,6 +1,6 @@
 # Yummy 第一期运维手册
 
-面向自部署与独立托管实例的安装、配置、升级与限制说明。产品只含控制面（`platform serve`）与 worker（`platform worker run`）两类常驻进程；CLI、本地 stdio MCP 均为按需启动的客户端。PostgreSQL、Redis、Kubernetes（k3s）、镜像仓库为既有基础设施，本产品不额外引入服务。
+面向自部署与独立托管实例的安装、配置、升级与限制说明。产品只含控制面（`platform serve`）与 worker（`platform worker run`）两类常驻进程；CLI 为按需启动的客户端。PostgreSQL、Redis、Kubernetes（k3s）、镜像仓库为既有基础设施，本产品不额外引入服务。
 
 ## 1. 构建与依赖
 
@@ -83,4 +83,4 @@ OAuth、worker TLS、可观测性），键名与命令行 flag 一致，完整�
 - **未做实机验收**（需要专用 Linux/AMD64 服务器）：k3s + BuildKit 真实构建推拉、真实域名 HTTPS 访问、Kubelet 指标精度、断网重传、PVC 保留与 NetworkPolicy 的 CNI 执行。任何"节点就绪/资格通过"在实机验收前不代表真实集群能力。
 - 第一期不含：多副本、跨节点自动迁移、Git 自动部署、多容器编排、托管数据库、复杂告警/APM/Trace、计费、跨实例自动迁移。
 - rootless BuildKit 不构成对任意陌生租户代码的强隔离承诺；节点权限最小 RBAC 与 NetworkPolicy 是否生效取决于安装侧 CNI，需专项验证。
-- 已知权衡：stdio MCP 长会话中 PAT 过期需重启会话（启动时刷新）；e2e 连续全量运行需管理登录频控窗口。
+- 已知权衡：e2e 连续全量运行需管理登录频控窗口。

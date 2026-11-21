@@ -8,8 +8,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -280,36 +278,5 @@ func TestNewHandlerRejectsInvalidConfiguration(t *testing.T) {
 	}
 	if _, err := NewHTTPHandler(Config{PublicBaseURL: "https://example.com"}, Services{Applications: apps}); err == nil {
 		t.Fatal("必须提供认证器")
-	}
-}
-func TestLocalPreviewRequiresAllowRoots(t *testing.T) {
-	if _, err := NewLocalServer(LocalConfig{}); err == nil {
-		t.Fatal("必须提供授权根")
-	}
-	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "Dockerfile"), []byte("FROM scratch\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	server, err := NewLocalServer(LocalConfig{AllowRoots: []string{root}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	a, b := sdk.NewInMemoryTransports()
-	if _, err = server.Connect(context.Background(), a, nil); err != nil {
-		t.Fatal(err)
-	}
-	client := sdk.NewClient(&sdk.Implementation{Name: "test", Version: "1"}, nil)
-	s, err := client.Connect(context.Background(), b, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s.Close()
-	v := call(t, s, "source_preview", map[string]any{"root": root})
-	if v.IsError || strings.Contains(contentJSON(t, v), root) {
-		t.Fatalf("预览失败或泄露根目录：%s", contentJSON(t, v))
-	}
-	outside := t.TempDir()
-	if v = call(t, s, "source_preview", map[string]any{"root": outside}); !v.IsError {
-		t.Fatal("越过授权目录")
 	}
 }
