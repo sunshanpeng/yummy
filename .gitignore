@@ -13,3 +13,6 @@ __debug_*
 # 实例启动配置文件（可能含密钥，仓库只保留 config.example.yaml）
 /config.yaml
 /config.yml
+
+# 会话级工具产物（计划/草稿），不入库
+.zcode/

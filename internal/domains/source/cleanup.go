@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"regexp"
 	"time"
 
 	"github.com/sunshanpeng/yummy/internal/domains/authorization"
@@ -43,11 +44,13 @@ type cleanupTarget struct {
 //     删上传行，成对彻底回收；
 //   - 快照 READY 且过期、仅被终态构建引用：删文件，行置 state=EXPIRED 保留
 //     （行仍被 builds 与上传行 RESTRICT，保留行即满足全部外键）；
-//   - 快照 READY 且过期、被非终态构建引用：本轮完全跳过。
+//   - 快照 READY 且过期、被非终态构建引用：本轮完全跳过；
+//   - 收包临时 part 文件寿命超限（进程崩溃遗留，正常路径由 defer 删除）：按修改
+//     时间有界删除。
 //
 // 每条先删文件再改行：文件不存在视为已删，行删除失败时下一轮重试仍能先处理文件；
 // 文件删除失败则不触碰行，保持整轮可重试。单条失败记录后继续（errors.Join 汇总），
-// 不中断整轮。孤儿文件（无对应行）不在本轮扫描范围，留待运维工具处理。
+// 不中断整轮。孤儿快照文件（无对应行）不在本轮扫描范围，留待运维工具处理。
 func (s *Service) Cleanup(ctx context.Context, now time.Time, limit int) (removed int, err error) {
 	if limit <= 0 {
 		return 0, authorization.ErrInvalid
@@ -86,6 +89,13 @@ func (s *Service) Cleanup(ctx context.Context, now time.Time, limit int) (remove
 				failures = append(failures, fmt.Errorf("回收上传 %s: %w", target.ID, targetErr))
 			}
 		}
+	}
+	// 收包临时文件的兜底回收：收包已移到数据库事务外，进程崩溃遗留的半包
+	// 不再有任何行可循，只能按文件名模式与寿命清理。
+	count, sweepErr := s.sweepOrphanParts(ctx, now, limit)
+	removed += count
+	if sweepErr != nil {
+		failures = append(failures, fmt.Errorf("回收遗留收包文件: %w", sweepErr))
 	}
 	return removed, errors.Join(failures...)
 }
@@ -214,4 +224,60 @@ func (s *Service) cleanupUpload(ctx context.Context, target cleanupTarget, now t
 		return 0, nil // 并发清理已处理或状态已变化
 	}
 	return 1, nil
+}
+
+// partFilePattern 匹配收包临时文件（security.NewID("part") 派生），与
+// storageKeyPattern 的 upload_/snapshot_ 前缀不重叠，绝不误删已落盘内容。
+var partFilePattern = regexp.MustCompile(`^part_[0-9a-f]{32}$`)
+
+// orphanPartLifetime 是收包临时文件的兜底寿命：正常路径 part 文件由 defer
+// 删除且收包自带 UploadLifetime 截止，超过寿命的 part 文件只可能是进程崩溃
+// 遗留的半包，删除不影响任何活跃上传。
+const orphanPartLifetime = time.Hour
+
+// sweepOrphanParts 回收进程崩溃遗留的收包临时文件：只删修改时间早于
+// orphanPartLifetime 的 part 文件，每轮最多 limit 个；失败记录后继续。
+func (s *Service) sweepOrphanParts(ctx context.Context, now time.Time, limit int) (int, error) {
+	directory, err := s.root.Open(".")
+	if err != nil {
+		return 0, err
+	}
+	entries, err := directory.ReadDir(-1)
+	closeErr := directory.Close()
+	if err != nil {
+		return 0, err
+	}
+	if closeErr != nil {
+		return 0, closeErr
+	}
+	cutoff := now.Add(-orphanPartLifetime)
+	removed := 0
+	var failures []error
+	for _, entry := range entries {
+		if removed >= limit {
+			break
+		}
+		if ctx.Err() != nil {
+			break
+		}
+		name := entry.Name()
+		if entry.IsDir() || !partFilePattern.MatchString(name) {
+			continue
+		}
+		info, infoErr := entry.Info()
+		if infoErr != nil || info.ModTime().After(cutoff) {
+			continue
+		}
+		if err := s.root.Remove(name); err != nil && !errors.Is(err, os.ErrNotExist) {
+			failures = append(failures, fmt.Errorf("回收 %s: %w", name, err))
+			continue
+		}
+		removed++
+	}
+	if removed > 0 {
+		if err := s.syncDirectory(); err != nil {
+			failures = append(failures, err)
+		}
+	}
+	return removed, errors.Join(failures...)
 }

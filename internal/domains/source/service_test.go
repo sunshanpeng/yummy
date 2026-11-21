@@ -392,6 +392,93 @@ func TestRevocationNotBlockedByTransferAndPreventsCommit(t *testing.T) {
 	if err := e.db.First(&stored, "id = ?", upload.ID).Error; err != nil || stored.State != StatePending {
 		t.Fatalf("撤权污染状态: %+v %v", stored, err)
 	}
+	// 快照不可用：撤权后归档入口先被身份复核拒绝，且不产生任何快照
+	//（未撤权时也会因会话仍 PENDING 被 ErrNotReady 拒绝）。
+	if _, err := e.service.Complete(context.Background(), e.developer, "space", "app", upload.ID); !errors.Is(err, authorization.ErrUnauthenticated) {
+		t.Fatalf("撤权后会话仍可归档: %v", err)
+	}
+	var snapshots int64
+	if err := e.db.Model(&snapshotRecord{}).Count(&snapshots).Error; err != nil || snapshots != 0 {
+		t.Fatalf("撤权后产生快照: %d %v", snapshots, err)
+	}
+}
+
+// TestSlowUploadDoesNotHoldDatabaseConnection 验证收包移出事务的核心收益：
+// 慢上传期间连接池唯一连接保持空闲，其他空间的查询照常执行（池=1 使任何
+// 占用都必然阻塞本用例）。
+func TestSlowUploadDoesNotHoldDatabaseConnection(t *testing.T) {
+	e := setup(t)
+	pool, err := e.db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool.SetMaxOpenConns(1)
+	t.Cleanup(func() { pool.SetMaxOpenConns(0) })
+	upload := e.create(t)
+	reader := &gatedReader{reader: bytes.NewReader(e.data), entered: make(chan struct{}), release: make(chan struct{})}
+	result := make(chan error, 1)
+	go func() {
+		_, err := e.service.Upload(context.Background(), e.developer, "space", "app", upload.ID, reader)
+		result <- err
+	}()
+	select {
+	case <-reader.entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("上传未开始")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	queryDone := make(chan error, 1)
+	go func() {
+		var count int64
+		queryDone <- e.db.WithContext(ctx).Model(&model.Workspace{}).Count(&count).Error
+	}()
+	select {
+	case err := <-queryDone:
+		if err != nil {
+			t.Fatalf("慢上传阻塞其他查询: %v", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("其他查询在慢上传期间无法获得连接")
+	}
+	close(reader.release)
+	if err := <-result; err != nil {
+		t.Fatalf("恢复后上传失败: %v", err)
+	}
+	if stored := e.received(t); stored.State != StateUploaded {
+		t.Fatalf("池收窄后新上传失败: %+v", stored)
+	}
+}
+
+// TestCleanupSweepsOrphanPartFiles 验证收包临时文件的兜底回收：只删超过
+// 寿命上限的 part 文件，活跃收包文件与已落盘快照不受影响。
+func TestCleanupSweepsOrphanPartFiles(t *testing.T) {
+	e := setup(t)
+	ready := e.ready(t)
+	stale := "part_" + strings.Repeat("a", 32)
+	fresh := "part_" + strings.Repeat("b", 32)
+	for _, name := range []string{stale, fresh} {
+		if err := os.WriteFile(filepath.Join(e.root, name), []byte("half"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	past := time.Now().Add(-2 * time.Hour)
+	if err := os.Chtimes(filepath.Join(e.root, stale), past, past); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.service.Cleanup(context.Background(), time.Now().UTC(), 100); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(e.root, stale)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("过期半包未回收: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(e.root, fresh)); err != nil {
+		t.Fatalf("误删活跃收包文件: %v", err)
+	}
+	target := "snapshot_" + strings.TrimPrefix(ready.ID, "src_") + ".tar.gz"
+	if _, err := os.Stat(filepath.Join(e.root, target)); err != nil {
+		t.Fatalf("快照文件被误删: %v", err)
+	}
 }
 
 func TestExpiryMetadataAndRenameCrashRecovery(t *testing.T) {

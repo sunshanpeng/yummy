@@ -154,6 +154,18 @@ func (s *Service) authorize(ctx context.Context, principal authorization.Princip
 func (s *Service) lockUpload(tx *gorm.DB, principal authorization.Principal, workspaceID, applicationID, uploadID string) (uploadRecord, error) {
 	var value uploadRecord
 	err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&value, "id = ? AND workspace_id = ? AND application_id = ? AND created_by = ?", uploadID, workspaceID, applicationID, principal.UserID).Error
+	return finishLoadUpload(value, err)
+}
+
+// loadUpload 无锁读取上传会话：收包与归档校验在数据库事务外进行，只需要会话
+// 事实的当下快照；提交前的短事务用 lockUpload 重新锁定并复核全部状态。
+func (s *Service) loadUpload(db *gorm.DB, principal authorization.Principal, workspaceID, applicationID, uploadID string) (uploadRecord, error) {
+	var value uploadRecord
+	err := db.First(&value, "id = ? AND workspace_id = ? AND application_id = ? AND created_by = ?", uploadID, workspaceID, applicationID, principal.UserID).Error
+	return finishLoadUpload(value, err)
+}
+
+func finishLoadUpload(value uploadRecord, err error) (uploadRecord, error) {
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return value, authorization.ErrNotFound
 	}

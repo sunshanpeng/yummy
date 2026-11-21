@@ -18,6 +18,11 @@ import (
 // Upload 仅接受上传会话既定的一份完整内容。中断不会修改会话状态，可以整包重传。
 // reader 必须遵守外层传输 deadline/关闭语义：此处仅在 Read 边界检查 context，
 // 不通过无法取消的 goroutine 读取阻塞 reader。HTTP 层应设置绝对读截止时间。
+//
+// 收包、摘要校验与落盘全部在数据库事务外：慢上传不占用连接池连接与会话行锁，
+// 其他空间的查询与权限修改照常进行。短事务只在提交点锁定会话、复核权限、
+// 有效期与状态后完成改名和状态提交；rename 已成功而提交失败（如中途撤权）时
+// 文件按会话派生键留存，后续重试按摘要核实复用，绝不覆盖异物。
 func (s *Service) Upload(ctx context.Context, principal authorization.Principal, workspaceID, applicationID, uploadID string, reader io.Reader) (result Upload, err error) {
 	if reader == nil {
 		return result, authorization.ErrInvalid
@@ -27,12 +32,8 @@ func (s *Service) Upload(ctx context.Context, principal authorization.Principal,
 	if err := s.authorize(ctx, principal, workspaceID, applicationID, authorization.SourceUpload); err != nil {
 		return result, err
 	}
-	tx := s.db.WithContext(ctx).Begin()
-	if tx.Error != nil {
-		return result, tx.Error
-	}
-	defer tx.Rollback()
-	upload, err := s.lockUpload(tx, principal, workspaceID, applicationID, uploadID)
+	// 事务外预读会话事实；与提交之间的状态变化由短事务锁定后复核兜底。
+	upload, err := s.loadUpload(s.db.WithContext(ctx), principal, workspaceID, applicationID, uploadID)
 	if err != nil {
 		return result, err
 	}
@@ -50,7 +51,8 @@ func (s *Service) Upload(ctx context.Context, principal authorization.Principal,
 	if err != nil {
 		return result, ErrUnavailable
 	}
-	// 路径来自已校验的随机 ID，并且只在服务配置的 root 句柄下删除。
+	// 路径来自已校验的随机 ID，并且只在服务配置的 root 句柄下删除；
+	// rename 成功后该名字已不存在，删除为幂等空操作。
 	defer func() { _ = s.root.Remove(id) }()
 	digest := sha256.New()
 	count, copyErr := io.Copy(io.MultiWriter(file, digest), io.LimitReader(readWithContext{ctx, reader}, upload.ExpectedSize+1))
@@ -70,6 +72,21 @@ func (s *Service) Upload(ctx context.Context, principal authorization.Principal,
 	if err := ctx.Err(); err != nil {
 		return result, err
 	}
+	tx := s.db.WithContext(ctx).Begin()
+	if tx.Error != nil {
+		return result, tx.Error
+	}
+	defer tx.Rollback()
+	upload, err = s.lockUpload(tx, principal, workspaceID, applicationID, uploadID)
+	if err != nil {
+		return result, err
+	}
+	if upload.State != StatePending {
+		return result, authorization.ErrConflict
+	}
+	if !upload.ExpiresAt.After(time.Now()) {
+		return result, ErrExpired
+	}
 	// 进程在上次 rename 后、事务提交前崩溃时只复用相同内容，不覆盖异物。
 	if _, statErr := s.root.Lstat(upload.StorageKey); statErr == nil {
 		if err := s.checkContent(ctx, upload.StorageKey, upload); err != nil {
@@ -86,9 +103,6 @@ func (s *Service) Upload(ctx context.Context, principal authorization.Principal,
 		}
 	}
 	now := time.Now().UTC()
-	if !upload.ExpiresAt.After(now) {
-		return result, ErrExpired
-	}
 	if err := tx.Model(&upload).Updates(map[string]any{"state": StateUploaded, "uploaded_at": now}).Error; err != nil {
 		return result, err
 	}
@@ -98,7 +112,6 @@ func (s *Service) Upload(ctx context.Context, principal authorization.Principal,
 	if err := s.commitAuthorized(ctx, principal, workspaceID, applicationID, tx); err != nil {
 		return result, err
 	}
-	upload.State, upload.UploadedAt = StateUploaded, &now
 	return uploadDTO(upload), nil
 }
 
@@ -119,29 +132,24 @@ func (s *Service) checkContent(ctx context.Context, key string, upload uploadRec
 	return nil
 }
 
-// Complete 仅校验归档，不解包或执行源码。落盘与目录 fsync 先于 READY 数据库提交；
-// 重试使用由随机 upload ID 派生的同一快照路径，因此能恢复 rename 已成功但事务未提交。
+// Complete 仅校验归档，不解包或执行源码。Inspect 与落盘改名在数据库事务外：
+// 归档校验是本入口最重的一步，不应占用连接池连接与会话行锁。落盘与目录 fsync
+// 先于 READY 数据库提交；重试使用由随机 upload ID 派生的同一快照路径，因此能
+// 恢复 rename 已成功而事务未提交（预读直接校验快照文件并以其为键）。
 func (s *Service) Complete(ctx context.Context, principal authorization.Principal, workspaceID, applicationID, uploadID string) (result Snapshot, err error) {
 	ctx, cancel := context.WithTimeout(ctx, UploadLifetime)
 	defer cancel()
 	if err := s.authorize(ctx, principal, workspaceID, applicationID, authorization.SourceUpload); err != nil {
 		return result, err
 	}
-	tx := s.db.WithContext(ctx).Begin()
-	if tx.Error != nil {
-		return result, tx.Error
-	}
-	defer tx.Rollback()
-	upload, err := s.lockUpload(tx, principal, workspaceID, applicationID, uploadID)
+	upload, err := s.loadUpload(s.db.WithContext(ctx), principal, workspaceID, applicationID, uploadID)
 	if err != nil {
 		return result, err
 	}
+	// 幂等重放：快照行与文件不可变，入口授权已通过时可直接返回既有事实。
 	if upload.State == StateComplete && upload.SnapshotID != nil {
 		var snapshot snapshotRecord
-		if err := tx.First(&snapshot, "id = ? AND workspace_id = ? AND application_id = ?", *upload.SnapshotID, workspaceID, applicationID).Error; err != nil {
-			return result, err
-		}
-		if err := s.commitAuthorized(ctx, principal, workspaceID, applicationID, tx); err != nil {
+		if err := s.db.WithContext(ctx).First(&snapshot, "id = ? AND workspace_id = ? AND application_id = ?", *upload.SnapshotID, workspaceID, applicationID).Error; err != nil {
 			return result, err
 		}
 		return snapshotDTO(snapshot, time.Now()), nil
@@ -174,6 +182,32 @@ func (s *Service) Complete(ctx context.Context, principal authorization.Principa
 	if inspected.CompressedBytes != upload.ExpectedSize {
 		return result, ErrContent
 	}
+	tx := s.db.WithContext(ctx).Begin()
+	if tx.Error != nil {
+		return result, tx.Error
+	}
+	defer tx.Rollback()
+	upload, err = s.lockUpload(tx, principal, workspaceID, applicationID, uploadID)
+	if err != nil {
+		return result, err
+	}
+	if upload.State == StateComplete && upload.SnapshotID != nil {
+		// 并发 Complete 已提交：返回既有快照，绝不重复建行或再次改名。
+		var snapshot snapshotRecord
+		if err := tx.First(&snapshot, "id = ? AND workspace_id = ? AND application_id = ?", *upload.SnapshotID, workspaceID, applicationID).Error; err != nil {
+			return result, err
+		}
+		if err := s.commitAuthorized(ctx, principal, workspaceID, applicationID, tx); err != nil {
+			return result, err
+		}
+		return snapshotDTO(snapshot, time.Now()), nil
+	}
+	if !upload.ExpiresAt.After(time.Now()) {
+		return result, ErrExpired
+	}
+	if upload.State != StateUploaded {
+		return result, ErrNotReady
+	}
 	if key != target {
 		if err := s.root.Rename(key, target); err != nil {
 			return result, ErrUnavailable
@@ -183,9 +217,6 @@ func (s *Service) Complete(ctx context.Context, principal authorization.Principa
 		}
 	}
 	now := time.Now().UTC()
-	if !upload.ExpiresAt.After(now) {
-		return result, ErrExpired
-	}
 	snapshot := snapshotRecord{ID: snapshotID, WorkspaceID: workspaceID, ApplicationID: applicationID, UploadID: upload.ID, CreatedBy: principal.UserID, State: StateReady, StorageKey: target, SHA256: inspected.SHA256, CompressedBytes: inspected.CompressedBytes, ExpandedBytes: inspected.ExpandedBytes, FileBytes: inspected.FileBytes, EntryCount: int64(len(inspected.Entries)), Dockerfile: inspected.Dockerfile, Entries: inspected.Entries, CreatedAt: now, ExpiresAt: now.Add(SnapshotRetention)}
 	if err := tx.Create(&snapshot).Error; err != nil {
 		return result, err
