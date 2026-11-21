@@ -70,7 +70,7 @@ func (e *Executor) Deploy(ctx context.Context, command *platformv1.WorkerDeploym
 			return err
 		}
 	case "STOP":
-		e.stopRuntimeCollector(change.Release.ID)
+		e.stopRuntimeCollector(change.Release.WorkspaceID, change.Release.ApplicationID)
 		if err := e.runtime.Stop(ctx, change); err != nil {
 			return err
 		}
@@ -165,7 +165,7 @@ func (e *Executor) observeLoop(ctx context.Context, command *platformv1.WorkerDe
 	// 运行日志/指标采集生命周期改挂部署本体（见 startRuntimeCollector）：Apply 成功
 	// 即启动持久采集器，部署消失（LOST）或 STOP 时停止；不再随操作跟踪窗口结束。
 	if stop {
-		e.stopRuntimeCollector(change.Release.ID)
+		e.stopRuntimeCollector(change.Release.WorkspaceID, change.Release.ApplicationID)
 	} else {
 		if err := e.startRuntimeCollector(command, change, http, emitter); err != nil {
 			return err
@@ -180,7 +180,7 @@ func (e *Executor) observeLoop(ctx context.Context, command *platformv1.WorkerDe
 		evidence, err := e.runtime.Observe(ctx, change, http)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
-				e.stopRuntimeCollector(change.Release.ID)
+				e.stopRuntimeCollector(change.Release.WorkspaceID, change.Release.ApplicationID)
 				return emitter.Observation(e.deploymentObservation(command, kube.RuntimeEvidence{CollectedAt: time.Now().UTC()}, observationKindLost, ""))
 			}
 			return err

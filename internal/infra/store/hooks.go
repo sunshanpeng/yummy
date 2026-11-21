@@ -97,6 +97,10 @@ func fillAuditField(tx *gorm.DB, value reflect.Value, dbName, actor string) {
 }
 
 // fillOnUpdate 更新路径填充 updated_by（updated_at 由 GORM 按字段名自动维护）。
+// updated_by 的语义是“本次更新由谁执行”：无条件覆盖写入而不是仅在为空时填充，
+// 否则行上会一直保留上一个操作者（如空间改名成功后 updated_by 仍是创建者）。
+// Updates(map) 的列集合不在结构体反射面内，经 Statement.SetColumn 注入列；
+// 调用方显式提供的 updated_by 同样被覆盖，本回调是更新写路径的统一裁决点。
 func fillOnUpdate(tx *gorm.DB) {
 	if tx.Statement == nil || tx.Statement.Schema == nil {
 		return
@@ -106,19 +110,7 @@ func fillOnUpdate(tx *gorm.DB) {
 		return
 	}
 	if field, found := tx.Statement.Schema.FieldsByDBName["updated_by"]; found && field.FieldType.Kind() == reflect.String {
-		value := reflect.ValueOf(tx.Statement.Dest)
-		for value.Kind() == reflect.Ptr {
-			value = value.Elem()
-		}
-		switch value.Kind() {
-		case reflect.Struct:
-			if _, zero := field.ValueOf(tx.Statement.Context, value); zero {
-				_ = field.Set(tx.Statement.Context, value, actor)
-			}
-		default:
-			// 按列的批量更新（Updates(map)）通过 Statement 的 Set 列注入，
-			// 不在 Dest 反射面内；此处仅填充模型整行更新。
-		}
+		tx.Statement.SetColumn("updated_by", actor, true)
 	}
 }
 

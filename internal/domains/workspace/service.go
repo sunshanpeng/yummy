@@ -272,7 +272,15 @@ func (s *Service) Archive(ctx context.Context, p authorization.Principal, id str
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&value, "id = ?", id).Error; err != nil {
 			return err
 		}
-		// 后续构建/运行模块接入前不对未知活动任务作停止承诺。
+		// 空间归档前要求其下应用全部已归档：应用归档自身要求停止运行且无在途
+		// 部署，由此传递保证归档空间内不存在仍在运行的工作负载。
+		var active int64
+		if err := tx.Model(&model.Application{}).Where("workspace_id = ? AND status = ?", id, model.ResourceActive).Count(&active).Error; err != nil {
+			return err
+		}
+		if active > 0 {
+			return fmt.Errorf("%w: 工作空间仍有未归档的应用，请先归档全部应用", authorization.ErrConflict)
+		}
 		updated := tx.Model(&model.Workspace{}).Where("id = ? AND revision = ?", id, expectedRevision).Updates(map[string]any{"status": model.ResourceArchived, "revision": gorm.Expr("revision + 1")})
 		if updated.Error != nil {
 			return updated.Error

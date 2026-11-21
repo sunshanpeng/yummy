@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"regexp"
 	"strings"
 	"time"
@@ -308,6 +309,10 @@ func (s *Service) VerifyArtifact(ctx context.Context, id string, v ArtifactVerif
 		return audit.Record(tx, b.ActorID, "build.artifact.verify", "build", b.ID, &b.WorkspaceID, &b.ApplicationID)
 	})
 }
+
+// VerifyPending 逐条核验待验证产物。单个产物失败（仓库暂不可用、manifest 缺失等）
+// 只记入汇总继续下一条，不结束整轮：失败记录保留 VERIFYING 由下一轮重试，
+// 其余产物照常推进，避免一条坏记录阻塞整个核验批次。
 func (s *Service) VerifyPending(ctx context.Context, v ArtifactVerifier, limit int) error {
 	if limit < 1 || limit > 100 {
 		return authorization.ErrInvalid
@@ -316,10 +321,11 @@ func (s *Service) VerifyPending(ctx context.Context, v ArtifactVerifier, limit i
 	if err := s.db.WithContext(ctx).Where("state = 'VERIFYING'").Order("created_at, id").Limit(limit).Find(&records).Error; err != nil {
 		return err
 	}
+	var failures []error
 	for _, a := range records {
 		if err := s.VerifyArtifact(ctx, a.BuildID, v); err != nil {
-			return err
+			failures = append(failures, fmt.Errorf("build %s: %w", a.BuildID, err))
 		}
 	}
-	return nil
+	return errors.Join(failures...)
 }

@@ -16,6 +16,26 @@ import (
 func (s *Service) Stop(ctx context.Context, p authorization.Principal, ws, app string, in ChangeInput) (Result, error) {
 	return s.change(ctx, p, ws, app, in, Stop)
 }
+
+// StoppedForArchive 判断应用能否安全归档：从未部署（无运行状态行）或期望状态
+// 已停止且无在途操作。归档后运行停止接口因活跃状态校验拒绝，放行仍运行或
+// 有在途部署的应用会让工作负载失控；停止操作成功收尾需要副本归零证据，
+// 期望状态与在途操作因此构成“已停止”的充分条件。调用方须持有应用的写授权，
+// 方法自身只读运行事实，供应用域归档边界经显式接口依赖。
+func (s *Service) StoppedForArchive(tx *gorm.DB, ws, app string) (bool, error) {
+	var runtime struct {
+		DesiredState      string
+		ActiveOperationID *string
+	}
+	err := tx.Table("application_runtime_states").Select("desired_state, active_operation_id").Where("workspace_id = ? AND application_id = ?", ws, app).Take(&runtime).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return true, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return runtime.DesiredState == DesiredStop && runtime.ActiveOperationID == nil, nil
+}
 func (s *Service) Start(ctx context.Context, p authorization.Principal, ws, app string, in ChangeInput) (Result, error) {
 	return s.change(ctx, p, ws, app, in, Start)
 }

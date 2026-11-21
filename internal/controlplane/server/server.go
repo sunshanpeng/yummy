@@ -147,13 +147,13 @@ func openWithDatabase(ctx context.Context, db *gorm.DB, config Config, assets fs
 	}
 	inventoryService := inventory.NewService(db, access, box)
 	configService := runtimeconfig.NewService(db, access, box)
-	applicationService := application.NewService(db, access)
 	secretService := buildsecret.NewService(db, access, box)
 	buildService := build.NewService(db, access, inventoryService)
 	buildService.SetSecretResolver(secretService)
 	reader := &artifactReader{db: db, inventory: inventoryService, authHosts: config.RegistryAuthHosts, deniedHosts: config.RegistryDeniedHosts}
 	buildVerifier := buildArtifactVerifier{reader: reader}
 	deploymentService := deployment.NewService(db, access, configService, deploymentArtifactVerifier{reader: reader})
+	applicationService := application.NewService(db, access, deploymentService)
 	materials := &workerMaterials{db: db, box: box, source: sources, secrets: secretService, inventory: inventoryService, baseURL: strings.TrimRight(config.PublicBaseURL, "/")}
 	var enrollmentService *enrollment.Service
 	var gateway *workergateway.Gateway

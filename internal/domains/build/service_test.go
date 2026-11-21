@@ -592,3 +592,44 @@ func TestPATRefreshReadScopesCancelQueuedAndStopActor(t *testing.T) {
 		t.Fatal(v)
 	}
 }
+
+// TestVerifyPendingContinuesAfterFailure 验证核验批次不被单个失败产物阻塞：
+// 仓库错误只汇总返回并保留该记录 VERIFYING 下轮重试，其余产物照常完成核验。
+func TestVerifyPendingContinuesAfterFailure(t *testing.T) {
+	e := setup(t)
+	create(t, e, "first")
+	first := claim(t, e)
+	success(t, e, first)
+	if _, err := e.service.CreateBuild(context.Background(), e.admin, "space", "app_two", CreateInput{SourceSnapshotID: "source_two", ExpectedPolicyRevision: 1, IdempotencyKey: "second"}); err != nil {
+		t.Fatal(err)
+	}
+	second := claim(t, e)
+	success(t, e, second)
+	broken := verifier(func(_ context.Context, r VerificationRequest) (VerificationResult, error) {
+		if r.BuildID == first.BuildID {
+			return VerificationResult{}, errors.New("registry unavailable")
+		}
+		return goodVerifier(nil, r)
+	})
+	assertArtifactState := func(t *testing.T, buildID, state string) {
+		t.Helper()
+		var value struct{ State string }
+		if err := e.db.Table("build_artifacts").Select("state").Where("build_id = ?", buildID).Take(&value).Error; err != nil {
+			t.Fatal(err)
+		}
+		if value.State != state {
+			t.Fatalf("产物状态不符 build=%s: %s != %s", buildID, value.State, state)
+		}
+	}
+	// 失败只汇总返回，不结束整轮：其余产物照常核验完成。
+	if err := e.service.VerifyPending(context.Background(), broken, 10); err == nil {
+		t.Fatal("仓库错误应汇总返回")
+	}
+	assertArtifactState(t, second.BuildID, "VERIFIED")
+	assertArtifactState(t, first.BuildID, "VERIFYING")
+	// 失败记录保留 VERIFYING 下轮重试，条件恢复后可正常核验。
+	if err := e.service.VerifyPending(context.Background(), verifier(goodVerifier), 10); err != nil {
+		t.Fatal(err)
+	}
+	assertArtifactState(t, first.BuildID, "VERIFIED")
+}

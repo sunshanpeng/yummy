@@ -18,14 +18,14 @@ import (
 )
 
 // funcProber 把函数适配为 Prober，ObservedAt 在探测时动态取当前时间，保证晚于最近一次 Kubernetes 观察。
-type funcProber func(ctx context.Context, domain, path string) (ProbeResult, error)
+type funcProber func(ctx context.Context, target ProbeTarget) (ProbeResult, error)
 
-func (f funcProber) Probe(ctx context.Context, domain, path string) (ProbeResult, error) {
-	return f(ctx, domain, path)
+func (f funcProber) Probe(ctx context.Context, target ProbeTarget) (ProbeResult, error) {
+	return f(ctx, target)
 }
 
 func healthyProber() Prober {
-	return funcProber(func(context.Context, string, string) (ProbeResult, error) {
+	return funcProber(func(context.Context, ProbeTarget) (ProbeResult, error) {
 		return ProbeResult{TLSVerified: true, Healthy: true, ObservedAt: time.Now().UTC()}, nil
 	})
 }
@@ -166,6 +166,14 @@ func TestAutoPublishExpectedServingMismatchSkipsWithoutRollback(t *testing.T) {
 	if count := countRows(t, e, &model.AuditEvent{}, "action = ? AND object_type = 'build'", "application.deployment.autodeploy.skip.serving_mismatch"); count != 1 {
 		t.Fatal("未审计 serving 不匹配原因")
 	}
+	// serving 期望可经回滚/再发布恢复一致，候选保持重试不关停。
+	var deployed bool
+	if err := e.db.Table("builds").Select("auto_deploy").Where("id = 'bld_extra_app_one'").Take(&deployed).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !deployed {
+		t.Fatal("serving 不匹配被当作永久失效关停")
+	}
 	// 期望修正为当前 serving 后正常发布，且记录前一个 serving。
 	mustExec(t, e.db, "UPDATE builds SET expected_serving_release=? WHERE id='bld_extra_app_one'", serving.Release.ID)
 	if published, err := e.service.AutoPublish(ctx, 10); err != nil || published != 1 {
@@ -201,6 +209,14 @@ func TestAutoPublishSkipsWhenFrozenConfigSuperseded(t *testing.T) {
 	}
 	if count := countRows(t, e, &model.AuditEvent{}, "action = ?", "application.deployment.autodeploy.skip.stale_config"); count != 1 {
 		t.Fatal("未审计配置前移原因")
+	}
+	// 配置被取代是永久失效：候选关停 auto_deploy 移出重试队列，不再占满批次。
+	var deployed bool
+	if err := e.db.Table("builds").Select("auto_deploy").Where("application_id = 'app_two'").Take(&deployed).Error; err != nil {
+		t.Fatal(err)
+	}
+	if deployed {
+		t.Fatal("永久失效候选未移出自动发布重试队列")
 	}
 }
 
@@ -249,7 +265,7 @@ func TestProbeOnceUnverifiedTLSOrUnhealthyNeverSucceeds(t *testing.T) {
 		{TLSVerified: true, Healthy: false},
 	} {
 		broken := broken
-		if err := e.service.ProbeOnce(ctx, funcProber(func(context.Context, string, string) (ProbeResult, error) {
+		if err := e.service.ProbeOnce(ctx, funcProber(func(context.Context, ProbeTarget) (ProbeResult, error) {
 			return ProbeResult{TLSVerified: broken.TLSVerified, Healthy: broken.Healthy, ObservedAt: time.Now().UTC()}, nil
 		}), 10); err != nil {
 			t.Fatal(err)
@@ -304,6 +320,89 @@ func TestProbeOnceContinuesAfterStaleTarget(t *testing.T) {
 	}
 }
 
+func TestProbeTargetsPendingFirstAndMonitoringRotation(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	// app_one 完整收敛进入巡检（SUCCEEDED，操作 id 更小）。
+	first := create(t, e, "one")
+	finishHTTP(t, e, first)
+	// app_two Kubernetes 就绪但入口未验证：停在 VERIFYING_INGRESS。
+	second, err := e.service.CreateDeployment(ctx, e.root, "space", "app_two", CreateInput{ArtifactID: "artifact_app_two", RuntimeConfigRevision: 1, ExpectedPolicyRevision: 1, Expected: Expected{ConfigRevision: 1}, IdempotencyKey: "two"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	event := readyEvent(second, 1)
+	event.ApplicationID = "app_two"
+	if _, err := e.service.ApplyObservation(ctx, e.worker, event); err != nil {
+		t.Fatal(err)
+	}
+
+	// 巡检目标（app_one）操作 id 更小，但待验证发布必须排在最前，
+	// 否则已发布成功的应用长期占满批次，VERIFYING_INGRESS 中的发布饿死。
+	targets, err := e.service.ProbeTargets(ctx, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(targets) != 1 || targets[0].ApplicationID != "app_two" || targets[0].OperationID != second.Operation.ID {
+		t.Fatalf("待验证发布未被优先:%#v", targets)
+	}
+	if targets[0].ConnectDomain == "" {
+		t.Fatal("探测目标缺少连接域名")
+	}
+
+	// app_two 也收敛后两个应用同在巡检池；轮转按最近一次探测证据时间升序，
+	// 先刷新 app_one 的证据，限 1 的下一轮应取最久未探测的 app_two。
+	probe := func(app, operationID string, generation int64, podUID string, domains []string) {
+		t.Helper()
+		time.Sleep(2 * time.Millisecond) // 证据时间戳须严格区分先后（timestamptz 微秒精度）
+		for _, domain := range domains {
+			if err := e.service.ApplyProbe(ctx, ProbeEvidence{WorkspaceID: "space", ApplicationID: app, OperationID: operationID, Generation: generation, Domain: domain, Path: "/health", PodUID: podUID, TLSVerified: true, Healthy: true, ObservedAt: time.Now().UTC()}); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	probe("app_two", second.Operation.ID, second.Operation.Generation, event.PodUID, second.Release.Domains)
+	probe("app_one", first.Operation.ID, first.Operation.Generation, "pod-"+first.Release.ID, first.Release.Domains)
+	targets, err = e.service.ProbeTargets(ctx, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(targets) != 1 || targets[0].ApplicationID != "app_two" {
+		t.Fatalf("巡检未按最近探测时间轮转:%#v", targets)
+	}
+	// 反向：app_two 刚探测过，下一轮轮转回 app_one。
+	probe("app_two", second.Operation.ID, second.Operation.Generation, event.PodUID, second.Release.Domains)
+	targets, err = e.service.ProbeTargets(ctx, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(targets) != 1 || targets[0].ApplicationID != "app_one" {
+		t.Fatalf("巡检轮转未回到最久未探测目标:%#v", targets)
+	}
+}
+
+func TestClaimPendingVerificationFailureBacksOffCandidate(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	create(t, e, "one")
+	e.service.verifier = verifierFunc(func(context.Context, ArtifactSnapshot) error { return errors.New("registry unavailable") })
+	if _, err := e.service.ClaimPending(ctx, e.worker); !errors.Is(err, ErrVerification) {
+		t.Fatalf("核验失败应返回 ErrVerification: %v", err)
+	}
+	var op operationRecord
+	if err := e.db.First(&op, "application_id = 'app_one'").Error; err != nil {
+		t.Fatal(err)
+	}
+	// 核验失败的操作单独退避：到期时间推后，不再每轮排在同一 worker 的队首。
+	if !op.NextDispatchAt.After(time.Now().Add(40 * time.Second)) {
+		t.Fatalf("核验失败未单独退避:%v", op.NextDispatchAt)
+	}
+	// 退避期间候选不再到期，重复领取拿不到任何任务。
+	if _, err := e.service.ClaimPending(ctx, e.worker); !errors.Is(err, ErrNoPending) {
+		t.Fatalf("退避中的候选不应被再次领取:%v", err)
+	}
+}
+
 func TestSweepMarksStaleObservationsUnknown(t *testing.T) {
 	e := setup(t)
 	r := create(t, e, "one")
@@ -334,6 +433,10 @@ func TestSweepMarksStaleObservationsUnknown(t *testing.T) {
 
 func TestHTTPSProberTLSRedirectAndHealthSemantics(t *testing.T) {
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// 连接域名与 Host 头分离：连接走默认域名，路由按目标域名。
+		if r.Host != "app.example.com" {
+			t.Errorf("Host 头必须保持目标域名: %s", r.Host)
+		}
 		switch r.URL.Path {
 		case "/health":
 			w.WriteHeader(http.StatusOK)
@@ -348,26 +451,33 @@ func TestHTTPSProberTLSRedirectAndHealthSemantics(t *testing.T) {
 	pool := x509.NewCertPool()
 	pool.AddCert(srv.Certificate())
 	host := strings.TrimPrefix(srv.URL, "https://")
+	target := func(path string) ProbeTarget {
+		return ProbeTarget{Domain: "app.example.com", ConnectDomain: host, Path: path}
+	}
 	// 注入客户端只扩展受信根（InsecureSkipVerify 保持 false），验证语义仍由探测器执行。
 	prober := HTTPSProber{Client: &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: pool}}}}
 	ctx := context.Background()
-	result, err := prober.Probe(ctx, host, "/health")
+	result, err := prober.Probe(ctx, target("/health"))
 	if err != nil || !result.TLSVerified || !result.Healthy {
 		t.Fatalf("2xx 健康探测失败:%#v %v", result, err)
 	}
 	if result.ObservedAt.IsZero() || time.Since(result.ObservedAt) > time.Minute {
 		t.Fatalf("ObservedAt 非探测完成时刻:%#v", result)
 	}
-	result, err = prober.Probe(ctx, host, "/moved")
+	result, err = prober.Probe(ctx, target("/moved"))
 	if err != nil || !result.TLSVerified || result.Healthy {
 		t.Fatalf("重定向被跟随或误判健康:%#v %v", result, err)
 	}
-	result, err = prober.Probe(ctx, host, "/unavailable")
+	result, err = prober.Probe(ctx, target("/unavailable"))
 	if err != nil || !result.TLSVerified || result.Healthy {
 		t.Fatalf("非 2xx 误判健康:%#v %v", result, err)
 	}
 	// 默认客户端不信任测试证书：TLS 验证失败必须返回错误而非伪造证据。
-	if _, err := (HTTPSProber{}).Probe(ctx, host, "/health"); err == nil {
+	if _, err := (HTTPSProber{}).Probe(ctx, target("/health")); err == nil {
 		t.Fatal("默认根证书未拒绝自签证书")
+	}
+	// 缺少连接域名或路径的目标必须拒绝，不产生半截证据。
+	if _, err := (HTTPSProber{}).Probe(ctx, ProbeTarget{Domain: host, Path: "/health"}); !errors.Is(err, authorization.ErrInvalid) {
+		t.Fatalf("缺连接域名未拒绝:%v", err)
 	}
 }

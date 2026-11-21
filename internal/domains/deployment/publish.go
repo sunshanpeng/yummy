@@ -29,6 +29,8 @@ func (autoDeployBuild) TableName() string { return "builds" }
 // 因此并发或重试最多产生一个 release+operation。
 // 单个构建不满足前置（serving 期望不匹配、配置已前移、凭据不可用等）时审计原因后跳过，
 // 返回错误不会中断整轮扫描；只有无法归类的底层错误才向上透出。
+// 永久失效的候选（配置版本被取代、构建者身份失效、数据异常）在首次跳过时同时关停
+// auto_deploy 移出重试队列，避免按创建时间取批次的扫描被最老的死候选占满、饿死后续有效构建。
 func (s *Service) AutoPublish(ctx context.Context, limit int) (int, error) {
 	if limit < 1 || limit > 100 {
 		return 0, authorization.ErrInvalid
@@ -133,8 +135,22 @@ func autoDeploySkipReason(err error) (string, bool) {
 	return "", false
 }
 
+// permanentSkipReasons 是构建本身已永久失效的跳过原因：条件不可逆转（冻结配置
+// 版本被新版本取代后永远不再最新、构建者身份/数据事实失效），候选每轮都会重现；
+// 首次跳过时关停构建的 auto_deploy 移出重试队列。serving_mismatch 例外：期望的
+// serving 可经回滚/再发布恢复一致，保持候选等待条件解除。
+var permanentSkipReasons = map[string]bool{
+	"missing_runtime_config": true,
+	"stale_config":           true,
+	"actor_forbidden":        true,
+	"missing":                true,
+	"invalid":                true,
+}
+
 // auditAutoDeploySkip 记录跳过原因。跳过条件每轮都会重现，同一构建同一原因只记录一次，
 // 避免后台循环以发布间隔刷屏审计；瞬时原因（conflict/not_ready 等）条件解除后仍会正常发布。
+// 永久失效的候选在同一事务内关停 auto_deploy：关停以审计已记为前提，保证审计与
+// 移出队列要么同轮发生、要么都不发生。
 func (s *Service) auditAutoDeploySkip(ctx context.Context, candidate autoDeployBuild, reason string) error {
 	action := "application.deployment.autodeploy.skip." + reason
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -145,6 +161,15 @@ func (s *Service) auditAutoDeploySkip(ctx context.Context, candidate autoDeployB
 		if seen > 0 {
 			return nil
 		}
-		return audit.Record(tx, candidate.ActorID, action, "build", candidate.ID, &candidate.WorkspaceID, &candidate.ApplicationID)
+		if err := audit.Record(tx, candidate.ActorID, action, "build", candidate.ID, &candidate.WorkspaceID, &candidate.ApplicationID); err != nil {
+			return err
+		}
+		if permanentSkipReasons[reason] {
+			// builds 的 CHECK 约束把 auto_deploy 与 runtime_config_revision 同现
+			// 绑定（auto_deploy = (runtime_config_revision IS NOT NULL)）：关停
+			// 标记必须同时释放冻结版本指针，版本事实本身仍在 runtime_config_revisions。
+			return tx.Table("builds").Where("id = ? AND auto_deploy = TRUE", candidate.ID).Updates(map[string]any{"auto_deploy": false, "runtime_config_revision": nil}).Error
+		}
+		return nil
 	})
 }

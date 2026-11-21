@@ -277,3 +277,59 @@ func TestWorkspaceSelfCreateToggleAndReservedNames(t *testing.T) {
 		}
 	}
 }
+
+// TestUpdateWritesOperatorToUpdatedBy 验证更新回调把本次操作者写入 updated_by：
+// 无条件覆盖写入，不保留上一个操作者（此前 Updates(map) 跳过填充、结构体仅在
+// 字段为空时填充，改名成功后行上会一直留创建者）。
+func TestUpdateWritesOperatorToUpdatedBy(t *testing.T) {
+	db, service, root, alice := fixture(t)
+	ctx := context.Background()
+	value, err := service.Create(ctx, root, workspace.CreateInput{Name: "空间", Slug: "space-a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var row model.Workspace
+	if err := db.First(&row, "id = ?", value.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if row.UpdatedBy != root.UserID {
+		t.Fatalf("创建后 updated_by=%q", row.UpdatedBy)
+	}
+	if err := db.Create(&model.WorkspaceMember{WorkspaceID: value.ID, UserID: alice.UserID, Role: model.WorkspaceAdmin}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Update(ctx, alice, value.ID, workspace.UpdateInput{Name: "空间乙", ExpectedRevision: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.First(&row, "id = ?", value.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if row.UpdatedBy != alice.UserID {
+		t.Fatalf("改名后 updated_by 仍是 %q", row.UpdatedBy)
+	}
+}
+
+// TestArchiveWorkspaceRequiresAllApplicationsArchived 验证空间归档的应用门槛：
+// 存在未归档应用时拒绝（应用归档自身要求停止运行，由此传递保证无失控工作负载），
+// 应用全部归档后才能归档空间。
+func TestArchiveWorkspaceRequiresAllApplicationsArchived(t *testing.T) {
+	db, service, root, _ := fixture(t)
+	ctx := context.Background()
+	value, err := service.Create(ctx, root, workspace.CreateInput{Name: "空间", Slug: "space-a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	app := model.Application{ID: "app-1", WorkspaceID: value.ID, Name: "gateway", AddressSuffix: "axk101", Status: model.ResourceActive, Revision: 1}
+	if err := db.Create(&app).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := service.Archive(ctx, root, value.ID, 1); !errors.Is(err, authorization.ErrConflict) {
+		t.Fatalf("未归档应用未阻断空间归档=%v", err)
+	}
+	if err := db.Model(&model.Application{}).Where("id = ?", app.ID).Update("status", model.ResourceArchived).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := service.Archive(ctx, root, value.ID, 1); err != nil {
+		t.Fatal(err)
+	}
+}

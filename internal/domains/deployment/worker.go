@@ -57,6 +57,11 @@ func (s *Service) ClaimPending(ctx context.Context, worker WorkerIdentity) (Disp
 			return result, ErrVerification
 		}
 		if err := s.verifier.Verify(ctx, releaseView(verifiedRelease).Artifact); err != nil {
+			// 核验失败时租约未续期，不推迟到期时间会让同一失败操作每轮都排在
+			// 队首，阻塞同 worker 的其余到期任务；单独退避后其余任务继续领取。
+			if postponeErr := s.postponeDispatch(ctx, worker, candidate.ID); postponeErr != nil {
+				return result, errors.Join(err, postponeErr)
+			}
 			return result, ErrVerification
 		}
 	}
@@ -144,7 +149,22 @@ const (
 	// 恢复完成前（LastObservedAt 刷新）的周期轮询不重复下发。
 	resumeStaleAfterSeconds = 120
 	resumeBackoffWindow     = time.Minute
+	// verifyFailureBackoffSeconds 镜像核验失败的单独退避：仓库暂不可用是外部
+	// 依赖故障，按固定间隔重试该操作即可，不占用派发队首。
+	verifyFailureBackoffSeconds = 60
 )
+
+// postponeDispatch 单独推迟一个到期未领取操作的下次派发时间：只推进
+// next_dispatch_at，不改状态不记领取次数；条件限定“仍活跃且已到期”，
+// 已被领取、取消或取代的操作不受影响。
+func (s *Service) postponeDispatch(ctx context.Context, worker WorkerIdentity, operationID string) error {
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := authenticateWorker(tx, worker); err != nil {
+			return err
+		}
+		return tx.Model(&operationRecord{}).Where("id = ? AND active = TRUE AND next_dispatch_at <= NOW()", operationID).Update("next_dispatch_at", store.NowPlusSeconds(tx, verifyFailureBackoffSeconds)).Error
+	})
+}
 
 // claimResume 在无可领取操作时为观察停更的 serving release 合成观察恢复命令
 // （Action=RECONCILE）：worker 重启丢失内存中的运行采集器（运行日志/指标），
@@ -507,7 +527,13 @@ func (s *Service) ProbeTargets(ctx context.Context, limit int) ([]ProbeTarget, e
 		// 同代可有多个 SUCCEEDED 操作（同产物重部署）：按应用取最新一条作探测
 		// 目标——历史操作过期后 ApplyProbe 必被拒绝，混入目标会令探测循环卡在
 		// 最旧记录上，永远轮不到当前 serving 操作。
-		if err := tx.Table("deployment_operations AS o").Select("o.*").Joins("JOIN application_runtime_states s ON s.workspace_id = o.workspace_id AND s.application_id = o.application_id AND s.generation = o.generation AND s.desired_release_id = o.release_id").Where("o.kubernetes_ready = TRUE AND o.action <> 'STOP' AND ((o.active = TRUE AND o.state = ?) OR (o.state = ? AND s.active_operation_id IS NULL)) AND o.id = (SELECT MAX(o2.id) FROM deployment_operations o2 WHERE o2.workspace_id = o.workspace_id AND o2.application_id = o.application_id AND o2.generation = o.generation)", VerifyingIngress, Succeeded).Order("o.id ASC").Limit(limit).Find(&ops).Error; err != nil {
+		// 排序把待验证发布（active VERIFYING_INGRESS）排在运行巡检（SUCCEEDED
+		// 复探测）之前：已发布成功且频繁出证的应用不得长期占满批次，把停在
+		// VERIFYING_INGRESS 的发布饿死在窗口外；巡检按最近一次探测证据时间
+		// 升序轮转（未探测过的最先），每轮优先补最久未探测的目标。
+		// 【数据库专有】ASC NULLS FIRST 为 PostgreSQL 语法；MySQL 升序默认
+		// NULL 在前，可去除此子句。
+		if err := tx.Table("deployment_operations AS o").Select("o.*").Joins("JOIN application_runtime_states s ON s.workspace_id = o.workspace_id AND s.application_id = o.application_id AND s.generation = o.generation AND s.desired_release_id = o.release_id").Where("o.kubernetes_ready = TRUE AND o.action <> 'STOP' AND ((o.active = TRUE AND o.state = ?) OR (o.state = ? AND s.active_operation_id IS NULL)) AND o.id = (SELECT MAX(o2.id) FROM deployment_operations o2 WHERE o2.workspace_id = o.workspace_id AND o2.application_id = o.application_id AND o2.generation = o.generation)", VerifyingIngress, Succeeded).Order(clause.OrderBy{Expression: clause.Expr{SQL: "CASE WHEN o.active = TRUE AND o.state = ? THEN 0 ELSE 1 END, (SELECT MAX(p.observed_at) FROM deployment_probe_evidence p WHERE p.operation_id = o.id) ASC NULLS FIRST, o.id ASC", Vars: []interface{}{VerifyingIngress}}}).Limit(limit).Find(&ops).Error; err != nil {
 			return err
 		}
 		for _, op := range ops {
@@ -520,7 +546,15 @@ func (s *Service) ProbeTargets(ctx context.Context, limit int) ([]ProbeTarget, e
 				return err
 			}
 			for _, domain := range release.Domains {
-				result = append(result, ProbeTarget{WorkspaceID: op.WorkspaceID, ApplicationID: op.ApplicationID, OperationID: op.ID, ReleaseID: op.ReleaseID, Generation: op.Generation, Domain: domain, Path: material.View.Probe.Path, PodUID: op.PodUID})
+				// 连接固定走平台管理的默认域名：自定义域名公网解析可能仍指向
+				// 旧站点，直连会把旧站点的 2xx 响应误记为本次发布的证据；默认
+				// 域名的 DNS 由平台管理，连接必然终止在平台入口。快照缺省时
+				// 退回直连（历史数据兜底）。
+				connect := release.PlacementSnapshot.DefaultDomain
+				if connect == "" {
+					connect = domain
+				}
+				result = append(result, ProbeTarget{WorkspaceID: op.WorkspaceID, ApplicationID: op.ApplicationID, OperationID: op.ID, ReleaseID: op.ReleaseID, Generation: op.Generation, Domain: domain, ConnectDomain: connect, Path: material.View.Probe.Path, PodUID: op.PodUID})
 			}
 		}
 		return nil

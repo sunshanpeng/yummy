@@ -30,9 +30,13 @@ const (
 	Failed           = "FAILED"
 	Superseded       = "SUPERSEDED"
 	Run              = "RUN"
-	Stopped          = "STOPPED"
-	Unknown          = "UNKNOWN"
-	Observe          = "OBSERVE"
+	// DesiredStop 是运行状态行的期望停止意图（与动作 Stop 的取值同名同义）：
+	// 操作受理时写入，停止操作成功收尾需要副本归零证据，是“应用已停止”
+	// 的充分条件；归档前置校验据此判断（见 StoppedForArchive）。
+	DesiredStop = "STOP"
+	Stopped     = "STOPPED"
+	Unknown     = "UNKNOWN"
+	Observe     = "OBSERVE"
 )
 
 var (
@@ -235,6 +239,10 @@ type ProbeEvidence struct {
 type ProbeTarget struct {
 	WorkspaceID, ApplicationID, OperationID, ReleaseID, Domain, Path, PodUID string
 	Generation                                                               int64
+	// ConnectDomain 是探测连接实际使用的域名：平台管理的默认域名。请求 Host
+	// 头仍用 Domain，由平台入口按域名路由；分离二者防止自定义域名公网解析
+	// 仍指向旧站点时，把旧站点响应误记为本次发布的证据。
+	ConnectDomain string
 }
 
 // RuntimeLogInput 是一个容器运行日志块；Content 为 worker 上报的原始字节分片。

@@ -27,13 +27,20 @@ import (
 // 统一命名规范（internal/lib/naming）：应用名与空间名同一规范。
 var namePattern = regexp.MustCompile(`^[a-z](-?[a-z0-9])*$`)
 
-type Service struct {
-	DB     *gorm.DB
-	Access *authorization.Access
+// RuntimeGuard 是部署域导出的运行事实接口（消费方声明）：归档边界用它校验
+// 应用已停止且无在途部署，应用域不直查运行状态表。
+type RuntimeGuard interface {
+	StoppedForArchive(tx *gorm.DB, workspaceID, applicationID string) (bool, error)
 }
 
-func NewService(db *gorm.DB, access *authorization.Access) *Service {
-	return &Service{DB: db, Access: access}
+type Service struct {
+	DB       *gorm.DB
+	Access   *authorization.Access
+	Runtimes RuntimeGuard
+}
+
+func NewService(db *gorm.DB, access *authorization.Access, runtimes RuntimeGuard) *Service {
+	return &Service{DB: db, Access: access, Runtimes: runtimes}
 }
 
 func normalizeName(name string) (string, error) {
@@ -247,6 +254,25 @@ func (s *Service) Archive(ctx context.Context, p authorization.Principal, worksp
 		}
 		if _, _, err := s.Access.Application(tx, current, workspaceID, id, authorization.ApplicationWrite); err != nil {
 			return err
+		}
+		// 先锁应用行再读运行事实：与部署受理（部署域 lockApplication 同行锁）
+		// 串行化，保证运行检查与归档 CAS 之间不会插入新的部署操作。
+		var appRow model.Application
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Take(&appRow, "workspace_id = ? AND id = ? AND status = ?", workspaceID, id, model.ResourceActive).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return authorization.ErrConflict
+			}
+			return err
+		}
+		// 归档前置运行校验（经部署域显式接口，不直查运行状态表）：仍在运行
+		// 或有在途部署时拒绝——归档后停止接口因活跃状态校验拒绝，工作负载
+		// 将失控运行。
+		stopped, err := s.Runtimes.StoppedForArchive(tx, workspaceID, id)
+		if err != nil {
+			return err
+		}
+		if !stopped {
+			return fmt.Errorf("%w: 应用仍在运行或有在途部署，停止后才能归档", authorization.ErrConflict)
 		}
 		updated := tx.Model(&model.Application{}).Where("workspace_id = ? AND id = ? AND revision = ? AND status = ?", workspaceID, id, expectedRevision, model.ResourceActive).Updates(map[string]any{"status": model.ResourceArchived, "revision": gorm.Expr("revision + 1")})
 		if updated.Error != nil {

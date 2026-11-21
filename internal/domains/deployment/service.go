@@ -377,7 +377,7 @@ func newOperation(tx *gorm.DB, state *stateRecord, release releaseRecord, actor,
 	state.ActiveOperationID = &op.ID
 	state.DesiredState = Run
 	if action == Stop {
-		state.DesiredState = "STOP"
+		state.DesiredState = DesiredStop
 		state.ObservedState = "STOPPING"
 	} else if state.ServingReleaseID == nil {
 		state.ObservedState = "PENDING"

@@ -10,6 +10,7 @@ import (
 
 	"github.com/sunshanpeng/yummy/internal/domains/application"
 	"github.com/sunshanpeng/yummy/internal/domains/authorization"
+	"github.com/sunshanpeng/yummy/internal/domains/deployment"
 	"github.com/sunshanpeng/yummy/internal/infra/store/model"
 	"github.com/sunshanpeng/yummy/internal/infra/testkit"
 	"gorm.io/gorm"
@@ -28,7 +29,9 @@ func fixture(t *testing.T) (*gorm.DB, *application.Service, authorization.Princi
 	if err != nil {
 		t.Fatal(err)
 	}
-	return db, application.NewService(db, access), authorization.Principal{UserID: "root", AuthVersion: 1}, authorization.Principal{UserID: "alice", AuthVersion: 1}
+	// 归档前置校验接真实部署域实现（StoppedForArchive 只读运行状态，不依赖
+	// 运行配置/校验器），与控制面装配一致。
+	return db, application.NewService(db, access, deployment.NewService(db, access, nil, nil)), authorization.Principal{UserID: "root", AuthVersion: 1}, authorization.Principal{UserID: "alice", AuthVersion: 1}
 }
 
 func TestCreateApplicationIsNameOnlyIdempotentAndAuditedOnce(t *testing.T) {
@@ -102,7 +105,7 @@ func TestConcurrentIdempotentCreateUsesDatabaseLock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	other := application.NewService(db, otherAccess)
+	other := application.NewService(db, otherAccess, service.Runtimes)
 	start := make(chan struct{})
 	ids := make(chan string, 2)
 	failures := make(chan error, 2)
@@ -314,5 +317,35 @@ func TestUpdateRevisionAndArchiveBoundaries(t *testing.T) {
 	db.Model(&model.AuditEvent{}).Where("application_id = ? AND action IN ?", app.ID, []string{"application.update", "application.archive"}).Count(&events)
 	if events != 2 {
 		t.Fatalf("write audits=%d", events)
+	}
+}
+
+// TestArchiveRequiresStoppedRuntime 验证归档前的运行检查：期望运行（或在途部署）
+// 的应用拒绝归档——归档后平台停止接口会因活跃状态校验拒绝，工作负载将失控运行；
+// 已停止（或从未部署）的应用可正常归档。
+func TestArchiveRequiresStoppedRuntime(t *testing.T) {
+	db, service, root, _ := fixture(t)
+	ctx := context.Background()
+	app, err := service.Create(ctx, root, "space-a", application.CreateInput{Name: "gateway", IdempotencyKey: "one"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := func(query string, args ...any) error {
+		t.Helper()
+		return db.Exec("UPDATE application_runtime_states SET "+query, args...).Error
+	}
+	insert := "INSERT INTO application_runtime_states(id, workspace_id, application_id, generation, desired_state, observed_state) VALUES (?, ?, ?, 1, 'RUN', 'PENDING')"
+	if err := db.Exec(insert, app.ID, "space-a", app.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := service.Archive(ctx, root, "space-a", app.ID, 1); !errors.Is(err, authorization.ErrConflict) {
+		t.Fatalf("运行中的应用可归档=%v", err)
+	}
+	// 停止完成后（期望 STOP 且无在途操作）允许归档。
+	if err := state("desired_state='STOP', observed_state='STOPPED' WHERE id = ?", app.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.Archive(ctx, root, "space-a", app.ID, 1); err != nil {
+		t.Fatal(err)
 	}
 }

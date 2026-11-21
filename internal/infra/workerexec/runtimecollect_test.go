@@ -336,6 +336,43 @@ func TestDeployCancelStopsSidecarGoroutines(t *testing.T) {
 	// 新生命周期：采集器挂部署本体，Deploy 返回（甚至 ctx 取消）后采集继续；
 	// 显式停止（部署消失/STOP 语义）后 goroutine 才全部退出。
 	waitFor(t, 2*time.Second, func() bool { return runtime.NumGoroutine() > before })
-	executor.stopRuntimeCollector("release-1")
+	executor.stopRuntimeCollector(testWorkspace, testApplication)
+	waitFor(t, 2*time.Second, func() bool { return runtime.NumGoroutine() <= before })
+}
+
+// TestRuntimeCollectorReplacedOnGenerationChange 验证采集器按应用替换：
+// 同应用 release/generation 变化（RESTART 提升代际、新发布）时旧采集器被
+// 取消，不能按 release 复用旧命令身份继续上报；显式停止后全部循环退出。
+func TestRuntimeCollectorReplacedOnGenerationChange(t *testing.T) {
+	executor, _, _, emitter := sidecarExecutor(t, func(options *Options) {
+		// 部署观察持续失败（非 NotFound）：采集循环保持存活等待显式取消，
+		// goroutine 数量才可作为替换语义的断言依据。
+		fakeClient := options.Client.(*fake.Clientset)
+		fakeClient.PrependReactor("get", "deployments", func(action ktesting.Action) (bool, kruntime.Object, error) {
+			return true, nil, errors.New("观察故障")
+		})
+	})
+	before := runtime.NumGoroutine()
+	change1, _, err := executor.runtimeChange(deployCommand("DEPLOY", "operation-1", 1, false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := executor.startRuntimeCollector(deployCommand("DEPLOY", "operation-1", 1, false), change1, false, emitter); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, 2*time.Second, func() bool { return runtime.NumGoroutine() > before })
+	// 同应用提升 generation：旧采集器立即让位，新命令身份接管。
+	change2, _, err := executor.runtimeChange(deployCommand("DEPLOY", "operation-2", 2, false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := executor.startRuntimeCollector(deployCommand("DEPLOY", "operation-2", 2, false), change2, false, emitter); err != nil {
+		t.Fatal(err)
+	}
+	// 同 release+generation 重复下发（RECONCILE 重放）幂等，不叠加循环。
+	if err := executor.startRuntimeCollector(deployCommand("DEPLOY", "operation-2", 2, false), change2, false, emitter); err != nil {
+		t.Fatal(err)
+	}
+	executor.stopRuntimeCollector(testWorkspace, testApplication)
 	waitFor(t, 2*time.Second, func() bool { return runtime.NumGoroutine() <= before })
 }
