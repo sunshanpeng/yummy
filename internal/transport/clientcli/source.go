@@ -27,7 +27,7 @@ func transferURL(base, relative string) (string, error) {
 	return base + u.Path, nil
 }
 func (a *clientApp) sourceCommand() *cobra.Command {
-	root := &cobra.Command{Use: "source", Short: "本机源码预览与上传"}
+	root := &cobra.Command{Use: "source", Short: "本机源码预览、上传与快照查询"}
 	var sourceRoot, contextPath, dockerfile string
 	var allowRoots []string
 	root.PersistentFlags().StringVar(&sourceRoot, "root", ".", "本机授权根目录")
@@ -123,6 +123,21 @@ func (a *clientApp) sourceCommand() *cobra.Command {
 		}
 		return output(cmd, completed.Msg)
 	}}
-	root.AddCommand(preview, upload)
+	get := &cobra.Command{Use: "get SNAPSHOT_ID", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+		c, p, err := a.client()
+		if err != nil {
+			return err
+		}
+		w, id, err := requireTarget(p)
+		if err != nil {
+			return err
+		}
+		r, err := c.source.GetSourceSnapshot(cmd.Context(), auth(c.token, &platformv1.GetSourceSnapshotRequest{WorkspaceId: w, ApplicationId: id, SnapshotId: args[0]}))
+		if err != nil {
+			return rpcError(err)
+		}
+		return output(cmd, r.Msg)
+	}}
+	root.AddCommand(preview, upload, get)
 	return root
 }
