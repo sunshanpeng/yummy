@@ -24,7 +24,9 @@ func NewDeploymentHandler(service *deployment.Service, log *zap.Logger, opts ...
 }
 
 func deploymentError(log *zap.Logger, err error) error {
-	if errors.Is(err, deployment.ErrNotReady) || errors.Is(err, deployment.ErrVerification) {
+	// ErrArtifactInvalid 与 ErrVerification 同映射：手动发布统一按不可受理呈现，
+	// 终态分类只供自动发布关停判定使用。
+	if errors.Is(err, deployment.ErrNotReady) || errors.Is(err, deployment.ErrVerification) || errors.Is(err, deployment.ErrArtifactInvalid) {
 		return connect.NewError(connect.CodeFailedPrecondition, err)
 	}
 	return RPCError(log, err)

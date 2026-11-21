@@ -30,6 +30,7 @@ type environment struct {
 	db        *gorm.DB
 	service   *Service
 	configs   *runtimeconfig.Service
+	builds    *build.Service
 	inventory *inventory.Service
 	root      authorization.Principal
 	worker    WorkerIdentity
@@ -61,7 +62,8 @@ func setup(t *testing.T) environment {
 		t.Fatal(err)
 	}
 	e := environment{db: db, inventory: inventory.NewService(db, access, box), configs: runtimeconfig.NewService(db, access, box), root: authorization.Principal{UserID: "root", AuthVersion: 1}}
-	e.service = NewService(db, access, e.configs, verifierFunc(func(context.Context, ArtifactSnapshot) error { return nil }))
+	e.builds = build.NewService(db, access, e.inventory, e.configs)
+	e.service = NewService(db, access, e.configs, e.builds, verifierFunc(func(context.Context, ArtifactSnapshot) error { return nil }))
 	ctx := context.Background()
 	e.node, err = e.inventory.CreateNode(ctx, e.root, inventory.NodeInput{Name: "节点", WorkerID: "worker-one", Capacity: 2})
 	if err != nil {
@@ -94,8 +96,7 @@ func setup(t *testing.T) environment {
 		digest := strings.Repeat("a", 64)
 		mustExec(t, db, `INSERT INTO source_uploads(id,workspace_id,application_id,created_by,expected_size,expected_sha256,dockerfile,storage_key,expires_at) VALUES (?,'space',?,'root',1,?,'Dockerfile',?,NOW()+INTERVAL '1 hour')`, "upload_"+app, app, digest, "upload_"+fingerprint(app)[:32]+".tar.gz")
 		mustExec(t, db, `INSERT INTO source_snapshots(id,workspace_id,application_id,upload_id,created_by,state,storage_key,sha256,compressed_bytes,expanded_bytes,file_bytes,entry_count,dockerfile,entries,expires_at) VALUES (?,'space',?,?,'root','READY',?,?,1,1024,1,1,'Dockerfile','[{"Path":"Dockerfile","Size":1,"Directory":false}]',NOW()+INTERVAL '1 hour')`, "src_"+app, app, "upload_"+app, "snapshot_"+fingerprint(app)[:32]+".tar.gz", digest)
-		builder := build.NewService(db, access, e.inventory)
-		b, err := builder.CreateBuild(ctx, e.root, "space", app, build.CreateInput{SourceSnapshotID: "src_" + app, ExpectedPolicyRevision: 1, IdempotencyKey: "build-" + app})
+		b, err := e.builds.CreateBuild(ctx, e.root, "space", app, build.CreateInput{SourceSnapshotID: "src_" + app, ExpectedPolicyRevision: 1, IdempotencyKey: "build-" + app})
 		if err != nil {
 			t.Fatal(err)
 		}

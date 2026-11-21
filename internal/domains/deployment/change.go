@@ -67,7 +67,7 @@ func (s *Service) change(ctx context.Context, p authorization.Principal, ws, app
 		if err != nil {
 			return err
 		}
-		if err = checkExpected(tx, ws, app, state, in.Expected); err != nil {
+		if err = s.checkExpected(tx, ws, app, state, in.Expected); err != nil {
 			return err
 		}
 		if action != Stop && state.ActiveOperationID != nil {
@@ -88,8 +88,7 @@ func (s *Service) change(ctx context.Context, p authorization.Principal, ws, app
 			return err
 		}
 		if action != Stop {
-			_, err = readArtifact(tx, ws, app, selected.ArtifactID)
-			if err != nil {
+			if _, err = s.builds.VerifiedArtifact(tx, ws, app, selected.ArtifactID); err != nil {
 				return err
 			}
 			_, err = s.materialize(tx, ws, app, selected.RuntimeConfigRevision)

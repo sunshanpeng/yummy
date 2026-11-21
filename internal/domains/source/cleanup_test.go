@@ -60,7 +60,7 @@ func cleanupSetup(t *testing.T) *cleanupEnv {
 			t.Fatal(err)
 		}
 	}
-	return &cleanupEnv{environment: base, builder: build.NewService(base.db, base.access, inv)}
+	return &cleanupEnv{environment: base, builder: build.NewService(base.db, base.access, inv, nil)}
 }
 
 // fixtureBuild 经真实 CreateBuild 受理引用指定快照的构建；state 非默认排队态时

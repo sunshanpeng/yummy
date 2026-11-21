@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/sunshanpeng/yummy/internal/domains/audit"
 	"github.com/sunshanpeng/yummy/internal/domains/authorization"
+	"github.com/sunshanpeng/yummy/internal/domains/build"
 	"github.com/sunshanpeng/yummy/internal/domains/runtimeconfig"
 	"github.com/sunshanpeng/yummy/internal/infra/store/model"
 	"github.com/sunshanpeng/yummy/internal/lib/security"
@@ -27,16 +28,21 @@ type Service struct {
 	db       *gorm.DB
 	access   *authorization.Access
 	configs  RuntimeConfigs
+	builds   BuildFacts
 	verifier Verifier
 	// resumeMu/resumeBackoff 保护观察恢复命令的合成退避（进程内状态）：同一
 	// 节点同一发布在退避窗口内只合成一次，恢复窗口内的重复轮询不重复下发。
 	// 进程重启后清零重新合成，幂等无害。
 	resumeMu      sync.Mutex
 	resumeBackoff map[string]time.Time
+	// publishMu/publishBackoff 保护自动发布暂态失败的内存退避（进程内状态）：
+	// 仓库暂不可用的候选在退避窗口内跳过扫描处理，重启即清零重新重试，幂等无害。
+	publishMu      sync.Mutex
+	publishBackoff map[string]time.Time
 }
 
-func NewService(db *gorm.DB, access *authorization.Access, configs RuntimeConfigs, verifier Verifier) *Service {
-	return &Service{db: db, access: access, configs: configs, verifier: verifier}
+func NewService(db *gorm.DB, access *authorization.Access, configs RuntimeConfigs, builds BuildFacts, verifier Verifier) *Service {
+	return &Service{db: db, access: access, configs: configs, builds: builds, verifier: verifier}
 }
 func invalid(message string) error { return fmt.Errorf("%w: %s", authorization.ErrInvalid, message) }
 func missing(err error) error {
@@ -68,21 +74,18 @@ func readState(tx *gorm.DB, ws, app string) (stateRecord, error) {
 	}
 	return v, err
 }
-func checkExpected(tx *gorm.DB, ws, app string, state stateRecord, e Expected) error {
-	var latest struct{ Revision int64 }
-	err := tx.Table("runtime_config_revisions").Select("revision").Where("workspace_id = ? AND application_id = ?", ws, app).Order("revision DESC").Take(&latest).Error
-	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+
+// checkExpected 经运行配置域接口核对最新版本（含未确认草稿，语义与原直查一致），
+// 与运行意图、当前服务版本共同构成受理的乐观并发守卫。
+func (s *Service) checkExpected(tx *gorm.DB, ws, app string, state stateRecord, e Expected) error {
+	revision, _, err := s.configs.LatestRevision(tx, ws, app)
+	if err != nil {
 		return err
 	}
-	if state.Generation != e.Generation || text(state.ServingReleaseID) != e.ServingReleaseID || latest.Revision != e.ConfigRevision {
+	if state.Generation != e.Generation || text(state.ServingReleaseID) != e.ServingReleaseID || revision != e.ConfigRevision {
 		return authorization.ErrConflict
 	}
 	return nil
-}
-func readArtifact(tx *gorm.DB, ws, app, id string) (artifactRecord, error) {
-	var v artifactRecord
-	err := tx.Table("build_artifacts AS a").Select("a.*").Joins("JOIN builds b ON b.id = a.build_id AND b.workspace_id = a.workspace_id AND b.application_id = a.application_id").Where("a.workspace_id = ? AND a.application_id = ? AND a.id = ? AND a.state = 'VERIFIED' AND a.verified_at IS NOT NULL AND b.state = 'SUCCEEDED'", ws, app, id).Take(&v).Error
-	return v, missing(err)
 }
 func readRelease(tx *gorm.DB, ws, app, id string) (releaseRecord, error) {
 	var v releaseRecord
@@ -130,7 +133,7 @@ func (s *Service) create(ctx context.Context, p authorization.Principal, ws, app
 	}
 	hash := fingerprint([]any{action, in, target})
 	var result Result
-	var snapshot artifactRecord
+	var snapshot build.VerifiedArtifact
 	var selected releaseRecord
 	var duplicate bool
 	read := func(tx *gorm.DB, current authorization.Principal) error {
@@ -146,7 +149,7 @@ func (s *Service) create(ctx context.Context, p authorization.Principal, ws, app
 		if err != nil {
 			return err
 		}
-		if err = checkExpected(tx, ws, app, state, in.Expected); err != nil {
+		if err = s.checkExpected(tx, ws, app, state, in.Expected); err != nil {
 			return err
 		}
 		if state.ActiveOperationID != nil {
@@ -167,7 +170,7 @@ func (s *Service) create(ctx context.Context, p authorization.Principal, ws, app
 			in.ArtifactID = selected.ArtifactID
 			in.RuntimeConfigRevision = selected.RuntimeConfigRevision
 		}
-		snapshot, err = readArtifact(tx, ws, app, in.ArtifactID)
+		snapshot, err = s.builds.VerifiedArtifact(tx, ws, app, in.ArtifactID)
 		if err != nil {
 			return err
 		}
@@ -183,7 +186,11 @@ func (s *Service) create(ctx context.Context, p authorization.Principal, ws, app
 	if s.verifier == nil {
 		return Result{}, ErrVerification
 	}
-	if err := s.verifier.Verify(ctx, artifactView(snapshot)); err != nil {
+	if err := s.verifier.Verify(ctx, verifiedArtifactSnapshot(snapshot)); err != nil {
+		if errors.Is(err, ErrArtifactInvalid) {
+			// 保留终态分类供自动发布判定；手动路径经 transport 与 ErrVerification 同映射。
+			return Result{}, err
+		}
 		return Result{}, ErrVerification
 	}
 	err := s.access.Do(ctx, p, false, func(tx *gorm.DB, current authorization.Principal) error {
@@ -202,17 +209,17 @@ func (s *Service) create(ctx context.Context, p authorization.Principal, ws, app
 		if err != nil {
 			return err
 		}
-		if err = checkExpected(tx, ws, app, state, in.Expected); err != nil {
+		if err = s.checkExpected(tx, ws, app, state, in.Expected); err != nil {
 			return err
 		}
 		if state.ActiveOperationID != nil {
 			return authorization.ErrConflict
 		}
-		artifact, err := readArtifact(tx, ws, app, in.ArtifactID)
+		artifact, err := s.builds.VerifiedArtifact(tx, ws, app, in.ArtifactID)
 		if err != nil {
 			return err
 		}
-		if artifactView(artifact) != artifactView(snapshot) {
+		if artifact != snapshot {
 			return authorization.ErrConflict
 		}
 		material, err := s.materialize(tx, ws, app, in.RuntimeConfigRevision)

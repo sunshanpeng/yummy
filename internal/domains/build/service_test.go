@@ -14,6 +14,7 @@ import (
 
 	"github.com/sunshanpeng/yummy/internal/domains/authorization"
 	"github.com/sunshanpeng/yummy/internal/domains/inventory"
+	"github.com/sunshanpeng/yummy/internal/domains/runtimeconfig"
 	"github.com/sunshanpeng/yummy/internal/infra/store/model"
 	"github.com/sunshanpeng/yummy/internal/infra/testkit"
 	"github.com/sunshanpeng/yummy/internal/lib/security"
@@ -57,7 +58,8 @@ func setup(t *testing.T) environment {
 		t.Fatal(err)
 	}
 	inv := inventory.NewService(db, access, box)
-	e := environment{db: db, service: NewService(db, access, inv), inv: inv, root: authorization.Principal{UserID: "root", AuthVersion: 1}, admin: authorization.Principal{UserID: "admin", AuthVersion: 1}, viewer: authorization.Principal{UserID: "viewer", AuthVersion: 1}}
+	configs := runtimeconfig.NewService(db, access, box)
+	e := environment{db: db, service: NewService(db, access, inv, configs), inv: inv, root: authorization.Principal{UserID: "root", AuthVersion: 1}, admin: authorization.Principal{UserID: "admin", AuthVersion: 1}, viewer: authorization.Principal{UserID: "viewer", AuthVersion: 1}}
 	ctx := context.Background()
 	e.node, err = inv.CreateNode(ctx, e.root, inventory.NodeInput{Name: "节点", WorkerID: "worker-one", Capacity: 2})
 	if err != nil {
@@ -240,7 +242,7 @@ func TestClaimCapacityAcrossConcurrentScannersAndRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	restarted := NewService(e.db, access, e.inv)
+	restarted := NewService(e.db, access, e.inv, nil)
 	items, err := restarted.PendingDispatch(context.Background(), e.worker, 10)
 	if err != nil || len(items) != 2 {
 		t.Fatalf("恢复=%#v %v", items, err)

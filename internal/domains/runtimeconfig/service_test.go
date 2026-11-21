@@ -198,3 +198,32 @@ func TestValidateRejectsUnsafePathsAndConflicts(t *testing.T) {
 		t.Fatal("域名未规范化")
 	}
 }
+
+// TestLatestRevisionFacts 验证跨域版本事实的语义：空应用返回零值、最新版本含
+// 未确认草稿、确认状态如实返回——部署域期望校验与构建域冻结校验共用本方法。
+func TestLatestRevisionFacts(t *testing.T) {
+	s, _, p := setup(t)
+	ctx := context.Background()
+	revision, confirmed, err := s.LatestRevision(s.db.WithContext(ctx), "space", "app")
+	if err != nil || revision != 0 || confirmed {
+		t.Fatalf("空应用语义错误: %d %t %v", revision, confirmed, err)
+	}
+	input := DefaultInput()
+	input.Confirmed = true
+	if _, err := s.Save(ctx, p, "space", "app", input); err != nil {
+		t.Fatal(err)
+	}
+	revision, confirmed, err = s.LatestRevision(s.db.WithContext(ctx), "space", "app")
+	if err != nil || revision != 1 || !confirmed {
+		t.Fatalf("已确认版本事实错误: %d %t %v", revision, confirmed, err)
+	}
+	input.ExpectedRevision = 1
+	input.Confirmed = false
+	if _, err := s.Save(ctx, p, "space", "app", input); err != nil {
+		t.Fatal(err)
+	}
+	revision, confirmed, err = s.LatestRevision(s.db.WithContext(ctx), "space", "app")
+	if err != nil || revision != 2 || confirmed {
+		t.Fatalf("草稿版本事实错误: %d %t %v", revision, confirmed, err)
+	}
+}

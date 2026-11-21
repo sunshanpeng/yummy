@@ -209,7 +209,7 @@ func TestGetAttemptRecoversUIDAndRequestCancellationDoesNotCancelBuild(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	restarted := NewService(e.db, access, e.inv)
+	restarted := NewService(e.db, access, e.inv, nil)
 	recovered, err := restarted.GetAttempt(context.Background(), e.worker, d.AttemptID)
 	if err != nil || recovered.AttemptID != d.AttemptID || recovered.JobName != d.JobName || recovered.JobUID != "persisted-job-uid" || recovered.Command != "RECONCILE" {
 		t.Fatal(recovered, err)

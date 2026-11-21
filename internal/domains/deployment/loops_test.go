@@ -481,3 +481,111 @@ func TestHTTPSProberTLSRedirectAndHealthSemantics(t *testing.T) {
 		t.Fatalf("缺连接域名未拒绝:%v", err)
 	}
 }
+
+func TestClaimPendingVerificationRecoversAfterMark(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	r := create(t, e, "one")
+	e.service.verifier = verifierFunc(func(context.Context, ArtifactSnapshot) error { return errors.New("registry unavailable") })
+	if _, err := e.service.ClaimPending(ctx, e.worker); !errors.Is(err, ErrVerification) {
+		t.Fatalf("核验失败未拒绝: %v", err)
+	}
+	// 标记窗口内不可领取：候选在访问仓库之前已被推后。
+	if _, err := e.service.ClaimPending(ctx, e.worker); !errors.Is(err, ErrNoPending) {
+		t.Fatalf("标记窗口内被领取: %v", err)
+	}
+	// 仓库恢复后重新到期即可领取：操作未被改动，无需重新受理。
+	e.service.verifier = verifierFunc(func(context.Context, ArtifactSnapshot) error { return nil })
+	mustExec(t, e.db, "UPDATE deployment_operations SET next_dispatch_at = NOW() WHERE id = ?", r.Operation.ID)
+	dispatch, err := e.service.ClaimPending(ctx, e.worker)
+	if err != nil || dispatch.OperationID != r.Operation.ID {
+		t.Fatalf("恢复后未领取: %#v %v", dispatch, err)
+	}
+}
+
+func TestAutoPublishDefersVerificationFailures(t *testing.T) {
+	e := setup(t)
+	markAutoDeploy(t, e, "app_two", "")
+	calls := 0
+	e.service.verifier = verifierFunc(func(context.Context, ArtifactSnapshot) error {
+		calls++
+		return errors.New("registry unavailable")
+	})
+	if published, err := e.service.AutoPublish(context.Background(), 10); err != nil || published != 0 {
+		t.Fatalf("首轮受理:%d %v", published, err)
+	}
+	if calls != 1 {
+		t.Fatalf("首轮未访问仓库: %d", calls)
+	}
+	// 退避窗口内重复扫描不再访问仓库，也不重复受理。
+	if published, err := e.service.AutoPublish(context.Background(), 10); err != nil || published != 0 {
+		t.Fatalf("退避轮受理:%d %v", published, err)
+	}
+	if calls != 1 {
+		t.Fatalf("退避窗口内仍访问仓库: %d", calls)
+	}
+	// 窗口过后恢复重试；仓库可用后正常受理并清除退避。
+	e.service.publishMu.Lock()
+	e.service.publishBackoff = map[string]time.Time{}
+	e.service.publishMu.Unlock()
+	e.service.verifier = verifierFunc(func(context.Context, ArtifactSnapshot) error { return nil })
+	if published, err := e.service.AutoPublish(context.Background(), 10); err != nil || published != 1 {
+		t.Fatalf("恢复轮受理:%d %v", published, err)
+	}
+	if e.service.publishDeferred(mustBuildID(t, e)) {
+		t.Fatal("成功后未清除退避")
+	}
+}
+
+// mustBuildID 返回 app_two 自动发布构建的 ID（测试辅助）。
+func mustBuildID(t *testing.T, e environment) string {
+	t.Helper()
+	var value struct{ ID string }
+	if err := e.db.Table("builds").Select("id").Where("application_id = 'app_two'").Take(&value).Error; err != nil {
+		t.Fatal(err)
+	}
+	return value.ID
+}
+
+func TestAutoPublishDisablesArtifactInvalidCandidates(t *testing.T) {
+	e := setup(t)
+	markAutoDeploy(t, e, "app_two", "")
+	e.service.verifier = verifierFunc(func(context.Context, ArtifactSnapshot) error {
+		return ErrArtifactInvalid
+	})
+	if published, err := e.service.AutoPublish(context.Background(), 10); err != nil || published != 0 {
+		t.Fatalf("受理:%d %v", published, err)
+	}
+	if count := countRows(t, e, &model.AuditEvent{}, "action = ?", "application.deployment.autodeploy.skip.artifact_invalid"); count != 1 {
+		t.Fatal("未审计产物永久失效")
+	}
+	var deployed bool
+	if err := e.db.Table("builds").Select("auto_deploy").Where("application_id = 'app_two'").Take(&deployed).Error; err != nil || deployed {
+		t.Fatalf("产物永久失效候选未关停: %v %v", deployed, err)
+	}
+}
+
+func TestAutoPublishProcessesNewerCandidateBehindDeferredOldest(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	// 最老候选（setup 先创建的 app_two 构建）核验失败进入退避；limit=1 的
+	// 下一轮必须把名额让给新候选（超取过滤），而不是被死候选占满。
+	markAutoDeploy(t, e, "app_two", "")
+	artifact := insertAutoDeployBuild(t, e, "app_one", "")
+	e.service.verifier = verifierFunc(func(_ context.Context, in ArtifactSnapshot) error {
+		if in.ID == "artifact_app_two" {
+			return errors.New("registry unavailable")
+		}
+		return nil
+	})
+	if published, err := e.service.AutoPublish(ctx, 1); err != nil || published != 0 {
+		t.Fatalf("第一轮:%d %v", published, err)
+	}
+	if published, err := e.service.AutoPublish(ctx, 1); err != nil || published != 1 {
+		t.Fatalf("退避中的最老候选占满名额:%d %v", published, err)
+	}
+	var release releaseRecord
+	if err := e.db.Order("created_at DESC").First(&release, "application_id = 'app_one'").Error; err != nil || release.ArtifactID != artifact {
+		t.Fatalf("未发布新候选: %+v %v", release, err)
+	}
+}

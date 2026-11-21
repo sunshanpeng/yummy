@@ -148,11 +148,11 @@ func openWithDatabase(ctx context.Context, db *gorm.DB, config Config, assets fs
 	inventoryService := inventory.NewService(db, access, box)
 	configService := runtimeconfig.NewService(db, access, box)
 	secretService := buildsecret.NewService(db, access, box)
-	buildService := build.NewService(db, access, inventoryService)
+	buildService := build.NewService(db, access, inventoryService, configService)
 	buildService.SetSecretResolver(secretService)
 	reader := &artifactReader{db: db, inventory: inventoryService, authHosts: config.RegistryAuthHosts, deniedHosts: config.RegistryDeniedHosts}
 	buildVerifier := buildArtifactVerifier{reader: reader}
-	deploymentService := deployment.NewService(db, access, configService, deploymentArtifactVerifier{reader: reader})
+	deploymentService := deployment.NewService(db, access, configService, buildService, deploymentArtifactVerifier{reader: reader})
 	applicationService := application.NewService(db, access, deploymentService)
 	materials := &workerMaterials{db: db, box: box, source: sources, secrets: secretService, inventory: inventoryService, baseURL: strings.TrimRight(config.PublicBaseURL, "/")}
 	var enrollmentService *enrollment.Service

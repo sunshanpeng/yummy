@@ -22,18 +22,26 @@ import (
 	"gorm.io/gorm/clause"
 )
 
+// ConfigFacts 是运行配置域提供给构建域的冻结校验事实（消费方声明）：
+// auto_deploy 构建受理时核对冻结版本是最新且已确认的配置，配置版本事实
+// 只经此依赖，构建域不再直查 runtime_config_revisions。
+type ConfigFacts interface {
+	LatestRevision(tx *gorm.DB, workspaceID, applicationID string) (revision int64, confirmed bool, err error)
+}
+
 type Service struct {
 	db       *gorm.DB
 	access   *authorization.Access
 	resolver BuildResolver
 	secrets  SecretResolver
+	configs  ConfigFacts
 }
 
 // SetSecretResolver 只在装配阶段调用，不得在处理请求时更换依赖。
 func (s *Service) SetSecretResolver(resolver SecretResolver) { s.secrets = resolver }
 
-func NewService(db *gorm.DB, access *authorization.Access, resolver BuildResolver) *Service {
-	return &Service{db: db, access: access, resolver: resolver}
+func NewService(db *gorm.DB, access *authorization.Access, resolver BuildResolver, configs ConfigFacts) *Service {
+	return &Service{db: db, access: access, resolver: resolver, configs: configs}
 }
 func hash(data []byte) string { v := sha256.Sum256(data); return hex.EncodeToString(v[:]) }
 func missing(err error) error {
@@ -152,6 +160,15 @@ func (s *Service) authorizeInput(tx *gorm.DB, p authorization.Principal, ws, app
 	}
 	return nil
 }
+
+// latestRevision 经运行配置域接口读取最新版本与确认状态；依赖未装配时失败
+// 关闭（装配必然注入，缺省即视为配置事实不可用，auto_deploy 构建不得受理）。
+func (s *Service) latestRevision(tx *gorm.DB, ws, app string) (int64, bool, error) {
+	if s.configs == nil {
+		return 0, false, invalid("运行配置域依赖未装配")
+	}
+	return s.configs.LatestRevision(tx, ws, app)
+}
 func (s *Service) prepare(tx *gorm.DB, ws, app string, in CreateInput) (Preview, settingsRecord, policyRecord, registryRecord, error) {
 	var out Preview
 	var settings settingsRecord
@@ -199,21 +216,21 @@ func (s *Service) prepare(tx *gorm.DB, ws, app string, in CreateInput) (Preview,
 		if in.RuntimeConfigRevision < 1 {
 			return fail(invalid("自动部署必须绑定已保存且确认的运行配置"))
 		}
-		var cfg struct {
-			Revision  int64
-			Confirmed bool
+		revision, confirmed, err := s.latestRevision(tx, ws, app)
+		if err != nil {
+			return fail(err)
 		}
-		if err := tx.Table("runtime_config_revisions").Where("workspace_id = ? AND application_id = ?", ws, app).Order("revision DESC").Take(&cfg).Error; err != nil {
-			return fail(missing(err))
+		if revision == 0 {
+			// 应用尚无任何运行配置版本：保持与直查时 ErrRecordNotFound 同义。
+			return fail(authorization.ErrNotFound)
 		}
-		if cfg.Revision != in.RuntimeConfigRevision {
+		if revision != in.RuntimeConfigRevision {
 			return fail(authorization.ErrConflict)
 		}
-		if !cfg.Confirmed {
+		if !confirmed {
 			return fail(invalid("运行配置尚未确认"))
 		}
-		v := cfg.Revision
-		out.RuntimeConfigRevision = &v
+		out.RuntimeConfigRevision = &revision
 	}
 	if err := tx.Clauses(clause.Locking{Strength: "SHARE"}).Where("singleton = TRUE").Take(&settings).Error; err != nil {
 		return fail(missing(err))

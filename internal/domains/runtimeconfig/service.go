@@ -152,6 +152,18 @@ func readRevision(tx *gorm.DB, workspaceID, applicationID string, revision int64
 	return value, spec, nil
 }
 
+// LatestRevision 返回应用当前最新配置版本号与确认状态（含未确认草稿；应用尚无
+// 任何版本时返回 0,false,nil）。配置版本事实只经本方法向构建域（冻结校验）与
+// 部署域（受理期望、自动发布过期判定）暴露，两个域不再各自直查
+// runtime_config_revisions；调用方传入自己的事务，由其负责授权与串行化。
+func (s *Service) LatestRevision(tx *gorm.DB, workspaceID, applicationID string) (int64, bool, error) {
+	value, _, err := latest(tx, workspaceID, applicationID)
+	if err != nil {
+		return 0, false, err
+	}
+	return value.Revision, value.Confirmed, nil
+}
+
 func (s *Service) Save(ctx context.Context, p authorization.Principal, workspaceID, applicationID string, input Input) (View, error) {
 	input, err := Validate(input)
 	if err != nil {

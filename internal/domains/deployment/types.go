@@ -6,6 +6,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/sunshanpeng/yummy/internal/domains/build"
 	"github.com/sunshanpeng/yummy/internal/domains/runtimeconfig"
 	"gorm.io/gorm"
 )
@@ -40,8 +41,13 @@ const (
 )
 
 var (
-	ErrNotReady         = errors.New("部署所需平台资源尚未就绪")
-	ErrVerification     = errors.New("发布镜像或历史凭据不可用")
+	ErrNotReady     = errors.New("部署所需平台资源尚未就绪")
+	ErrVerification = errors.New("发布镜像或历史凭据不可用")
+	// ErrArtifactInvalid 表示产物或其冻结凭据已永久不可用（manifest/摘要/平台
+	// 不符、目标被拒、凭据版本不存在），与暂态的 ErrVerification（仓库暂不可用
+	// 等网络错误）区分：自动发布据此把候选记成终态关停，手动发布统一按不可
+	// 受理呈现（transport 与 ErrVerification 同映射）。
+	ErrArtifactInvalid  = errors.New("发布产物或其冻结凭据已永久不可用")
 	ErrStaleObservation = errors.New("运行观察已被新操作取代")
 	ErrSequence         = errors.New("运行观察序号不连续或内容冲突")
 	ErrNoPending        = errors.New("没有可领取的运行操作")
@@ -106,12 +112,24 @@ type ArtifactSnapshot struct {
 }
 
 // Verifier 独立检查仓库 manifest/config 和冻结凭据可读性，调用始终在业务事务外。
+// 返回 ErrArtifactInvalid 表示产物永久失效、ErrVerification 表示暂态不可用；
 // nil 校验器失败关闭；fake 仅用于状态机测试，不证明真实镜像存在。
 type Verifier interface {
 	Verify(context.Context, ArtifactSnapshot) error
 }
 type RuntimeConfigs interface {
 	MaterializeForDeployment(*gorm.DB, string, string, int64) (runtimeconfig.Materialized, error)
+	// LatestRevision 是运行配置域的版本事实：受理期望校验与自动发布过期判定
+	// 共用，部署域不直查 runtime_config_revisions。
+	LatestRevision(tx *gorm.DB, workspaceID, applicationID string) (revision int64, confirmed bool, err error)
+}
+
+// BuildFacts 是构建域的产物事实（消费方声明）：发布受理所需的已验证产物与
+// 自动发布候选只经此依赖，部署域不直查 builds/build_artifacts；发布事实
+// （是否已产生 release）与最终一致性校验仍归部署域。
+type BuildFacts interface {
+	AutoDeployCandidates(ctx context.Context, limit int) ([]build.AutoDeployCandidate, error)
+	VerifiedArtifact(tx *gorm.DB, workspaceID, applicationID, artifactID string) (build.VerifiedArtifact, error)
 }
 
 type ReleaseView struct {

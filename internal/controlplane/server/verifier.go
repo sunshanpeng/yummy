@@ -3,9 +3,11 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/url"
 	"strings"
 
+	"github.com/sunshanpeng/yummy/internal/domains/authorization"
 	"github.com/sunshanpeng/yummy/internal/domains/build"
 	"github.com/sunshanpeng/yummy/internal/domains/deployment"
 	"github.com/sunshanpeng/yummy/internal/domains/inventory"
@@ -64,6 +66,13 @@ type deploymentArtifactVerifier struct{ reader *artifactReader }
 func (v deploymentArtifactVerifier) Verify(ctx context.Context, in deployment.ArtifactSnapshot) error {
 	_, err := v.reader.read(ctx, in.RegistryID, in.CredentialVersion, in.Repository, in.Digest, in.Platform)
 	if err != nil {
+		// 与构建侧核验同一分类（见 buildArtifactVerifier）：明确不可运行（摘要/
+		// manifest/平台不符、目标被拒、配置非法）与凭据版本缺失属永久失效，
+		// 仓库暂不可用等网络错误保持暂态；自动发布据此区分终态关停与退避重试，
+		// 手动发布统一按不可受理呈现（transport 与 ErrVerification 同映射）。
+		if errors.Is(err, registryclient.ErrDigest) || errors.Is(err, registryclient.ErrManifest) || errors.Is(err, registryclient.ErrPlatform) || errors.Is(err, registryclient.ErrInvalid) || errors.Is(err, registryclient.ErrUnsafeTarget) || errors.Is(err, authorization.ErrNotFound) {
+			return fmt.Errorf("%w: %v", deployment.ErrArtifactInvalid, err)
+		}
 		return deployment.ErrVerification
 	}
 	return nil

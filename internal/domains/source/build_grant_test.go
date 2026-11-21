@@ -55,7 +55,7 @@ func TestBuildGrantBoundToAttemptAndRevocable(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	service := build.NewService(e.db, e.access, inv)
+	service := build.NewService(e.db, e.access, inv, nil)
 	created, err := service.CreateBuild(ctx, e.admin, "space", "app", build.CreateInput{SourceSnapshotID: snapshot.ID, ExpectedPolicyRevision: 1, IdempotencyKey: "grant-build"})
 	if err != nil {
 		t.Fatal(err)
@@ -212,7 +212,7 @@ func TestBuildGrantSurvivesCertificateRotation(t *testing.T) {
 		}
 	}
 	insertCert("a1", strings.Repeat("1", 64), strings.Repeat("2", 64))
-	service := build.NewService(e.db, e.access, inv)
+	service := build.NewService(e.db, e.access, inv, nil)
 	if _, err := service.CreateBuild(ctx, e.admin, "space", "app", build.CreateInput{SourceSnapshotID: snapshot.ID, ExpectedPolicyRevision: 1, IdempotencyKey: "rotate-build"}); err != nil {
 		t.Fatal(err)
 	}

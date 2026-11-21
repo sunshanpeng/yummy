@@ -45,7 +45,21 @@ func (s *Service) ClaimPending(ctx context.Context, worker WorkerIdentity) (Disp
 			return err
 		}
 		verifiedRelease, err = readRelease(tx, candidate.WorkspaceID, candidate.ApplicationID, candidate.ReleaseID)
-		return err
+		if err != nil {
+			return err
+		}
+		// 标记候选：在访问仓库核验之前先把到期时间推后 dispatchMarkSeconds，
+		// 核验失败（或进程崩溃）的候选天然不再占队首，同 worker 其余到期任务
+		// 继续领取；条件更新保证只有仍到期且活跃的候选被标记，并发竞争输家
+		// 在此让路。
+		marked := tx.Model(&operationRecord{}).Where("id = ? AND active = TRUE AND next_dispatch_at <= NOW()", candidate.ID).Update("next_dispatch_at", store.NowPlusSeconds(tx, dispatchMarkSeconds))
+		if marked.Error != nil {
+			return marked.Error
+		}
+		if marked.RowsAffected == 0 {
+			return ErrNoPending
+		}
+		return nil
 	}); err != nil {
 		return result, err
 	}
@@ -57,11 +71,8 @@ func (s *Service) ClaimPending(ctx context.Context, worker WorkerIdentity) (Disp
 			return result, ErrVerification
 		}
 		if err := s.verifier.Verify(ctx, releaseView(verifiedRelease).Artifact); err != nil {
-			// 核验失败时租约未续期，不推迟到期时间会让同一失败操作每轮都排在
-			// 队首，阻塞同 worker 的其余到期任务；单独退避后其余任务继续领取。
-			if postponeErr := s.postponeDispatch(ctx, worker, candidate.ID); postponeErr != nil {
-				return result, errors.Join(err, postponeErr)
-			}
+			// 候选已在第一段事务标记：核验失败不再额外处理，到期后由下一轮
+			// 重新标记并重试。
 			return result, ErrVerification
 		}
 	}
@@ -73,9 +84,11 @@ func (s *Service) ClaimPending(ctx context.Context, worker WorkerIdentity) (Disp
 			return err
 		}
 		var op operationRecord
-		// 候选选择和加锁后的再次检查都使用数据库时钟，避免控制面与数据库时钟偏差
-		// 使已经到期的任务反复被选中却永远不能领取。
-		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND active = TRUE AND next_dispatch_at <= NOW()", candidate.ID).Take(&op).Error
+		// 复核改为 dispatch_count CAS：候选已在第一段事务被标记出队，比较到期
+		// 时间会永远失配；并发领取者（如网关重连重叠）只有一个能把计数从候选
+		// 快照值推进，第二个领取者在此失败。其余守卫（generation/active op/
+		// 节点/产物）照旧复核。
+		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND active = TRUE AND dispatch_count = ?", candidate.ID, candidate.DispatchCount).Take(&op).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return ErrNoPending
 		}
@@ -102,11 +115,11 @@ func (s *Service) ClaimPending(ctx context.Context, worker WorkerIdentity) (Disp
 		}
 		var material runtimeconfig.Materialized
 		if op.Action != Stop {
-			artifact, err := readArtifact(tx, op.WorkspaceID, op.ApplicationID, release.ArtifactID)
+			artifact, err := s.builds.VerifiedArtifact(tx, op.WorkspaceID, op.ApplicationID, release.ArtifactID)
 			if err != nil {
 				return err
 			}
-			if artifactView(artifact) != releaseView(verifiedRelease).Artifact {
+			if verifiedArtifactSnapshot(artifact) != releaseView(verifiedRelease).Artifact {
 				return authorization.ErrConflict
 			}
 			material, err = s.materialize(tx, op.WorkspaceID, op.ApplicationID, release.RuntimeConfigRevision)
@@ -149,22 +162,10 @@ const (
 	// 恢复完成前（LastObservedAt 刷新）的周期轮询不重复下发。
 	resumeStaleAfterSeconds = 120
 	resumeBackoffWindow     = time.Minute
-	// verifyFailureBackoffSeconds 镜像核验失败的单独退避：仓库暂不可用是外部
-	// 依赖故障，按固定间隔重试该操作即可，不占用派发队首。
-	verifyFailureBackoffSeconds = 60
+	// dispatchMarkSeconds 是领取候选的核验标记窗口：候选在访问仓库前先出队
+	// 该窗口，核验成功立即领取（租约覆盖标记），失败或崩溃后按窗口重试。
+	dispatchMarkSeconds = 60
 )
-
-// postponeDispatch 单独推迟一个到期未领取操作的下次派发时间：只推进
-// next_dispatch_at，不改状态不记领取次数；条件限定“仍活跃且已到期”，
-// 已被领取、取消或取代的操作不受影响。
-func (s *Service) postponeDispatch(ctx context.Context, worker WorkerIdentity, operationID string) error {
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := authenticateWorker(tx, worker); err != nil {
-			return err
-		}
-		return tx.Model(&operationRecord{}).Where("id = ? AND active = TRUE AND next_dispatch_at <= NOW()", operationID).Update("next_dispatch_at", store.NowPlusSeconds(tx, verifyFailureBackoffSeconds)).Error
-	})
-}
 
 // claimResume 在无可领取操作时为观察停更的 serving release 合成观察恢复命令
 // （Action=RECONCILE）：worker 重启丢失内存中的运行采集器（运行日志/指标），

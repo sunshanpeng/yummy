@@ -3,6 +3,7 @@ package deployment
 import (
 	"time"
 
+	"github.com/sunshanpeng/yummy/internal/domains/build"
 	"github.com/sunshanpeng/yummy/internal/domains/inventory"
 )
 
@@ -129,16 +130,6 @@ type runtimeMetricSampleRecord struct {
 
 func (runtimeMetricSampleRecord) TableName() string { return "runtime_metric_samples" }
 
-// 跨模块结构只读投影；不通过这些结构修改其他模块事实。
-type artifactRecord struct {
-	ID, WorkspaceID, ApplicationID, RegistryID string
-	CredentialVersion                          int64
-	Repository, Digest, Platform, State        string
-	VerifiedAt                                 *time.Time
-}
-
-func (artifactRecord) TableName() string { return "build_artifacts" }
-
 type settingsRecord struct {
 	ID             string
 	PolicyRevision int64
@@ -212,7 +203,10 @@ func text(value *string) string {
 	}
 	return *value
 }
-func artifactView(v artifactRecord) ArtifactSnapshot {
+
+// verifiedArtifactSnapshot 把构建域产物事实映射为发布域的产物快照（可比结构，
+// 用于受理时冻结值与当前值的一致性比对）。
+func verifiedArtifactSnapshot(v build.VerifiedArtifact) ArtifactSnapshot {
 	return ArtifactSnapshot{ID: v.ID, WorkspaceID: v.WorkspaceID, ApplicationID: v.ApplicationID, RegistryID: v.RegistryID, CredentialVersion: v.CredentialVersion, Repository: v.Repository, Digest: v.Digest, Platform: v.Platform}
 }
 func releaseView(v releaseRecord) ReleaseView {

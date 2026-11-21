@@ -31,7 +31,7 @@ func fixture(t *testing.T) (*gorm.DB, *application.Service, authorization.Princi
 	}
 	// 归档前置校验接真实部署域实现（StoppedForArchive 只读运行状态，不依赖
 	// 运行配置/校验器），与控制面装配一致。
-	return db, application.NewService(db, access, deployment.NewService(db, access, nil, nil)), authorization.Principal{UserID: "root", AuthVersion: 1}, authorization.Principal{UserID: "alice", AuthVersion: 1}
+	return db, application.NewService(db, access, deployment.NewService(db, access, nil, nil, nil)), authorization.Principal{UserID: "root", AuthVersion: 1}, authorization.Principal{UserID: "alice", AuthVersion: 1}
 }
 
 func TestCreateApplicationIsNameOnlyIdempotentAndAuditedOnce(t *testing.T) {
