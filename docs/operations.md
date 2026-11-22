@@ -1,12 +1,13 @@
 # Yummy 第一期运维手册
 
-面向自部署与独立托管实例的安装、配置、升级与限制说明。产品只含控制面（`platform serve`）与 worker（`platform worker run`）两类常驻进程；CLI 为按需启动的客户端。PostgreSQL、Redis、Kubernetes（k3s）、镜像仓库为既有基础设施，本产品不额外引入服务。
+面向自部署与独立托管实例的安装、配置、升级与限制说明。产品只含控制面（`yummy-server serve`）与 worker（`yummy-worker run`）两类常驻进程；CLI 为按需启动的客户端。PostgreSQL、Redis、Kubernetes（k3s）、镜像仓库为既有基础设施，本产品不额外引入服务。
 
 ## 1. 构建与依赖
 
 - 工具链：Go（go.mod 声明版本，工具链 1.27.3 验证）、Node（^22/^24/≥26，pnpm 10）、make、openssl（证书）、docker（本地基础设施，可选）。
-- 构建：`make build`（先 `pnpm --dir web install`）。产物：`bin/platform`（控制面 `serve`、worker `worker run` 与全部按需管理命令；构建 Pod 内的一次性 runner 由 `cmd/build-runner` 打成镜像，非常驻服务）。
-- 数据库迁移：goose 版本化迁移，进程内带锁执行；`platform migrate --database-url …`。禁止 AutoMigrate。
+- `make build-server` 生成内嵌 Web 控制台的 `bin/yummy-server`（先执行 `make install`）。`make build-cli` 生成 `bin/yummy`，`make build-worker` 生成 `bin/yummy-worker`，这两个目标使用 Go 工具链。
+- 控制面主机安装 `yummy-server`，执行宿主机安装 `yummy-worker`，用户安装 `yummy`。执行宿主机为 Linux/AMD64 时，使用 `CGO_ENABLED=0 GOOS=linux GOARCH=amd64 make build-worker` 构建。构建 Pod 的一次性 runner 由 `cmd/build-runner` 打成镜像。
+- 数据库迁移：goose 版本化迁移，进程内带锁执行；`yummy-server migrate --database-url …`。禁止 AutoMigrate。
 
 ## 2. 控制面安装与启动
 
@@ -16,12 +17,12 @@ OAuth、worker TLS、可观测性），键名与命令行 flag 一致，完整�
 `./config.yaml` 与 `/etc/yummy/config.yaml`。含密钥的文件权限设为 0600；改配置文件需重启进程生效。
 
 1. 准备 PostgreSQL 与 Redis（Redis 仅承担会话与在线 TTL）。
-2. `platform migrate --database-url "postgres://user:pass@host:5432/db?sslmode=disable"`。
+2. `yummy-server migrate --database-url "postgres://user:pass@host:5432/db?sslmode=disable"`。
 3. 初始化首位全局管理员（无匿名初始化接口）：
-   `platform admin init --database-url … --username <管理员> --password-stdin`
+   `yummy-server admin init --database-url … --username <管理员> --password-stdin`
 4. 生成三把独立密钥（Base64 32 字节）：`openssl rand -base64 32`，分别作为 session-key / csrf-key / master-key；如需 OAuth 与远程 MCP 再加 oauth-key。
 5. 创建源码持久化目录（`--source-root`，必须预先创建，产品校验可写与 fsync）。
-6. 启动：`platform serve`。关键参数（均有同名环境变量，密钥推荐走环境变量）：
+6. 启动：`yummy-server serve`。关键参数（均有同名环境变量，密钥推荐走环境变量）：
 
 | 参数 | 说明 |
 |---|---|
@@ -43,10 +44,12 @@ OAuth、worker TLS、可观测性），键名与命令行 flag 一致，完整�
 
 1. 控制面启用 worker CA（见上）。
 2. 全局管理员创建执行节点并签发一次性注册码（全局管理或 `InventoryService.CreateNode` + `EnrollmentService.CreateNodeRegistration`）。
-3. worker 机上：`platform worker register --server https://控制面:8443 --token <一次性码> --state-dir /var/lib/yummy-worker --server-ca-file <控制面CA>`。状态目录 0700（私钥/证书/CA/身份），注册码一次性、不可重放。
+3. worker 机上：`yummy-worker register --server https://控制面:8443 --token <一次性码> --state-dir /var/lib/yummy-worker --server-ca-file <控制面CA>`。状态目录 0700（私钥/证书/CA/身份），注册码一次性、不可重放。
 4. 安装资格：全局管理员先在控制面登记节点验收记录（`RegisterNodeQualification`，含 cluster_node_uid/OS/arch/能力位与验收证据）；worker 以 `--qualification-file` 提供同一记录，控制面逐项核对一致才置能力就绪。任何不一致或缺失即失败关闭——不自报即信。
-5. 运行：`platform worker run`（显式 `--kube-apiserver/--kube-ca-file/--kube-token-file/--node-name/--build-namespace/--runtime-namespace`，可选 `--storage-class/--ingress-class/--runner-image/--buildkit-image`——镜像必须 digest 钉住；`--qualification-file` 缺失时全部能力关闭；`--journal-dir` 持久化事件跨重连）。绝不读取 kubeconfig 或环境默认集群。
+5. `yummy-worker run` 需要显式传入 `--state-dir`、`--kube-apiserver`、`--kube-ca-file`、`--kube-token-file`、`--node-name`、`--build-namespace` 和 `--runtime-namespace`。可选 `--storage-class`、`--ingress-class`、`--runner-image`、`--buildkit-image`，镜像必须固定 digest。缺少 `--qualification-file` 时全部能力关闭。`--journal-dir` 用于持久化事件，默认是状态目录下的 `journal`。
 6. 证书轮换：7 天轮换窗（`/worker/rotate` 自动）；轮换与撤销不影响在途构建下载（节点粒度信任），节点全部证书撤销才阻断。
+
+使用 VS Code 调试时，`Go: Control` 读取常规启动配置，`Go: Worker` 按 [启动配置](../.vscode/launch.json) 将本机环境中的执行参数传入 `yummy-worker run`。
 
 ## 4. 反向代理与 HTTPS（生产必须）
 
@@ -63,7 +66,8 @@ OAuth、worker TLS、可观测性），键名与命令行 flag 一致，完整�
 
 ## 6. 升级与备份
 
-- 升级顺序：备份数据库与 source-root 卷与三把密钥 → 替换二进制 → `platform migrate` → 重启控制面 → 逐台滚动重启 worker（journal 保证事件不丢，重投幂等）。
+- 升级顺序：备份数据库与 source-root 卷与三把密钥 → 按同一 Git 版本替换各端二进制与启动命令 → `yummy-server migrate` → 重启控制面 → 逐台滚动重启 worker（journal 保证事件不丢，重投幂等）。
+- worker 升级时沿用原 `--state-dir` 和自定义 `--journal-dir`，可直接复用登记身份并继续发送积压事件。
 - 迁移只前滚；`001_init.sql` 为历史基线不可改写。
 - 备份必须成套：PostgreSQL + source-root（归档文件）+ master-key。缺任何一个，源码授权/仓库凭据恢复即不完整。
 - 会话存于 Redis，可整库丢失重建（用户重新登录）；OAuth 授权族随 oauth-key 丢失失效。

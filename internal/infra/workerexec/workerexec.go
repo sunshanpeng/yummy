@@ -1,6 +1,6 @@
 // Package workerexec 把控制面 worker 网关命令装配为节点内 Kubernetes 适配器调用，
 // 是 worker 进程的产品执行内核：不读取 kubeconfig、不访问宿主 Shell、不新增常驻服务。
-// 序列号策略：所有事件/日志/观察都以 Seq=0 交给 Emitter，由 workergateway.Journal 依据
+// 序列号策略：所有事件/日志/观察都以 Seq=0 交给 Emitter，由 workerclient.Journal 依据
 // 已持久化序列自动递增（journal.append 在 seq==0 时回写 oldSeq+1），从而跨重连稳定。
 package workerexec
 
@@ -25,7 +25,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-// GenerationClient 由 workergateway.WorkerClient 实现：复用同一条已验证 mTLS 连接，
+// GenerationClient 由 workerclient.WorkerClient 实现：复用同一条已验证 mTLS 连接，
 // 在每次 Kubernetes 写入前查询控制面当前持久期望态。
 type GenerationClient interface {
 	CheckGeneration(ctx context.Context, request *platformv1.WorkerGenerationRequest) error
@@ -90,7 +90,7 @@ type Options struct {
 	KubeletMetrics *kube.MetricsConfig
 }
 
-// Executor 实现 workergateway.Executor；生命周期独立于任何一次流连接，
+// Executor 实现 workerclient.Executor；生命周期独立于任何一次流连接，
 // 长循环一律尊重 ctx 取消，返回非 nil 错误时保留 journal 待重投。
 type Executor struct {
 	options Options
@@ -444,7 +444,7 @@ func (e *Executor) followBuildLogs(ctx context.Context, task kube.BuildTask, emi
 }
 
 // drainLogStream 读取日志流并按 LogChunkBytes 分块发射；块大小不超过
-// workergateway.Journal 的单块上限，末尾不足一块时单独发射。
+// workerclient.Journal 的单块上限，末尾不足一块时单独发射。
 func (e *Executor) drainLogStream(ctx context.Context, stream *kube.LogStream, attemptID string, emitter Emitter) error {
 	buffer := make([]byte, e.options.LogChunkBytes)
 	pending := []byte{}

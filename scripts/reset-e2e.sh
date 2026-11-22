@@ -9,9 +9,9 @@ database=${YUMMY_E2E_PG_DATABASE:-yummy_e2e}
 dsn_user=${YUMMY_E2E_PG_USER:-demo}
 username=${1:-e2eadmin}
 password=${2:-e2e-admin-password}
-binary=${E2E_PLATFORM_BIN:-work/tools/platform-e2e}
+binary=${E2E_PLATFORM_BIN:-bin/yummy-server}
 
-test -x "$binary" || { echo "缺少 ${binary}，请先 make build 或单独构建 ./cmd/platform" >&2; exit 1; }
+test -x "$binary" || { echo "缺少 ${binary}，请先 make build-server" >&2; exit 1; }
 
 docker exec "$container" psql -U "$dsn_user" -d postgres -c "DROP DATABASE IF EXISTS $database" >/dev/null
 docker exec "$container" psql -U "$dsn_user" -d postgres -c "CREATE DATABASE $database OWNER $dsn_user" >/dev/null

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sunshanpeng/yummy/internal/domains/authorization"
+	"github.com/sunshanpeng/yummy/internal/lib/workerprotocol"
 )
 
 func createOn(t *testing.T, e environment, app, key string) Result {
@@ -98,7 +99,7 @@ func TestApplyRuntimeLogIdempotencySequenceAndAccess(t *testing.T) {
 	}
 	// 大小上限与代际标签校验。
 	tooBig := runtimeLogInput(r, "app_one", "pod-1", 3, "")
-	tooBig.Content = make([]byte, RuntimeLogMaxChunkBytes+1)
+	tooBig.Content = make([]byte, workerprotocol.RuntimeLogMaxChunkBytes+1)
 	if _, err := e.service.ApplyRuntimeLog(ctx, e.worker, tooBig); !errors.Is(err, authorization.ErrInvalid) {
 		t.Fatalf("超大块应无效: %v", err)
 	}
@@ -136,11 +137,11 @@ func TestApplyRuntimeLogQuotaConvergenceRemovesOldest(t *testing.T) {
 	}
 	// 字节配额：4MiB/16KiB+1 = 257 块超出预算，收敛到 256 块（含最新写入的一块）。
 	rBytes := createOn(t, e, "app_two", "quota-bytes")
-	seedRuntimeLogs(t, e, "app_two", "pod-big", "bytes", int(runtimeLogQuotaBytes/RuntimeLogMaxChunkBytes)+1, RuntimeLogMaxChunkBytes, 100000)
+	seedRuntimeLogs(t, e, "app_two", "pod-big", "bytes", int(runtimeLogQuotaBytes/workerprotocol.RuntimeLogMaxChunkBytes)+1, workerprotocol.RuntimeLogMaxChunkBytes, 100000)
 	if _, err := e.service.ApplyRuntimeLog(ctx, e.worker, runtimeLogInput(rBytes, "app_two", "pod-new", 1, "newest")); err != nil {
 		t.Fatal(err)
 	}
-	if count := countAppRows(t, e, "runtime_log_chunks", "app_two"); count != int64(runtimeLogQuotaBytes/RuntimeLogMaxChunkBytes) {
+	if count := countAppRows(t, e, "runtime_log_chunks", "app_two"); count != int64(runtimeLogQuotaBytes/workerprotocol.RuntimeLogMaxChunkBytes) {
 		t.Fatalf("字节配额未收敛=%d", count)
 	}
 	if rowExists(t, e, "runtime_log_chunks", "seed_bytes_1") || rowExists(t, e, "runtime_log_chunks", "seed_bytes_2") {

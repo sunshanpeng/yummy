@@ -28,6 +28,7 @@ import (
 	"github.com/sunshanpeng/yummy/internal/domains/enrollment"
 	"github.com/sunshanpeng/yummy/internal/infra/store/model"
 	"github.com/sunshanpeng/yummy/internal/infra/testkit"
+	"github.com/sunshanpeng/yummy/internal/lib/workerprotocol"
 	"gorm.io/gorm"
 )
 
@@ -386,7 +387,7 @@ func (f *fakeBuild) ApplyEvent(_ context.Context, _ build.WorkerIdentity, value 
 	}
 	old, duplicate := f.events[value.Seq]
 	if duplicate && old != value {
-		return build.Ack{}, ErrProtocol
+		return build.Ack{}, workerprotocol.ErrProtocol
 	}
 	f.events[value.Seq] = value
 	return build.Ack{Seq: value.Seq, Duplicate: duplicate, State: "RUNNING"}, nil
@@ -399,7 +400,7 @@ func (f *fakeBuild) AppendLogs(_ context.Context, _ build.WorkerIdentity, value 
 	}
 	old, duplicate := f.logs[value.Seq]
 	if duplicate && old != string(value.Content) {
-		return build.Ack{}, ErrProtocol
+		return build.Ack{}, workerprotocol.ErrProtocol
 	}
 	f.logs[value.Seq] = string(value.Content)
 	return build.Ack{Seq: value.Seq, Duplicate: duplicate}, nil

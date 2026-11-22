@@ -16,7 +16,7 @@ import (
 	"github.com/sunshanpeng/yummy/internal/domains/application"
 	"github.com/sunshanpeng/yummy/internal/domains/authorization"
 	"github.com/sunshanpeng/yummy/internal/domains/build"
-	"github.com/sunshanpeng/yummy/internal/domains/runtimeconfig"
+	"github.com/sunshanpeng/yummy/internal/lib/runtimeconfig"
 )
 
 type fakeApplications struct {

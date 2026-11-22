@@ -37,7 +37,7 @@ const (
 )
 
 // CertificateHolder 保存可原子替换的客户端证书。TLS 配置经 GetClientCertificate
-// 回调读取证书：workergateway.NewWorkerClient 在构造时 Clone 一次 tls.Config，
+// 回调读取证书：workerclient.NewWorkerClient 在构造时 Clone 一次 tls.Config，
 // 回调指针被保留，轮换成功后更新 holder 即可让后续握手使用新证书，无需重建
 // 客户端（TLS.Certificates 留空但 GetClientCertificate 非空即为合法配置）。
 type CertificateHolder struct {

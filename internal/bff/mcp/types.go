@@ -9,8 +9,8 @@ import (
 	"github.com/sunshanpeng/yummy/internal/domains/authorization"
 	"github.com/sunshanpeng/yummy/internal/domains/build"
 	"github.com/sunshanpeng/yummy/internal/domains/deployment"
-	"github.com/sunshanpeng/yummy/internal/domains/runtimeconfig"
 	"github.com/sunshanpeng/yummy/internal/domains/source"
+	"github.com/sunshanpeng/yummy/internal/lib/runtimeconfig"
 )
 
 // Authenticate 必须验证 OAuth token 的签名、有效期、撤销及精确 resource。

@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/sunshanpeng/yummy/internal/domains/runtimeconfig"
+	"github.com/sunshanpeng/yummy/internal/lib/runtimeconfig"
 )
 
 // claimTLSRelease 构造带两条自定义域名的 HTTP 发布：配置另存 revision 2 后受理，

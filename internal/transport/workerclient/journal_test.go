@@ -1,4 +1,4 @@
-package workergateway
+package workerclient
 
 import (
 	"context"
@@ -11,6 +11,7 @@ import (
 
 	platformv1 "github.com/sunshanpeng/yummy/gen/go/platform/v1"
 	"github.com/sunshanpeng/yummy/internal/infra/workerexec"
+	"github.com/sunshanpeng/yummy/internal/lib/workerprotocol"
 )
 
 func journalDirectory(t *testing.T) string {
@@ -21,6 +22,22 @@ func journalDirectory(t *testing.T) string {
 	}
 	return directory
 }
+
+func waitUntil(t *testing.T, fn func() bool) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for !fn() {
+		select {
+		case <-ctx.Done():
+			t.Fatal("等待条件超时")
+		case <-ticker.C:
+		}
+	}
+}
+
 func TestJournalFsyncReplayAckAndConflictingSequence(t *testing.T) {
 	directory := journalDirectory(t)
 	journal, err := OpenJournal(directory, 0)
@@ -47,7 +64,7 @@ func TestJournalFsyncReplayAckAndConflictingSequence(t *testing.T) {
 	if err != nil || len(pending) != 1 || pending[0].GetBuildEvent().Kind != "SUCCEEDED" || pending[0].GetBuildEvent().Seq != 1 {
 		t.Fatalf("重启遗失成功=%#v,%v", pending, err)
 	}
-	if err := restarted.append(&platformv1.WorkerEnvelope{Payload: &platformv1.WorkerEnvelope_BuildEvent{BuildEvent: &platformv1.WorkerBuildEvent{AttemptId: "attempt", Seq: 1, Kind: "FAILED"}}}); !errors.Is(err, ErrProtocol) {
+	if err := restarted.append(&platformv1.WorkerEnvelope{Payload: &platformv1.WorkerEnvelope_BuildEvent{BuildEvent: &platformv1.WorkerBuildEvent{AttemptId: "attempt", Seq: 1, Kind: "FAILED"}}}); !errors.Is(err, workerprotocol.ErrProtocol) {
 		t.Fatalf("相同序号不同内容=%v", err)
 	}
 	if err := restarted.ack(&platformv1.WorkerAck{Channel: "build-event", ExecutionId: "other", Seq: 1}); err != nil {
@@ -93,13 +110,13 @@ func TestJournalTruncatesLogsAndKeepsStateAndExecutionRecovery(t *testing.T) {
 	if err != nil || !seen || done {
 		t.Fatal(seen, done, err)
 	}
-	if _, _, err := journal.begin("build:attempt", "changed"); !errors.Is(err, ErrProtocol) {
+	if _, _, err := journal.begin("build:attempt", "changed"); !errors.Is(err, workerprotocol.ErrProtocol) {
 		t.Fatal(err)
 	}
 	if err := journal.generation("app", 2); err != nil {
 		t.Fatal(err)
 	}
-	if err := journal.generation("app", 1); !errors.Is(err, ErrIdentity) {
+	if err := journal.generation("app", 1); !errors.Is(err, workerprotocol.ErrIdentity) {
 		t.Fatal("旧generation未拒绝")
 	}
 }

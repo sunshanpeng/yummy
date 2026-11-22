@@ -16,6 +16,7 @@ import (
 	"github.com/sunshanpeng/yummy/gen/go/platform/v1/platformv1connect"
 	"github.com/sunshanpeng/yummy/internal/domains/enrollment"
 	"github.com/sunshanpeng/yummy/internal/lib/security"
+	"github.com/sunshanpeng/yummy/internal/lib/workerprotocol"
 )
 
 type peerKey struct{}
@@ -43,25 +44,25 @@ type Gateway struct {
 
 func New(config Config) (*Gateway, error) {
 	if config.DB == nil || config.Peers == nil || config.ServerID == "" {
-		return nil, ErrProtocol
+		return nil, workerprotocol.ErrProtocol
 	}
 	if config.MaxSessions == 0 {
 		config.MaxSessions = 256
 	}
 	if config.MaxSessions < 1 || config.MaxSessions > 10000 {
-		return nil, ErrProtocol
+		return nil, workerprotocol.ErrProtocol
 	}
 	if config.QueueSize == 0 {
 		config.QueueSize = 64
 	}
 	if config.QueueSize < 4 || config.QueueSize > 1024 {
-		return nil, ErrProtocol
+		return nil, workerprotocol.ErrProtocol
 	}
 	if config.ScheduleInterval == 0 {
 		config.ScheduleInterval = 5 * time.Second
 	}
 	if config.ScheduleInterval < 10*time.Millisecond || config.ScheduleInterval > time.Minute {
-		return nil, ErrProtocol
+		return nil, workerprotocol.ErrProtocol
 	}
 	return &Gateway{config: config, sessions: make(map[string]*session), closing: make(chan struct{})}, nil
 }
@@ -106,36 +107,36 @@ func (g *Gateway) Handler() (string, http.Handler) {
 func peer(ctx context.Context) (*x509.Certificate, error) {
 	certificate, ok := ctx.Value(peerKey{}).(*x509.Certificate)
 	if !ok || certificate == nil {
-		return nil, ErrIdentity
+		return nil, workerprotocol.ErrIdentity
 	}
 	return certificate, nil
 }
 func (g *Gateway) check(ctx context.Context, s *session) error {
 	identity, err := g.config.Peers.VerifyPeer(ctx, s.certificate)
 	if err != nil {
-		return ErrIdentity
+		return workerprotocol.ErrIdentity
 	}
 	if identity.NodeID != s.identity.NodeID || identity.WorkerID != s.identity.WorkerID || identity.Serial != s.identity.Serial {
-		return ErrIdentity
+		return workerprotocol.ErrIdentity
 	}
 	var count int64
 	if err := g.config.DB.WithContext(ctx).Table("execution_nodes").Where("id = ? AND worker_id = ? AND connection_epoch = ? AND connection_owner = ? AND status IN ('ACTIVE','DRAINING')", identity.NodeID, identity.WorkerID, s.epoch, s.owner).Count(&count).Error; err != nil {
 		return err
 	}
 	if count != 1 {
-		return ErrIdentity
+		return workerprotocol.ErrIdentity
 	}
 	return nil
 }
 func (g *Gateway) enqueue(s *session, message *platformv1.ControlEnvelope) error {
 	select {
 	case <-s.ctx.Done():
-		return ErrIdentity
+		return workerprotocol.ErrIdentity
 	case s.queue <- message:
 		return nil
 	default:
 		s.cancel()
-		return ErrSpoolFull
+		return workerprotocol.ErrSpoolFull
 	}
 }
 func (g *Gateway) report(err error) {
@@ -173,7 +174,7 @@ func (g *Gateway) Connect(ctx context.Context, stream *connect.BidiStream[platfo
 	g.mu.Lock()
 	if g.closed {
 		g.mu.Unlock()
-		return connect.NewError(connect.CodeUnavailable, ErrIdentity)
+		return connect.NewError(connect.CodeUnavailable, workerprotocol.ErrIdentity)
 	}
 	g.streams.Add(1)
 	g.mu.Unlock()
@@ -205,11 +206,11 @@ func (g *Gateway) Connect(ctx context.Context, stream *connect.BidiStream[platfo
 	ctx = connectionCtx
 	certificate, err := peer(ctx)
 	if err != nil {
-		return connect.NewError(connect.CodeUnauthenticated, ErrIdentity)
+		return connect.NewError(connect.CodeUnauthenticated, workerprotocol.ErrIdentity)
 	}
 	identity, err := g.config.Peers.VerifyPeer(ctx, certificate)
 	if err != nil {
-		return connect.NewError(connect.CodeUnauthenticated, ErrIdentity)
+		return connect.NewError(connect.CodeUnauthenticated, workerprotocol.ErrIdentity)
 	}
 	first, err := stream.Receive()
 	if err != nil {
@@ -217,7 +218,7 @@ func (g *Gateway) Connect(ctx context.Context, stream *connect.BidiStream[platfo
 	}
 	hello := first.GetHello()
 	if hello == nil || hello.WorkerId != identity.WorkerID || hello.NodeId != identity.NodeID || len(hello.Version) > 128 {
-		return connect.NewError(connect.CodeUnauthenticated, ErrIdentity)
+		return connect.NewError(connect.CodeUnauthenticated, workerprotocol.ErrIdentity)
 	}
 	owner, err := security.NewID("conn")
 	if err != nil {
@@ -231,16 +232,16 @@ func (g *Gateway) Connect(ctx context.Context, stream *connect.BidiStream[platfo
 	g.mu.Lock()
 	if g.closed {
 		g.mu.Unlock()
-		return connect.NewError(connect.CodeUnavailable, ErrIdentity)
+		return connect.NewError(connect.CodeUnavailable, workerprotocol.ErrIdentity)
 	}
 	old := g.sessions[identity.NodeID]
 	if old == nil && len(g.sessions) >= g.config.MaxSessions {
 		g.mu.Unlock()
-		return connect.NewError(connect.CodeResourceExhausted, ErrSpoolFull)
+		return connect.NewError(connect.CodeResourceExhausted, workerprotocol.ErrSpoolFull)
 	}
 	if err := g.openPresence(connectionCtx, s); err != nil {
 		g.mu.Unlock()
-		return connect.NewError(connect.CodeUnauthenticated, ErrIdentity)
+		return connect.NewError(connect.CodeUnauthenticated, workerprotocol.ErrIdentity)
 	}
 	g.sessions[identity.NodeID] = s
 	if old != nil {
@@ -322,7 +323,7 @@ func (g *Gateway) Connect(ctx context.Context, stream *connect.BidiStream[platfo
 	for {
 		select {
 		case <-connectionCtx.Done():
-			return connect.NewError(connect.CodeCanceled, ErrIdentity)
+			return connect.NewError(connect.CodeCanceled, workerprotocol.ErrIdentity)
 		case err := <-writerErr:
 			return err
 		case err := <-receiveErr:
@@ -332,17 +333,17 @@ func (g *Gateway) Connect(ctx context.Context, stream *connect.BidiStream[platfo
 			return connect.NewError(connect.CodeUnauthenticated, safeGatewayError(err))
 		case <-ticker.C:
 			if err := g.check(connectionCtx, s); err != nil {
-				return connect.NewError(connect.CodeUnauthenticated, ErrIdentity)
+				return connect.NewError(connect.CodeUnauthenticated, workerprotocol.ErrIdentity)
 			}
 			g.report(g.schedule(connectionCtx, s))
 		}
 	}
 }
 func safeGatewayError(err error) error {
-	if errors.Is(err, ErrIdentity) {
-		return ErrIdentity
+	if errors.Is(err, workerprotocol.ErrIdentity) {
+		return workerprotocol.ErrIdentity
 	}
-	return ErrProtocol
+	return workerprotocol.ErrProtocol
 }
 func certificateHash(certificate *x509.Certificate) string {
 	sum := sha256.Sum256(certificate.Raw)
@@ -352,29 +353,29 @@ func (g *Gateway) CheckGeneration(ctx context.Context, request *connect.Request[
 	g.mu.Lock()
 	if g.closed {
 		g.mu.Unlock()
-		return nil, connect.NewError(connect.CodeUnavailable, ErrIdentity)
+		return nil, connect.NewError(connect.CodeUnavailable, workerprotocol.ErrIdentity)
 	}
 	g.streams.Add(1)
 	g.mu.Unlock()
 	defer g.streams.Done()
 	certificate, err := peer(ctx)
 	if err != nil {
-		return nil, connect.NewError(connect.CodeUnauthenticated, ErrIdentity)
+		return nil, connect.NewError(connect.CodeUnauthenticated, workerprotocol.ErrIdentity)
 	}
 	identity, err := g.config.Peers.VerifyPeer(ctx, certificate)
 	if err != nil {
-		return nil, connect.NewError(connect.CodeUnauthenticated, ErrIdentity)
+		return nil, connect.NewError(connect.CodeUnauthenticated, workerprotocol.ErrIdentity)
 	}
 	if g.config.Guard == nil {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, ErrQualification)
+		return nil, connect.NewError(connect.CodeFailedPrecondition, workerprotocol.ErrQualification)
 	}
 	value := request.Msg
 	if value.Generation < 1 || value.WorkspaceId == "" || value.ApplicationId == "" || value.OperationId == "" || value.ReleaseId == "" || value.ClusterNodeUid == "" {
-		return nil, connect.NewError(connect.CodeInvalidArgument, ErrProtocol)
+		return nil, connect.NewError(connect.CodeInvalidArgument, workerprotocol.ErrProtocol)
 	}
 	err = g.config.Guard.Check(ctx, deploymentIdentity(identity, certificate), GenerationCheck{WorkspaceID: value.WorkspaceId, ApplicationID: value.ApplicationId, OperationID: value.OperationId, ReleaseID: value.ReleaseId, ClusterNodeUID: value.ClusterNodeUid, Generation: value.Generation})
 	if err != nil {
-		return nil, connect.NewError(connect.CodeAborted, ErrIdentity)
+		return nil, connect.NewError(connect.CodeAborted, workerprotocol.ErrIdentity)
 	}
 	return connect.NewResponse(&platformv1.WorkerGenerationResponse{Current: true}), nil
 }

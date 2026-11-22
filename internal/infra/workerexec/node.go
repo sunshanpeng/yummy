@@ -284,7 +284,7 @@ func LoadNodeState(directory string) ([]byte, []byte, []byte, NodeState, error) 
 	}
 	var state NodeState
 	if json.Unmarshal(identityData, &state) != nil || state.NodeID == "" || state.WorkerID == "" || state.Serial == "" || state.Server == "" {
-		return nil, nil, nil, NodeState{}, errors.New("workerexec: 身份文件无效，请重新执行 worker register")
+		return nil, nil, nil, NodeState{}, errors.New("workerexec: 身份文件无效，请重新执行 yummy-worker register")
 	}
 	if _, err := tls.X509KeyPair(certPEM, keyPEM); err != nil {
 		return nil, nil, nil, NodeState{}, fmt.Errorf("workerexec: 证书与私钥不匹配: %w", err)

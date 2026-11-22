@@ -14,10 +14,13 @@ import (
 	"github.com/sunshanpeng/yummy/internal/domains/audit"
 	"github.com/sunshanpeng/yummy/internal/domains/authorization"
 	"github.com/sunshanpeng/yummy/internal/infra/store/model"
+	"github.com/sunshanpeng/yummy/internal/lib/runtimeconfig"
 	"github.com/sunshanpeng/yummy/internal/lib/security"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
+
+func invalid(message string) error { return fmt.Errorf("%w: %s", authorization.ErrInvalid, message) }
 
 type record struct {
 	ID            string `gorm:"primaryKey"`
@@ -39,16 +42,16 @@ type secretValue struct {
 	Ciphertext []byte `json:"ciphertext,omitempty"`
 }
 type storedSpec struct {
-	Type      string        `json:"type"`
-	Port      int32         `json:"port"`
-	Probe     Probe         `json:"probe"`
-	Command   []string      `json:"command"`
-	Args      []string      `json:"args"`
-	Variables []secretValue `json:"variables"`
-	Files     []secretValue `json:"files"`
-	Volumes   []Volume      `json:"volumes"`
-	Domains   []string      `json:"domains"`
-	Resources Resources     `json:"resources"`
+	Type      string                  `json:"type"`
+	Port      int32                   `json:"port"`
+	Probe     runtimeconfig.Probe     `json:"probe"`
+	Command   []string                `json:"command"`
+	Args      []string                `json:"args"`
+	Variables []secretValue           `json:"variables"`
+	Files     []secretValue           `json:"files"`
+	Volumes   []runtimeconfig.Volume  `json:"volumes"`
+	Domains   []string                `json:"domains"`
+	Resources runtimeconfig.Resources `json:"resources"`
 }
 
 type Service struct {
@@ -61,9 +64,9 @@ func NewService(db *gorm.DB, access *authorization.Access, box *security.SecretB
 	return &Service{db: db, access: access, box: box}
 }
 
-func suggested(workspaceID, applicationID string) View {
-	input := DefaultInput()
-	return View{WorkspaceID: workspaceID, ApplicationID: applicationID, Type: input.Type, Port: input.Port, Probe: input.Probe, Resources: input.Resources, Variables: []Variable{}, Files: []ConfigFile{}, Volumes: []Volume{}, Domains: []string{}, Command: []string{}, Args: []string{}}
+func suggested(workspaceID, applicationID string) runtimeconfig.View {
+	input := runtimeconfig.DefaultInput()
+	return runtimeconfig.View{WorkspaceID: workspaceID, ApplicationID: applicationID, Type: input.Type, Port: input.Port, Probe: input.Probe, Resources: input.Resources, Variables: []runtimeconfig.Variable{}, Files: []runtimeconfig.ConfigFile{}, Volumes: []runtimeconfig.Volume{}, Domains: []string{}, Command: []string{}, Args: []string{}}
 }
 
 func latest(tx *gorm.DB, workspaceID, applicationID string) (record, storedSpec, error) {
@@ -82,27 +85,27 @@ func latest(tx *gorm.DB, workspaceID, applicationID string) (record, storedSpec,
 	return value, spec, nil
 }
 
-func asView(value record, spec storedSpec) View {
-	result := View{WorkspaceID: value.WorkspaceID, ApplicationID: value.ApplicationID, Revision: value.Revision, Confirmed: value.Confirmed, Type: spec.Type, Port: spec.Port, Probe: spec.Probe, Command: spec.Command, Args: spec.Args, Resources: spec.Resources, Domains: spec.Domains, Volumes: spec.Volumes, CreatedAt: value.CreatedAt, Variables: make([]Variable, 0, len(spec.Variables)), Files: make([]ConfigFile, 0, len(spec.Files))}
+func asView(value record, spec storedSpec) runtimeconfig.View {
+	result := runtimeconfig.View{WorkspaceID: value.WorkspaceID, ApplicationID: value.ApplicationID, Revision: value.Revision, Confirmed: value.Confirmed, Type: spec.Type, Port: spec.Port, Probe: spec.Probe, Command: spec.Command, Args: spec.Args, Resources: spec.Resources, Domains: spec.Domains, Volumes: spec.Volumes, CreatedAt: value.CreatedAt, Variables: make([]runtimeconfig.Variable, 0, len(spec.Variables)), Files: make([]runtimeconfig.ConfigFile, 0, len(spec.Files))}
 	for _, v := range spec.Variables {
 		plain := v.Value
 		if v.Sensitive {
 			plain = ""
 		}
-		result.Variables = append(result.Variables, Variable{Name: v.Name, Value: plain, Sensitive: v.Sensitive, Configured: true})
+		result.Variables = append(result.Variables, runtimeconfig.Variable{Name: v.Name, Value: plain, Sensitive: v.Sensitive, Configured: true})
 	}
 	for _, f := range spec.Files {
 		plain := f.Value
 		if f.Sensitive {
 			plain = ""
 		}
-		result.Files = append(result.Files, ConfigFile{Path: f.Name, Content: plain, Sensitive: f.Sensitive, Configured: true})
+		result.Files = append(result.Files, runtimeconfig.ConfigFile{Path: f.Name, Content: plain, Sensitive: f.Sensitive, Configured: true})
 	}
 	return result
 }
 
-func (s *Service) Get(ctx context.Context, p authorization.Principal, workspaceID, applicationID string) (View, error) {
-	var result View
+func (s *Service) Get(ctx context.Context, p authorization.Principal, workspaceID, applicationID string) (runtimeconfig.View, error) {
+	var result runtimeconfig.View
 	err := s.access.Do(ctx, p, false, func(tx *gorm.DB, current authorization.Principal) error {
 		if _, _, err := s.access.Application(tx, current, workspaceID, applicationID, authorization.ConfigRead); err != nil {
 			return err
@@ -121,8 +124,8 @@ func (s *Service) Get(ctx context.Context, p authorization.Principal, workspaceI
 	return result, err
 }
 
-func (s *Service) GetRevision(ctx context.Context, p authorization.Principal, workspaceID, applicationID string, revision int64) (View, error) {
-	var result View
+func (s *Service) GetRevision(ctx context.Context, p authorization.Principal, workspaceID, applicationID string, revision int64) (runtimeconfig.View, error) {
+	var result runtimeconfig.View
 	err := s.access.Do(ctx, p, false, func(tx *gorm.DB, current authorization.Principal) error {
 		if _, _, err := s.access.Application(tx, current, workspaceID, applicationID, authorization.ConfigRead); err != nil {
 			return err
@@ -164,18 +167,18 @@ func (s *Service) LatestRevision(tx *gorm.DB, workspaceID, applicationID string)
 	return value.Revision, value.Confirmed, nil
 }
 
-func (s *Service) Save(ctx context.Context, p authorization.Principal, workspaceID, applicationID string, input Input) (View, error) {
-	input, err := Validate(input)
+func (s *Service) Save(ctx context.Context, p authorization.Principal, workspaceID, applicationID string, input runtimeconfig.Input) (runtimeconfig.View, error) {
+	input, err := runtimeconfig.Validate(input)
 	if err != nil {
-		return View{}, err
+		return runtimeconfig.View{}, invalid(err.Error())
 	}
 	if input.IdempotencyKey != "" && (len(input.IdempotencyKey) > 128 || input.IdempotencyKey != strings.TrimSpace(input.IdempotencyKey) || !utf8.ValidString(input.IdempotencyKey) || strings.ContainsAny(input.IdempotencyKey, "\x00\r\n")) {
-		return View{}, invalid("幂等键无效")
+		return runtimeconfig.View{}, invalid("幂等键无效")
 	}
 	payload, _ := json.Marshal(input)
 	sum := sha256.Sum256(payload)
 	fingerprint := hex.EncodeToString(sum[:])
-	var result View
+	var result runtimeconfig.View
 	err = s.access.Do(ctx, p, false, func(tx *gorm.DB, current authorization.Principal) error {
 		if _, _, err := s.access.Application(tx, current, workspaceID, applicationID, authorization.ConfigWrite); err != nil {
 			return err
@@ -300,21 +303,21 @@ func (s *Service) prepareSecret(workspaceID, applicationID, kind, name string, r
 
 // MaterializeForDeployment 只供已完成对象授权的部署调度服务使用，禁止挂载为公共接口。
 // 读取冻结revision而非最新草稿，确保构建并部署或回滚不带入后来保存的配置。
-func (s *Service) MaterializeForDeployment(tx *gorm.DB, workspaceID, applicationID string, revision int64) (Materialized, error) {
+func (s *Service) MaterializeForDeployment(tx *gorm.DB, workspaceID, applicationID string, revision int64) (runtimeconfig.Materialized, error) {
 	value, spec, err := readRevision(tx, workspaceID, applicationID, revision)
 	if err != nil {
-		return Materialized{}, err
+		return runtimeconfig.Materialized{}, err
 	}
 	if !value.Confirmed {
-		return Materialized{}, invalid("首次部署前必须确认运行配置")
+		return runtimeconfig.Materialized{}, invalid("首次部署前必须确认运行配置")
 	}
-	result := Materialized{View: asView(value, spec), Variables: make(map[string]string), Files: make(map[string]string)}
+	result := runtimeconfig.Materialized{View: asView(value, spec), Variables: make(map[string]string), Files: make(map[string]string)}
 	for _, v := range spec.Variables {
 		plain := v.Value
 		if v.Sensitive {
 			data, err := s.box.Decrypt(v.Ciphertext, secretIdentity(workspaceID, applicationID, "variable", v.Name, revision))
 			if err != nil {
-				return Materialized{}, err
+				return runtimeconfig.Materialized{}, err
 			}
 			plain = string(data)
 		}
@@ -325,7 +328,7 @@ func (s *Service) MaterializeForDeployment(tx *gorm.DB, workspaceID, application
 		if f.Sensitive {
 			data, err := s.box.Decrypt(f.Ciphertext, secretIdentity(workspaceID, applicationID, "file", f.Name, revision))
 			if err != nil {
-				return Materialized{}, err
+				return runtimeconfig.Materialized{}, err
 			}
 			plain = string(data)
 		}

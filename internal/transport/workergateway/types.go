@@ -4,7 +4,6 @@ package workergateway
 import (
 	"context"
 	"crypto/x509"
-	"errors"
 	"time"
 
 	platformv1 "github.com/sunshanpeng/yummy/gen/go/platform/v1"
@@ -12,15 +11,7 @@ import (
 	"github.com/sunshanpeng/yummy/internal/domains/deployment"
 	"github.com/sunshanpeng/yummy/internal/domains/enrollment"
 	"github.com/sunshanpeng/yummy/internal/domains/qualification"
-	"github.com/sunshanpeng/yummy/internal/infra/workerexec"
 	"gorm.io/gorm"
-)
-
-var (
-	ErrIdentity      = errors.New("worker连接身份无效或已被替代")
-	ErrQualification = errors.New("缺少可验证的节点资格证据")
-	ErrSpoolFull     = errors.New("worker持久发送日志已达到容量上限")
-	ErrProtocol      = errors.New("worker协议无效")
 )
 
 type PeerVerifier interface {
@@ -71,13 +62,4 @@ type Config struct {
 	QueueSize          int
 	ScheduleInterval   time.Duration
 	OnError            func(error)
-}
-
-// Executor由worker装配层注入Kubernetes适配器，生命周期必须独立于某次流请求。
-var _ Executor = (*workerexec.Executor)(nil)
-
-// Reconcile=true表示此执行已见过，必须核对原稳定Job身份，不能另起第二个任务。
-type Executor interface {
-	Build(context.Context, *platformv1.WorkerBuildCommand, bool, workerexec.Emitter) error
-	Deploy(context.Context, *platformv1.WorkerDeploymentCommand, bool, workerexec.Emitter) error
 }

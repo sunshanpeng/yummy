@@ -62,7 +62,7 @@ func (g *stubGeneration) callCount() int {
 	return g.calls
 }
 
-// recordingEmitter 模拟 workergateway.Journal 的序号语义：事件/日志/观察都以
+// recordingEmitter 模拟 workerclient.Journal 的序号语义：事件/日志/观察都以
 // Seq=0 交给发射器并按执行身份自增，从而断言 Executor 不自造序号。
 type recordingEmitter struct {
 	mu             sync.Mutex

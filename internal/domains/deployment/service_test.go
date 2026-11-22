@@ -15,9 +15,10 @@ import (
 	"github.com/sunshanpeng/yummy/internal/domains/authorization"
 	"github.com/sunshanpeng/yummy/internal/domains/build"
 	"github.com/sunshanpeng/yummy/internal/domains/inventory"
-	"github.com/sunshanpeng/yummy/internal/domains/runtimeconfig"
+	runtimeconfigdomain "github.com/sunshanpeng/yummy/internal/domains/runtimeconfig"
 	"github.com/sunshanpeng/yummy/internal/infra/store/model"
 	"github.com/sunshanpeng/yummy/internal/infra/testkit"
+	"github.com/sunshanpeng/yummy/internal/lib/runtimeconfig"
 	"github.com/sunshanpeng/yummy/internal/lib/security"
 	"gorm.io/gorm"
 )
@@ -29,7 +30,7 @@ func (f verifierFunc) Verify(ctx context.Context, a ArtifactSnapshot) error { re
 type environment struct {
 	db        *gorm.DB
 	service   *Service
-	configs   *runtimeconfig.Service
+	configs   *runtimeconfigdomain.Service
 	builds    *build.Service
 	inventory *inventory.Service
 	root      authorization.Principal
@@ -61,7 +62,7 @@ func setup(t *testing.T) environment {
 	if err != nil {
 		t.Fatal(err)
 	}
-	e := environment{db: db, inventory: inventory.NewService(db, access, box), configs: runtimeconfig.NewService(db, access, box), root: authorization.Principal{UserID: "root", AuthVersion: 1}}
+	e := environment{db: db, inventory: inventory.NewService(db, access, box), configs: runtimeconfigdomain.NewService(db, access, box), root: authorization.Principal{UserID: "root", AuthVersion: 1}}
 	e.builds = build.NewService(db, access, e.inventory, e.configs)
 	e.service = NewService(db, access, e.configs, e.builds, verifierFunc(func(context.Context, ArtifactSnapshot) error { return nil }))
 	ctx := context.Background()

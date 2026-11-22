@@ -5,7 +5,7 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/sunshanpeng/yummy/internal/domains/authorization"
-	"github.com/sunshanpeng/yummy/internal/domains/runtimeconfig"
+	"github.com/sunshanpeng/yummy/internal/lib/runtimeconfig"
 )
 
 type configInput struct {

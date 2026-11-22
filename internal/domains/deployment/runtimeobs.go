@@ -10,12 +10,11 @@ import (
 	"github.com/sunshanpeng/yummy/internal/domains/authorization"
 	"github.com/sunshanpeng/yummy/internal/infra/store"
 	"github.com/sunshanpeng/yummy/internal/lib/security"
+	"github.com/sunshanpeng/yummy/internal/lib/workerprotocol"
 	"gorm.io/gorm"
 )
 
 const (
-	// RuntimeLogMaxChunkBytes 运行日志单块字节上限；协议校验、journal 与数据库 CHECK 保持一致。
-	RuntimeLogMaxChunkBytes = 16 << 10
 	// runtimeLogQuotaBytes 每应用运行日志保留字节预算；写入时收敛删除最旧数据，不建后台清理服务。
 	runtimeLogQuotaBytes int64 = 4 << 20
 	// runtimeLogQuotaChunks 每应用运行日志块数上限；两个配额同时生效，超出的最旧行被删除。
@@ -122,7 +121,7 @@ func (s runtimeLogStream) args() []any {
 // ApplyRuntimeLog 持久化一个容器运行日志块。seq 在 (pod, container, restart) 流内连续：
 // 同键同 hash 幂等 ack，同键不同 hash 或断号/回退按 ErrSequence 拒绝；插入与配额收敛同事务。
 func (s *Service) ApplyRuntimeLog(ctx context.Context, worker WorkerIdentity, input RuntimeLogInput) (Ack, error) {
-	if input.WorkspaceID == "" || input.ApplicationID == "" || input.Generation < 1 || input.Seq < 1 || input.RestartCount < 0 || input.PodUID == "" || len(input.PodUID) > 64 || input.Container == "" || len(input.Container) > 128 || len(input.OperationID) > 128 || len(input.ReleaseID) > 128 || len(input.Content) > RuntimeLogMaxChunkBytes {
+	if input.WorkspaceID == "" || input.ApplicationID == "" || input.Generation < 1 || input.Seq < 1 || input.RestartCount < 0 || input.PodUID == "" || len(input.PodUID) > 64 || input.Container == "" || len(input.Container) > 128 || len(input.OperationID) > 128 || len(input.ReleaseID) > 128 || len(input.Content) > workerprotocol.RuntimeLogMaxChunkBytes {
 		return Ack{}, authorization.ErrInvalid
 	}
 	hash := fingerprint([]any{input.Content, input.Truncated})

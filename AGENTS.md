@@ -8,7 +8,7 @@
 
 ## 进程与架构边界
 
-- 当前产品只区分控制面和 worker 两类常驻应用进程，优先保持模块化单体。
+- 当前产品只区分控制面和 worker 两类常驻应用进程，优先保持模块化单体。按职责独立分发 `yummy-server`（含 Web 控制台）、`yummy-worker` 和按需运行的 `yummy` CLI。
 - 除非存在无法在现有进程内合理满足的必要条件，否则不增加额外的常驻应用进程或独立服务。拆分前说明具体限制、替代方案与运维代价，先与负责人确认。
 - 登录、令牌管理，以及第一版之后加入的 OAuth 授权服务和客户端管理，都集成在现有控制面进程代码中；优先使用可嵌入的成熟 Go 库，不为此新增独立身份服务。
 - 调度、恢复与清理，以及远程 HTTP MCP 入口，都在控制面内按模块组织；执行任务由现有 worker 承担。
@@ -20,7 +20,7 @@
 - 后端代码按「公共库 / 基础设施 / 业务领域 / 传输与聚合」归类，依赖单向：入口装配 → 传输（Connect、gin handler）→ 业务领域 → 基础设施与公共库；领域代码不 import 传输层与装配细节，公共库不依赖任何业务域。
 - 公共横切能力（错误码、分页、ID 与时间、校验、配置加载、可观测性埋点）沉淀为独立库供各领域复用，不在各领域复制粘贴；领域无关的纯工具库与业务代码分开归属。
 - 业务按领域划分（工作空间、应用、构建、部署、成员与授权、审计等），域内高内聚（模型、数据访问、服务同域组织）；域间只通过对方显式导出的接口依赖，禁止跨域直查对方数据表或引用对方内部 struct。
-- 基础设施（数据库、Redis、k3s、BuildKit、镜像仓库、OTel）封装在独立适配层，不与业务逻辑混写；业务代码不出现连接串、SQL 字符串、k8s API 对象这类细节。代码布局按本分层落地：`internal/domains/`（业务域）、`internal/infra/`（基础设施适配）、`internal/transport/`（Connect handler 与 worker 网关）、`internal/bff/`（聚合层，现为远程 MCP）、`internal/controlplane/`（装配：cli/server/webui）；公共类库统一收纳在 `internal/lib/` 下（与 domains/infra 同级成层，现为 `lib/naming`、`lib/observability`、`lib/security`）；新增公共能力默认进 `internal/lib/<名>`，不再新增与 domains 平级的顶层包。lib 内的包必须域无关且不耦合外部系统适配（依赖 gorm/k8s 客户端等的归 infra）。已知例外：部署链（kube/workerexec）共用 runtimeconfig 视图类型，后续以 proto 契约收敛。
+- 基础设施（数据库、Redis、k3s、BuildKit、镜像仓库、OTel）封装在独立适配层，不与业务逻辑混写；业务代码不出现连接串、SQL 字符串、k8s API 对象这类细节。代码布局按本分层落地：`internal/domains/`（业务域）、`internal/infra/`（基础设施适配）、`internal/transport/`（Connect handler 与 worker 网关）、`internal/bff/`（聚合层，现为远程 MCP）、`internal/controlplane/`（装配：cli/server/webui）；公共类库统一收纳在 `internal/lib/` 下（与 domains/infra 同级成层，现为 `lib/naming`、`lib/observability`、`lib/security`）；新增公共能力默认进 `internal/lib/<名>`，不再新增与 domains 平级的顶层包。lib 内的包必须域无关且不耦合外部系统适配（依赖 gorm/k8s 客户端等的归 infra）。部署配置的传输契约由 proto 定义，共用的纯配置类型与校验放在 `internal/lib/runtimeconfig`。
 - 数据库建模与迁移遵守工程 skill [.agents/skills/db-modeling](.agents/skills/db-modeling/SKILL.md)（设计/修改表结构、写迁移时加载）：每张表必有单列 `id` 主键与 `created_at`/`updated_at`（可变实体表带 `created_by`/`updated_by`，回调自动填充），业务键转 UNIQUE；SQL 默认只用 PG/MySQL 通用写法，PG 特有能力收口到领域数据访问文件并加【数据库专有】注释；CRUD 走 GORM + gen DAO，复杂 SQL 收口到领域数据访问文件，schema 走 goose 前向迁移。
 - 需要跨领域聚合的对外接口（如 CMDB、人员与权限、CICD、监控告警这类内部模块的组合查询）由控制面进程内的 BFF 层编排：BFF 只做聚合、裁剪与编排，不写业务规则；领域模块之间不互相直连，前端不直连领域内部接口。BFF 是控制面内的一个分层，不是新进程，不新增常驻服务。现状远程 MCP 即位于 `internal/bff/mcp`。
 

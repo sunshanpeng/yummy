@@ -12,6 +12,7 @@ import (
 	"github.com/sunshanpeng/yummy/internal/domains/authorization"
 	"github.com/sunshanpeng/yummy/internal/infra/store/model"
 	"github.com/sunshanpeng/yummy/internal/infra/testkit"
+	"github.com/sunshanpeng/yummy/internal/lib/runtimeconfig"
 	"github.com/sunshanpeng/yummy/internal/lib/security"
 	"gorm.io/gorm"
 )
@@ -41,10 +42,10 @@ func TestSuggestedConfigAndImmutableSecretVersions(t *testing.T) {
 	if err != nil || suggested.Revision != 0 || suggested.Confirmed {
 		t.Fatalf("建议配置错误:%#v %v", suggested, err)
 	}
-	input := DefaultInput()
+	input := runtimeconfig.DefaultInput()
 	input.Confirmed = true
-	input.Variables = []VariableInput{{Name: "PUBLIC", Value: "hello"}, {Name: "PASSWORD", Value: "private-secret-value", Sensitive: true}}
-	input.Files = []FileInput{{Path: "/app/config.json", Content: "{\"private\":true}", Sensitive: true}}
+	input.Variables = []runtimeconfig.VariableInput{{Name: "PUBLIC", Value: "hello"}, {Name: "PASSWORD", Value: "private-secret-value", Sensitive: true}}
+	input.Files = []runtimeconfig.FileInput{{Path: "/app/config.json", Content: "{\"private\":true}", Sensitive: true}}
 	first, err := s.Save(ctx, p, "space", "app", input)
 	if err != nil {
 		t.Fatal(err)
@@ -74,7 +75,7 @@ func TestSuggestedConfigAndImmutableSecretVersions(t *testing.T) {
 	if err != nil || old.Variables[0].Value != "hello" {
 		t.Fatal("保存覆盖历史版本")
 	}
-	var material Materialized
+	var material runtimeconfig.Materialized
 	if err := db.Transaction(func(tx *gorm.DB) error {
 		var err error
 		material, err = s.MaterializeForDeployment(tx, "space", "app", 2)
@@ -91,14 +92,14 @@ func TestSuggestedConfigAndImmutableSecretVersions(t *testing.T) {
 }
 func TestKeepExistingCannotAccumulateBeyondFinalSizeLimit(t *testing.T) {
 	s, _, p := setup(t)
-	input := DefaultInput()
+	input := runtimeconfig.DefaultInput()
 	oneMiB := string(bytes.Repeat([]byte("x"), 1<<20))
-	input.Files = []FileInput{{Path: "/app/a", Content: oneMiB, Sensitive: true}, {Path: "/app/b", Content: oneMiB, Sensitive: true}}
+	input.Files = []runtimeconfig.FileInput{{Path: "/app/a", Content: oneMiB, Sensitive: true}, {Path: "/app/b", Content: oneMiB, Sensitive: true}}
 	if _, err := s.Save(context.Background(), p, "space", "app", input); err != nil {
 		t.Fatal(err)
 	}
 	input.ExpectedRevision = 1
-	input.Files = []FileInput{{Path: "/app/a", Sensitive: true, KeepExisting: true}, {Path: "/app/b", Sensitive: true, KeepExisting: true}, {Path: "/app/c", Content: "extra", Sensitive: true}}
+	input.Files = []runtimeconfig.FileInput{{Path: "/app/a", Sensitive: true, KeepExisting: true}, {Path: "/app/b", Sensitive: true, KeepExisting: true}, {Path: "/app/c", Content: "extra", Sensitive: true}}
 	if _, err := s.Save(context.Background(), p, "space", "app", input); !errors.Is(err, authorization.ErrInvalid) {
 		t.Fatalf("保留旧值绕过总量: %v", err)
 	}
@@ -117,7 +118,7 @@ func TestConcurrentSaveUsesApplicationLock(t *testing.T) {
 		wg.Add(1)
 		go func(service *Service) {
 			defer wg.Done()
-			_, err := service.Save(context.Background(), p, "space", "app", DefaultInput())
+			_, err := service.Save(context.Background(), p, "space", "app", runtimeconfig.DefaultInput())
 			result <- err
 		}(service)
 	}
@@ -147,13 +148,13 @@ func TestConfigPermissionsAndUnconfirmedDeployment(t *testing.T) {
 	if _, err := s.Get(ctx, viewer, "space", "app"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Save(ctx, viewer, "space", "app", DefaultInput()); !errors.Is(err, authorization.ErrNotFound) {
+	if _, err := s.Save(ctx, viewer, "space", "app", runtimeconfig.DefaultInput()); !errors.Is(err, authorization.ErrNotFound) {
 		t.Fatal("查看者可写配置")
 	}
 	if _, err := s.Get(ctx, p, "other-space", "app"); !errors.Is(err, authorization.ErrNotFound) {
 		t.Fatal("跨空间可读配置")
 	}
-	if _, err := s.Save(ctx, p, "space", "app", DefaultInput()); err != nil {
+	if _, err := s.Save(ctx, p, "space", "app", runtimeconfig.DefaultInput()); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Transaction(func(tx *gorm.DB) error { _, err := s.MaterializeForDeployment(tx, "space", "app", 1); return err }); !errors.Is(err, authorization.ErrInvalid) {
@@ -161,39 +162,39 @@ func TestConfigPermissionsAndUnconfirmedDeployment(t *testing.T) {
 	}
 }
 func TestValidateRejectsUnsafePathsAndConflicts(t *testing.T) {
-	cases := []func(*Input){
-		func(i *Input) { i.Port = 0 }, func(i *Input) { i.Probe.Path = "https://evil.test/health" }, func(i *Input) { i.Domains = []string{"127.0.0.1"} }, func(i *Input) { i.Domains = []string{"*.example.com"} },
-		func(i *Input) { i.Domains = []string{"１２７．０．０．１"} },
-		func(i *Input) {
-			i.Files = []FileInput{{Path: "/app/data"}, {Path: "/app/data-foo"}, {Path: "/app/data/x"}}
+	cases := []func(*runtimeconfig.Input){
+		func(i *runtimeconfig.Input) { i.Port = 0 }, func(i *runtimeconfig.Input) { i.Probe.Path = "https://evil.test/health" }, func(i *runtimeconfig.Input) { i.Domains = []string{"127.0.0.1"} }, func(i *runtimeconfig.Input) { i.Domains = []string{"*.example.com"} },
+		func(i *runtimeconfig.Input) { i.Domains = []string{"１２７．０．０．１"} },
+		func(i *runtimeconfig.Input) {
+			i.Files = []runtimeconfig.FileInput{{Path: "/app/data"}, {Path: "/app/data-foo"}, {Path: "/app/data/x"}}
 		},
-		func(i *Input) { i.Files = []FileInput{{Path: "/app/../etc/passwd"}} }, func(i *Input) { i.Files = []FileInput{{Path: "/proc/self/environ"}} },
-		func(i *Input) {
-			i.Files = []FileInput{{Path: "/app/data/config"}}
-			i.Volumes = []Volume{{Name: "data", MountPath: "/app/data", SizeGiB: 1}}
+		func(i *runtimeconfig.Input) { i.Files = []runtimeconfig.FileInput{{Path: "/app/../etc/passwd"}} }, func(i *runtimeconfig.Input) { i.Files = []runtimeconfig.FileInput{{Path: "/proc/self/environ"}} },
+		func(i *runtimeconfig.Input) {
+			i.Files = []runtimeconfig.FileInput{{Path: "/app/data/config"}}
+			i.Volumes = []runtimeconfig.Volume{{Name: "data", MountPath: "/app/data", SizeGiB: 1}}
 		},
-		func(i *Input) {
-			i.Variables = []VariableInput{{Name: "SECRET", Sensitive: true, KeepExisting: true, Value: "mask"}}
+		func(i *runtimeconfig.Input) {
+			i.Variables = []runtimeconfig.VariableInput{{Name: "SECRET", Sensitive: true, KeepExisting: true, Value: "mask"}}
 		},
-		func(i *Input) { i.Type = TypeWorker }, func(i *Input) { i.Resources.CPULimitMilli = 1 },
+		func(i *runtimeconfig.Input) { i.Type = runtimeconfig.TypeWorker }, func(i *runtimeconfig.Input) { i.Resources.CPULimitMilli = 1 },
 	}
 	for index, mutate := range cases {
-		input := DefaultInput()
+		input := runtimeconfig.DefaultInput()
 		mutate(&input)
-		if _, err := Validate(input); err == nil {
+		if _, err := runtimeconfig.Validate(input); err == nil {
 			t.Fatalf("危险配置%d未拒绝", index)
 		}
 	}
-	input := DefaultInput()
-	input.Type = TypeWorker
+	input := runtimeconfig.DefaultInput()
+	input.Type = runtimeconfig.TypeWorker
 	input.Port = 0
-	input.Probe = Probe{}
-	if _, err := Validate(input); err != nil {
+	input.Probe = runtimeconfig.Probe{}
+	if _, err := runtimeconfig.Validate(input); err != nil {
 		t.Fatal(err)
 	}
-	input = DefaultInput()
+	input = runtimeconfig.DefaultInput()
 	input.Domains = []string{"WWW.Example.COM."}
-	got, err := Validate(input)
+	got, err := runtimeconfig.Validate(input)
 	if err != nil || got.Domains[0] != "www.example.com" {
 		t.Fatal("域名未规范化")
 	}
@@ -208,7 +209,7 @@ func TestLatestRevisionFacts(t *testing.T) {
 	if err != nil || revision != 0 || confirmed {
 		t.Fatalf("空应用语义错误: %d %t %v", revision, confirmed, err)
 	}
-	input := DefaultInput()
+	input := runtimeconfig.DefaultInput()
 	input.Confirmed = true
 	if _, err := s.Save(ctx, p, "space", "app", input); err != nil {
 		t.Fatal(err)

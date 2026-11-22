@@ -27,7 +27,7 @@ import (
 
 	platformv1 "github.com/sunshanpeng/yummy/gen/go/platform/v1"
 	"github.com/sunshanpeng/yummy/internal/infra/workerexec"
-	"github.com/sunshanpeng/yummy/internal/transport/workergateway"
+	"github.com/sunshanpeng/yummy/internal/transport/workerclient"
 )
 
 // rotateFixture 是一个已登记完成的状态目录与模拟控制面的回环服务。
@@ -312,7 +312,7 @@ func firstCertContains(certificate *tls.Certificate, certPEM []byte) bool {
 	return block != nil && bytes.Equal(certificate.Certificate[0], block.Bytes)
 }
 
-// nopExecutor 满足 workergateway.Executor，仅用于装配校验。
+// nopExecutor 满足 workerclient.Executor，仅用于装配校验。
 type nopExecutor struct{}
 
 func (nopExecutor) Build(context.Context, *platformv1.WorkerBuildCommand, bool, workerexec.Emitter) error {
@@ -325,7 +325,7 @@ func (nopExecutor) Deploy(context.Context, *platformv1.WorkerDeploymentCommand, 
 
 // TestCertificateHolderSatisfiesWorkerClientTLS 固定轮换与网关客户端的 TLS
 // 契约：TLS.Certificates 为空但 GetClientCertificate 非空的配置合法
-// （workergateway.NewWorkerClient 的校验条件），轮换回填 holder 无需重建客户端。
+// （workerclient.NewWorkerClient 的校验条件），轮换回填 holder 无需重建客户端。
 func TestCertificateHolderSatisfiesWorkerClientTLS(t *testing.T) {
 	caKey, caCertificate, _ := testCA(t)
 	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -334,12 +334,12 @@ func TestCertificateHolderSatisfiesWorkerClientTLS(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	journal, err := workergateway.OpenJournal(filepath.Join(t.TempDir(), "journal"), 0)
+	journal, err := workerclient.OpenJournal(filepath.Join(t.TempDir(), "journal"), 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer journal.Close()
-	client, err := workergateway.NewWorkerClient(workergateway.WorkerConfig{
+	client, err := workerclient.NewWorkerClient(workerclient.WorkerConfig{
 		URL: "https://control.example", NodeID: "node-1", WorkerID: "worker-1",
 		TLS:      &tls.Config{GetClientCertificate: holder.GetClientCertificate},
 		Journal:  journal,
@@ -349,7 +349,7 @@ func TestCertificateHolderSatisfiesWorkerClientTLS(t *testing.T) {
 		t.Fatalf("holder回调配置必须被网关客户端接受: %v", err)
 	}
 	_ = client
-	if _, err := workergateway.NewWorkerClient(workergateway.WorkerConfig{
+	if _, err := workerclient.NewWorkerClient(workerclient.WorkerConfig{
 		URL: "https://control.example", NodeID: "node-1", WorkerID: "worker-1",
 		TLS:      &tls.Config{MinVersion: tls.VersionTLS12},
 		Journal:  journal,

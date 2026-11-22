@@ -1,4 +1,4 @@
-package workergateway
+package workerclient
 
 import (
 	"bytes"
@@ -9,18 +9,17 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strconv"
 	"sync"
 
 	platformv1 "github.com/sunshanpeng/yummy/gen/go/platform/v1"
-	"github.com/sunshanpeng/yummy/internal/domains/deployment"
+	"github.com/sunshanpeng/yummy/internal/lib/workerprotocol"
 	"google.golang.org/protobuf/proto"
 )
 
 const maxAttemptLogBytes = 20 << 20
 
 // maxRuntimeLogStreamBytes 是单个容器实例日志流在 journal 中的字节预算；
-// 与控制面每应用运行日志配额（deployment.runtimeLogQuotaBytes）一致，超出即截断保护 spool。
+// 超出即截断保护本地发送队列。
 const maxRuntimeLogStreamBytes = 4 << 20
 
 type journalEntry struct {
@@ -54,13 +53,13 @@ type Journal struct {
 
 func OpenJournal(directory string, maxBytes int64) (*Journal, error) {
 	if directory == "" {
-		return nil, ErrProtocol
+		return nil, workerprotocol.ErrProtocol
 	}
 	if maxBytes == 0 {
 		maxBytes = 64 << 20
 	}
 	if maxBytes < 1<<20 || maxBytes > 256<<20 {
-		return nil, ErrProtocol
+		return nil, workerprotocol.ErrProtocol
 	}
 	absolute, err := filepath.Abs(directory)
 	if err != nil {
@@ -71,10 +70,10 @@ func OpenJournal(directory string, maxBytes int64) (*Journal, error) {
 	}
 	info, err := os.Lstat(absolute)
 	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-		return nil, ErrProtocol
+		return nil, workerprotocol.ErrProtocol
 	}
 	if info.Mode().Perm()&0077 != 0 {
-		return nil, ErrProtocol
+		return nil, workerprotocol.ErrProtocol
 	}
 	root, err := os.OpenRoot(absolute)
 	if err != nil {
@@ -93,19 +92,19 @@ func OpenJournal(directory string, maxBytes int64) (*Journal, error) {
 	fileInfo, err := file.Stat()
 	if err != nil || !fileInfo.Mode().IsRegular() || fileInfo.Mode().Perm() != 0600 || fileInfo.Size() > maxBytes {
 		root.Close()
-		return nil, ErrProtocol
+		return nil, workerprotocol.ErrProtocol
 	}
 	data, err := io.ReadAll(io.LimitReader(file, maxBytes+1))
 	if err != nil || int64(len(data)) > maxBytes {
 		root.Close()
-		return nil, ErrSpoolFull
+		return nil, workerprotocol.ErrSpoolFull
 	}
 	if err := json.Unmarshal(data, &journal.state); err != nil {
 		root.Close()
-		return nil, ErrProtocol
+		return nil, workerprotocol.ErrProtocol
 	}
 	// 版本不匹配 = 指纹算法或状态结构升级：旧 spool 的执行指纹与新代码必然
-	// 失配（ErrProtocol 死循环），重置为新 spool 重新开始——观察与幂等事实在
+	// 失配（workerprotocol.ErrProtocol 死循环），重置为新 spool 重新开始——观察与幂等事实在
 	// 控制面持久化，重放只会重执行未完成操作，安全。
 	if journal.state.Version != 1 {
 		journal.state = journalState{Version: 1, Sequences: map[string]int64{}, LogBytes: map[string]int64{}, Truncated: map[string]bool{}, Entries: []journalEntry{}, Executions: map[string]journalExecution{}, Generations: map[string]int64{}}
@@ -116,18 +115,18 @@ func OpenJournal(directory string, maxBytes int64) (*Journal, error) {
 	}
 	if journal.state.Sequences == nil || journal.state.LogBytes == nil || journal.state.Truncated == nil || journal.state.Executions == nil || journal.state.Generations == nil {
 		root.Close()
-		return nil, ErrProtocol
+		return nil, workerprotocol.ErrProtocol
 	}
 	for _, entry := range journal.state.Entries {
 		var message platformv1.WorkerEnvelope
 		if err := proto.Unmarshal(entry.Payload, &message); err != nil {
 			root.Close()
-			return nil, ErrProtocol
+			return nil, workerprotocol.ErrProtocol
 		}
 		channel, id, seq, err := eventIdentity(&message)
 		if err != nil || channel != entry.Channel || id != entry.ExecutionID || seq != entry.Seq {
 			root.Close()
-			return nil, ErrProtocol
+			return nil, workerprotocol.ErrProtocol
 		}
 	}
 	return journal, nil
@@ -139,7 +138,7 @@ func (j *Journal) save() error {
 		return err
 	}
 	if int64(len(data)) > j.maxBytes {
-		return ErrSpoolFull
+		return workerprotocol.ErrSpoolFull
 	}
 	file, err := j.root.OpenFile("journal.tmp", os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0600)
 	if err != nil {
@@ -187,7 +186,7 @@ func eventIdentity(message *platformv1.WorkerEnvelope) (string, string, int64, e
 		}
 	case *platformv1.WorkerEnvelope_RuntimeLog:
 		if value.RuntimeLog != nil {
-			id, err := runtimeLogStreamID(value.RuntimeLog)
+			id, err := workerprotocol.RuntimeLogStreamID(value.RuntimeLog)
 			if err != nil {
 				return "", "", 0, err
 			}
@@ -200,7 +199,7 @@ func eventIdentity(message *platformv1.WorkerEnvelope) (string, string, int64, e
 			return "runtime-metric", value.RuntimeMetric.PodUid, value.RuntimeMetric.CollectedUnixMilli, nil
 		}
 	}
-	return "", "", 0, ErrProtocol
+	return "", "", 0, workerprotocol.ErrProtocol
 }
 func setEventSequence(message *platformv1.WorkerEnvelope, seq int64) {
 	switch value := message.Payload.(type) {
@@ -215,28 +214,19 @@ func setEventSequence(message *platformv1.WorkerEnvelope, seq int64) {
 	}
 }
 
-// runtimeLogStreamID 是运行日志流的 journal 键，worker 持久化与控制面 ack 两侧共用同一实现，
-// 因此不存在构造分歧；对 (pod, container, restart) 取 SHA-256 保证长度有界且无歧义。
-func runtimeLogStreamID(value *platformv1.WorkerRuntimeLog) (string, error) {
-	if value == nil {
-		return "", ErrProtocol
-	}
-	sum := sha256.Sum256([]byte(value.PodUid + "\x00" + value.Container + "\x00" + strconv.FormatInt(int64(value.RestartCount), 10)))
-	return hex.EncodeToString(sum[:]), nil
-}
 func (j *Journal) append(message *platformv1.WorkerEnvelope) error {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 	message = proto.Clone(message).(*platformv1.WorkerEnvelope)
 	channel, id, seq, err := eventIdentity(message)
 	if err != nil || id == "" || len(id) > 128 || seq < 0 {
-		return ErrProtocol
+		return workerprotocol.ErrProtocol
 	}
 	key := channel + ":" + id
 	oldLog, oldTruncated := j.state.LogBytes[id], j.state.Truncated[id]
 	if log := message.GetBuildLog(); log != nil {
 		if len(log.Content) > 16<<10 {
-			return ErrProtocol
+			return workerprotocol.ErrProtocol
 		}
 		if j.state.Truncated[id] {
 			return nil
@@ -251,8 +241,8 @@ func (j *Journal) append(message *platformv1.WorkerEnvelope) error {
 	}
 	// 运行日志与构建日志同构：单块上限一致，流预算耗尽后截断并继续上报，不阻塞关键状态。
 	if log := message.GetRuntimeLog(); log != nil {
-		if len(log.Content) > deployment.RuntimeLogMaxChunkBytes {
-			return ErrProtocol
+		if len(log.Content) > workerprotocol.RuntimeLogMaxChunkBytes {
+			return workerprotocol.ErrProtocol
 		}
 		if j.state.Truncated[id] {
 			return nil
@@ -267,7 +257,7 @@ func (j *Journal) append(message *platformv1.WorkerEnvelope) error {
 	}
 	// 采样没有独立序号字段，采集毫秒时间充当 journal 序号；0 不是合法采集时间。
 	if channel == "runtime-metric" && seq <= 0 {
-		return ErrProtocol
+		return workerprotocol.ErrProtocol
 	}
 	oldSeq := j.state.Sequences[key]
 	if seq == 0 {
@@ -286,12 +276,12 @@ func (j *Journal) append(message *platformv1.WorkerEnvelope) error {
 			}
 		}
 		j.state.LogBytes[id], j.state.Truncated[id] = oldLog, oldTruncated
-		return ErrProtocol
+		return workerprotocol.ErrProtocol
 	}
 	// 采样间隔不固定，允许跳号；只拒绝时间回退与同键异值（上面的 seq<=oldSeq 分支）。
 	if channel != "runtime-metric" && seq != oldSeq+1 {
 		j.state.LogBytes[id], j.state.Truncated[id] = oldLog, oldTruncated
-		return ErrProtocol
+		return workerprotocol.ErrProtocol
 	}
 	entry := journalEntry{Channel: channel, ExecutionID: id, Seq: seq, Payload: payload}
 	j.state.Entries = append(j.state.Entries, entry)
@@ -303,7 +293,7 @@ func (j *Journal) append(message *platformv1.WorkerEnvelope) error {
 			j.state.Entries = j.state.Entries[:len(j.state.Entries)-1]
 			j.state.Sequences[key] = oldSeq
 			j.state.LogBytes[id], j.state.Truncated[id] = oldLog, oldTruncated
-			return ErrSpoolFull
+			return workerprotocol.ErrSpoolFull
 		}
 	}
 	if err := j.save(); err != nil {
@@ -316,7 +306,7 @@ func (j *Journal) append(message *platformv1.WorkerEnvelope) error {
 }
 func (j *Journal) ack(value *platformv1.WorkerAck) error {
 	if value == nil || value.Seq < 1 {
-		return ErrProtocol
+		return workerprotocol.ErrProtocol
 	}
 	j.mu.Lock()
 	defer j.mu.Unlock()
@@ -375,12 +365,12 @@ func (j *Journal) begin(key, fingerprint string) (bool, bool, error) {
 	defer j.mu.Unlock()
 	if value, ok := j.state.Executions[key]; ok {
 		if value.Fingerprint != fingerprint {
-			return false, false, ErrProtocol
+			return false, false, workerprotocol.ErrProtocol
 		}
 		return true, value.Done, nil
 	}
 	if len(j.state.Executions) >= 1024 {
-		return false, false, ErrSpoolFull
+		return false, false, workerprotocol.ErrSpoolFull
 	}
 	j.state.Executions[key] = journalExecution{Fingerprint: fingerprint}
 	if err := j.save(); err != nil {
@@ -394,7 +384,7 @@ func (j *Journal) done(key string) error {
 	defer j.mu.Unlock()
 	value, ok := j.state.Executions[key]
 	if !ok {
-		return ErrProtocol
+		return workerprotocol.ErrProtocol
 	}
 	old := value
 	value.Done = true
@@ -410,7 +400,7 @@ func (j *Journal) generation(app string, generation int64) error {
 	defer j.mu.Unlock()
 	old := j.state.Generations[app]
 	if generation < old {
-		return ErrIdentity
+		return workerprotocol.ErrIdentity
 	}
 	if generation == old {
 		return nil
@@ -440,7 +430,7 @@ func deploymentFingerprint(value *platformv1.WorkerDeploymentCommand) (string, e
 func fingerprintMessage(value proto.Message) (string, error) {
 	data, err := (proto.MarshalOptions{Deterministic: true}).Marshal(value)
 	if err != nil {
-		return "", ErrProtocol
+		return "", workerprotocol.ErrProtocol
 	}
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:]), nil

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/sunshanpeng/yummy/internal/domains/build"
-	"github.com/sunshanpeng/yummy/internal/domains/runtimeconfig"
+	"github.com/sunshanpeng/yummy/internal/lib/runtimeconfig"
 	"gorm.io/gorm"
 )
 

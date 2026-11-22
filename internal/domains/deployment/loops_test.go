@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/sunshanpeng/yummy/internal/domains/authorization"
-	"github.com/sunshanpeng/yummy/internal/domains/runtimeconfig"
 	"github.com/sunshanpeng/yummy/internal/infra/store/model"
+	"github.com/sunshanpeng/yummy/internal/lib/runtimeconfig"
 )
 
 // funcProber 把函数适配为 Prober，ObservedAt 在探测时动态取当前时间，保证晚于最近一次 Kubernetes 观察。

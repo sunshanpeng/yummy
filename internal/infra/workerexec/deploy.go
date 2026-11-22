@@ -11,8 +11,8 @@ import (
 	"time"
 
 	platformv1 "github.com/sunshanpeng/yummy/gen/go/platform/v1"
-	"github.com/sunshanpeng/yummy/internal/domains/runtimeconfig"
 	"github.com/sunshanpeng/yummy/internal/infra/kube"
+	"github.com/sunshanpeng/yummy/internal/lib/runtimeconfig"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -232,7 +232,7 @@ func classifyRuntime(evidence kube.RuntimeEvidence, stop bool) (string, string) 
 	}
 }
 
-// deploymentObservation 只映射 kube 证据：Seq 固定 0 由 workergateway.Journal
+// deploymentObservation 只映射 kube 证据：Seq 固定 0 由 workerclient.Journal
 // 递增；digest 仅在镜像 ID 证据匹配钉住 digest 时如实回传；PodUID 只取当前
 // 发布且就绪的 Pod；副本数按 Pod 终止态如实统计。
 func (e *Executor) deploymentObservation(command *platformv1.WorkerDeploymentCommand, evidence kube.RuntimeEvidence, kind, code string) *platformv1.WorkerDeploymentObservation {

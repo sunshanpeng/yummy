@@ -10,6 +10,7 @@ import (
 	"github.com/sunshanpeng/yummy/internal/domains/build"
 	"github.com/sunshanpeng/yummy/internal/domains/deployment"
 	"github.com/sunshanpeng/yummy/internal/domains/enrollment"
+	"github.com/sunshanpeng/yummy/internal/lib/workerprotocol"
 )
 
 func buildIdentity(value enrollment.Identity) build.WorkerIdentity {
@@ -26,11 +27,11 @@ func (g *Gateway) receive(ctx context.Context, s *session, message *platformv1.W
 		return g.qualification(ctx, s, payload.Qualification)
 	case *platformv1.WorkerEnvelope_BuildEvent:
 		if g.config.Builds == nil {
-			return ErrProtocol
+			return workerprotocol.ErrProtocol
 		}
 		value := payload.BuildEvent
 		if value == nil {
-			return ErrProtocol
+			return workerprotocol.ErrProtocol
 		}
 		ack, err := g.config.Builds.ApplyEvent(ctx, buildIdentity(s.identity), build.Event{AttemptID: value.AttemptId, Seq: value.Seq, Kind: value.Kind, JobUID: value.JobUid, Stage: value.Stage, Digest: value.Digest, ErrorCode: value.ErrorCode, LogsComplete: value.LogsComplete})
 		if err != nil {
@@ -39,11 +40,11 @@ func (g *Gateway) receive(ctx context.Context, s *session, message *platformv1.W
 		return g.ack(s, "build-event", value.AttemptId, ack.Seq, ack.Duplicate, ack.State)
 	case *platformv1.WorkerEnvelope_BuildLog:
 		if g.config.Builds == nil {
-			return ErrProtocol
+			return workerprotocol.ErrProtocol
 		}
 		value := payload.BuildLog
 		if value == nil || len(value.Content) > build.MaxLogChunk {
-			return ErrProtocol
+			return workerprotocol.ErrProtocol
 		}
 		ack, err := g.config.Builds.AppendLogs(ctx, buildIdentity(s.identity), build.LogInput{AttemptID: value.AttemptId, Seq: value.Seq, Content: value.Content})
 		if err != nil {
@@ -52,11 +53,11 @@ func (g *Gateway) receive(ctx context.Context, s *session, message *platformv1.W
 		return g.ack(s, "build-log", value.AttemptId, ack.Seq, ack.Duplicate, ack.State)
 	case *platformv1.WorkerEnvelope_DeploymentObservation:
 		if g.config.Deployments == nil {
-			return ErrProtocol
+			return workerprotocol.ErrProtocol
 		}
 		value := payload.DeploymentObservation
 		if value == nil {
-			return ErrProtocol
+			return workerprotocol.ErrProtocol
 		}
 		ack, err := g.config.Deployments.ApplyObservation(ctx, deploymentIdentity(s.identity, s.certificate), deployment.Observation{WorkspaceID: value.WorkspaceId, ApplicationID: value.ApplicationId, OperationID: value.OperationId, ReleaseID: value.ReleaseId, Generation: value.Generation, Seq: value.Seq, ClusterNodeUID: value.ClusterNodeUid, DeploymentUID: value.DeploymentUid, PodUID: value.PodUid, Digest: value.Digest, CorrectGeneration: value.CorrectGeneration, ReadyReplicas: value.ReadyReplicas, Replicas: value.Replicas, OldPodsGone: value.OldPodsGone, ServiceEndpoints: value.ServiceEndpoints, Kind: value.Kind, ErrorCode: value.ErrorCode, CollectedAt: time.UnixMilli(value.CollectedUnixMilli).UTC()})
 		if err != nil {
@@ -65,13 +66,13 @@ func (g *Gateway) receive(ctx context.Context, s *session, message *platformv1.W
 		return g.ack(s, "deployment", value.OperationId, ack.Seq, ack.Duplicate, ack.State)
 	case *platformv1.WorkerEnvelope_RuntimeLog:
 		if g.config.Deployments == nil {
-			return ErrProtocol
+			return workerprotocol.ErrProtocol
 		}
 		value := payload.RuntimeLog
-		if value == nil || len(value.Content) > deployment.RuntimeLogMaxChunkBytes {
-			return ErrProtocol
+		if value == nil || len(value.Content) > workerprotocol.RuntimeLogMaxChunkBytes {
+			return workerprotocol.ErrProtocol
 		}
-		id, err := runtimeLogStreamID(value)
+		id, err := workerprotocol.RuntimeLogStreamID(value)
 		if err != nil {
 			return err
 		}
@@ -82,11 +83,11 @@ func (g *Gateway) receive(ctx context.Context, s *session, message *platformv1.W
 		return g.ack(s, "runtime-log", id, ack.Seq, ack.Duplicate, ack.State)
 	case *platformv1.WorkerEnvelope_RuntimeMetric:
 		if g.config.Deployments == nil {
-			return ErrProtocol
+			return workerprotocol.ErrProtocol
 		}
 		value := payload.RuntimeMetric
 		if value == nil {
-			return ErrProtocol
+			return workerprotocol.ErrProtocol
 		}
 		ack, err := g.config.Deployments.ApplyRuntimeMetric(ctx, deploymentIdentity(s.identity, s.certificate), deployment.RuntimeMetricInput{WorkspaceID: value.WorkspaceId, ApplicationID: value.ApplicationId, ReleaseID: value.ReleaseId, Generation: value.Generation, PodUID: value.PodUid, CPUNanoCores: value.CpuNanoCores, CPUWindowMillis: value.CpuWindowMillis, MemoryWorkingSetBytes: value.MemoryWorkingSetBytes, CollectedAt: time.UnixMilli(value.CollectedUnixMilli).UTC()})
 		if err != nil {
@@ -95,7 +96,7 @@ func (g *Gateway) receive(ctx context.Context, s *session, message *platformv1.W
 		// ack.Seq 携带采集毫秒时间，worker journal 以同一序号清理待确认条目。
 		return g.ack(s, "runtime-metric", value.PodUid, ack.Seq, ack.Duplicate, ack.State)
 	default:
-		return ErrProtocol
+		return workerprotocol.ErrProtocol
 	}
 }
 func (g *Gateway) ack(s *session, channel, id string, seq int64, duplicate bool, state string) error {
@@ -141,7 +142,7 @@ func (g *Gateway) schedule(ctx context.Context, s *session) error {
 }
 func (g *Gateway) sendBuild(ctx context.Context, s *session, value build.Dispatch) error {
 	if value.NodeID != s.identity.NodeID || value.WorkerID != s.identity.WorkerID || value.AttemptID == "" || value.JobName == "" {
-		return ErrIdentity
+		return workerprotocol.ErrIdentity
 	}
 	if err := g.check(ctx, s); err != nil {
 		return err
@@ -149,7 +150,7 @@ func (g *Gateway) sendBuild(ctx context.Context, s *session, value build.Dispatc
 	message := &platformv1.WorkerBuildCommand{BuildId: value.BuildID, AttemptId: value.AttemptID, WorkspaceId: value.WorkspaceID, ApplicationId: value.ApplicationID, NodeId: value.NodeID, WorkerId: value.WorkerID, Action: value.Command, StableJobName: value.JobName, JobUid: value.JobUID, SourceSnapshotId: value.SourceSnapshotID, SourceSha256: value.SourceSHA256, Dockerfile: value.Config.Dockerfile, ContextPath: value.Config.Context, Target: value.Config.Target, BuildArgs: value.Config.Args, Repository: value.Repository, Tag: value.Tag, Platform: value.Platform, DeadlineUnix: value.DeadlineAt.Unix(), SpaceSlug: value.SpaceSlug}
 	if value.Command == "RUN" {
 		if g.config.BuildMaterial == nil {
-			return ErrQualification
+			return workerprotocol.ErrQualification
 		}
 		material, err := g.config.BuildMaterial.MaterializeBuild(ctx, s.identity, value)
 		if err != nil {
@@ -159,7 +160,7 @@ func (g *Gateway) sendBuild(ctx context.Context, s *session, value build.Dispatc
 		message.Registry = material.Registry
 		message.Secrets = material.Secrets
 		if message.SourceGrant == nil || message.Registry == nil {
-			return ErrQualification
+			return workerprotocol.ErrQualification
 		}
 	}
 	if err := g.check(ctx, s); err != nil {
@@ -169,7 +170,7 @@ func (g *Gateway) sendBuild(ctx context.Context, s *session, value build.Dispatc
 }
 func (g *Gateway) sendDeployment(ctx context.Context, s *session, value deployment.Dispatch) error {
 	if value.Placement.NodeID != s.identity.NodeID || value.Placement.WorkerID != s.identity.WorkerID {
-		return ErrIdentity
+		return workerprotocol.ErrIdentity
 	}
 	if err := g.check(ctx, s); err != nil {
 		return err
@@ -179,14 +180,14 @@ func (g *Gateway) sendDeployment(ctx context.Context, s *session, value deployme
 	// 不需要仓库凭据；绝不因恢复路径多做一次凭据物化。
 	if value.Action != deployment.Stop && value.Action != deployment.Reconcile {
 		if g.config.DeploymentMaterial == nil {
-			return ErrQualification
+			return workerprotocol.ErrQualification
 		}
 		credential, err := g.config.DeploymentMaterial.MaterializeDeployment(ctx, s.identity, s.certificate, value)
 		if err != nil {
 			return err
 		}
 		if credential == nil {
-			return ErrQualification
+			return workerprotocol.ErrQualification
 		}
 		message.Registry = credential
 	}

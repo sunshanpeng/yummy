@@ -1,4 +1,4 @@
-// Package runtimeconfig 管理应用运行配置的不可变版本，保存不代表已经部署生效。
+// Package runtimeconfig 定义控制面与执行适配器共用的运行配置快照和校验规则。
 package runtimeconfig
 
 import "time"

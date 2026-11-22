@@ -5,6 +5,7 @@ import (
 	"time"
 
 	platformv1 "github.com/sunshanpeng/yummy/gen/go/platform/v1"
+	"github.com/sunshanpeng/yummy/internal/lib/workerprotocol"
 )
 
 func (g *Gateway) openPresence(ctx context.Context, s *session) error {
@@ -15,7 +16,7 @@ func (g *Gateway) openPresence(ctx context.Context, s *session) error {
 		return updated.Error
 	}
 	if updated.RowsAffected != 1 || s.epoch < 1 {
-		return ErrIdentity
+		return workerprotocol.ErrIdentity
 	}
 	return nil
 }
@@ -24,7 +25,7 @@ func (g *Gateway) closePresence(ctx context.Context, s *session) error {
 }
 func (g *Gateway) heartbeat(ctx context.Context, s *session, message *platformv1.WorkerHeartbeat) error {
 	if len(message.ClusterNodeUid) > 256 || len(message.Os) > 32 || len(message.Arch) > 32 {
-		return ErrProtocol
+		return workerprotocol.ErrProtocol
 	}
 	// 未经资格检查只刷新连接事实，不把自报UID/能力写成资产与就绪事实。
 	var registered struct {
@@ -36,20 +37,20 @@ func (g *Gateway) heartbeat(ctx context.Context, s *session, message *platformv1
 		return err
 	}
 	if registered.ClusterNodeUID != "" && message.ClusterNodeUid != registered.ClusterNodeUID {
-		return ErrIdentity
+		return workerprotocol.ErrIdentity
 	}
 	if registered.OS != "" && message.Os != registered.OS {
-		return ErrIdentity
+		return workerprotocol.ErrIdentity
 	}
 	if registered.Arch != "" && message.Arch != registered.Arch {
-		return ErrIdentity
+		return workerprotocol.ErrIdentity
 	}
 	updated := g.config.DB.WithContext(ctx).Table("execution_nodes").Where("id = ? AND connection_epoch = ? AND connection_owner = ?", s.identity.NodeID, s.epoch, s.owner).Update("last_seen", time.Now().UTC())
 	if updated.Error != nil {
 		return updated.Error
 	}
 	if updated.RowsAffected != 1 {
-		return ErrIdentity
+		return workerprotocol.ErrIdentity
 	}
 	return nil
 }
@@ -62,14 +63,14 @@ func (g *Gateway) qualification(ctx context.Context, s *session, message *platfo
 		return g.enqueue(s, &platformv1.ControlEnvelope{Payload: &platformv1.ControlEnvelope_Rejection{Rejection: &platformv1.WorkerRejection{Channel: "qualification", Code: "QUALIFICATION_REJECTED"}}})
 	}
 	if proof.ClusterNodeUID == "" || proof.OS != "linux" || proof.Arch != "amd64" || proof.ClusterNodeUID != message.ClusterNodeUid {
-		return ErrQualification
+		return workerprotocol.ErrQualification
 	}
 	updated := g.config.DB.WithContext(ctx).Table("execution_nodes").Where("id = ? AND connection_epoch = ? AND connection_owner = ? AND status IN ('ACTIVE','DRAINING') AND (cluster_node_uid = '' OR cluster_node_uid = ?)", s.identity.NodeID, s.epoch, s.owner, proof.ClusterNodeUID).Updates(map[string]any{"cluster_node_uid": proof.ClusterNodeUID, "os": proof.OS, "arch": proof.Arch, "build_ready": proof.Build, "runtime_ready": proof.Runtime, "ingress_ready": proof.Ingress, "metrics_ready": proof.Metrics, "readiness_reason": "已核验登记资格证据", "last_seen": time.Now().UTC()})
 	if updated.Error != nil {
 		return updated.Error
 	}
 	if updated.RowsAffected != 1 {
-		return ErrIdentity
+		return workerprotocol.ErrIdentity
 	}
 	return g.enqueue(s, &platformv1.ControlEnvelope{Payload: &platformv1.ControlEnvelope_Ack{Ack: &platformv1.WorkerAck{Channel: "qualification", State: "VERIFIED"}}})
 }

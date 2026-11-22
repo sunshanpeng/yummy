@@ -2,26 +2,26 @@
 
 Yummy 是一个把源码构建成镜像并部署到 k3s 运行的应用平台：React 控制台与公共 API 由
 控制面进程提供，构建与部署执行由 worker 承担，构建 Pod 内的一次性 runner 进程调用
-BuildKit 完成镜像构建。全部能力打进一个 `bin/platform` 二进制（含嵌入控制台）。
+BuildKit 完成镜像构建。控制面、执行宿主机和用户客户端各有独立的分发二进制。
 
 ## 架构
 
 ```mermaid
 flowchart LR
-    UI["React 控制台"] -->|"ConnectRPC /api"| CP["控制面<br/>bin/platform serve"]
+    UI["React 控制台"] -->|"ConnectRPC /api"| CP["控制面<br/>bin/yummy-server serve"]
     CP --> PG[("PostgreSQL<br/>业务事实源")]
     CP --> Redis[("Redis<br/>会话与在线状态")]
     CP --> SRC[("源码归档目录")]
-    CP -->|"mTLS 双向流"| W["worker<br/>bin/platform worker run"]
+    CP -->|"mTLS 双向流"| W["worker<br/>bin/yummy-worker run"]
     W --> K3S["k3s 集群"]
     K3S --> BP["构建 Pod<br/>BuildKit runner"]
     K3S --> RT["应用运行时 Deployment"]
 ```
 
-- **控制面**：登录与会话、工作空间/应用/构建/部署/OAuth 的 Connect API、审计与授权、
-  本地 CLI/MCP 入口，全部在一个进程内按模块组织。
+- **控制面**：`yummy-server` 嵌入 Web 控制台并提供 Connect API、远程 MCP、登录与授权、调度与审计。
 - **worker**：以注册身份经 mTLS 长连接接入控制面，负责构建 Job、部署与运行时观察、
   节点指标采集；事件经 journal 保证不丢、重投幂等。
+- **CLI**：`yummy` 是按需启动的用户客户端，通过公开 API 操作应用、构建和部署。
 - **构建 runner**：`cmd/build-runner` 只由构建 Pod 启动，不是常驻服务。
 
 ## 前置条件
@@ -39,6 +39,17 @@ docker compose up -d postgres redis
 make build
 ```
 
+`make build` 构建全部三个二进制。只安装某一端时，可以单独构建对应产物。
+
+| 构建目标 | 产物 | 构建要求 |
+|---|---|---|
+| `make build-server` | `bin/yummy-server` | Go + Node.js + pnpm |
+| `make build-cli` | `bin/yummy` | Go |
+| `make build-worker` | `bin/yummy-worker` | Go |
+
+从 macOS 为 Linux/AMD64 的执行宿主机构建时，执行 `CGO_ENABLED=0 GOOS=linux GOARCH=amd64 make build-worker`。
+分发时按同一 Git 版本构建各端，并选择与安装机器匹配的平台和架构。
+
 compose 使用 PostgreSQL 18 和 Redis 8。PostgreSQL 18 镜像的数据目录与 17 不兼容，如果本机还留着旧版本创建的容器，先执行 `docker compose down -v` 删除旧容器和数据，再重新启动。
 
 ## 快速开始（单机开发）
@@ -50,10 +61,10 @@ openssl rand -base64 32   # CSRF_KEY
 openssl rand -base64 32   # MASTER_KEY
 mkdir -p var/source
 
-./bin/platform migrate
-./bin/platform admin init --username admin
+./bin/yummy-server migrate
+./bin/yummy-server admin init --username admin
 SESSION_KEY=... CSRF_KEY=... MASTER_KEY=... SOURCE_ROOT=var/source \
-  ./bin/platform serve --allow-local-http
+  ./bin/yummy-server serve --allow-local-http
 ```
 
 打开 <http://127.0.0.1:8080>，用 `admin init` 创建的账号登录。`--allow-local-http`
@@ -64,15 +75,16 @@ SESSION_KEY=... CSRF_KEY=... MASTER_KEY=... SOURCE_ROOT=var/source \
 控制面启用 worker 登记（生成 CA 与服务端证书）：
 
 ```bash
-./bin/platform serve --worker-ca-cert var/worker-ca.crt --worker-ca-key var/worker-ca.key \
+./bin/yummy-server serve --worker-ca-cert var/worker-ca.crt --worker-ca-key var/worker-ca.key \
   --worker-cert var/worker.crt --worker-key var/worker.key --worker-addr :8443
 ```
 
-worker 所在节点先登记身份再运行执行内核：
+worker 所在节点先登记身份再运行执行内核。使用自建 CA 时，将控制面 worker HTTPS 证书的签发 CA 证书复制到执行宿主机。
 
 ```bash
-./bin/platform worker register --server control.example.com:8443 --token <一次性注册码> --state-dir /var/lib/yummy-worker
-./bin/platform worker run --state-dir /var/lib/yummy-worker \
+./bin/yummy-worker register --server https://control.example.com:8443 --token '一次性注册码' \
+  --state-dir /var/lib/yummy-worker --server-ca-file /etc/yummy/control-server-ca.crt
+./bin/yummy-worker run --state-dir /var/lib/yummy-worker \
   --kube-apiserver https://10.0.0.5:6443 --kube-ca-file ca.crt --kube-token-file token \
   --node-name node-1 --build-namespace build-demo --runtime-namespace prod-demo
 ```
@@ -82,16 +94,18 @@ worker 主动建立长连接，部署在客户网络时通常只需允许它访�
 ## CLI 与 MCP
 
 ```bash
-./bin/platform client auth login        # PAT 登录
-./bin/platform client workspace list    # 工作空间与应用操作
-./bin/platform mcp --stdio              # 本地 stdio MCP（源码预览 + 已登录桥接业务工具）
+./bin/yummy auth login --server https://control.example.com
+./bin/yummy workspace list
 ```
+
+`auth login` 使用浏览器 OAuth。使用个人访问令牌时，通过 `yummy auth token --server https://control.example.com --token-stdin` 从标准输入保存 PAT。
+Agent 也可通过控制面的远程 Streamable HTTP MCP 接入。认证和代理配置见[运维手册](docs/operations.md)。
 
 ## 常用配置
 
-同一配置项的读取优先级：**显式命令行参数 > 配置文件 > 环境变量 > 内置默认值**。
-配置文件用 `--config`（或 `-c`）指定，未指定时依次查找 `./config.yaml`、`/etc/yummy/config.yaml`；
-键名与 flag 一致，完整示例见 [config.example.yaml](config.example.yaml)。
+控制面配置与 worker 的全局日志、遥测选项遵循 **显式命令行参数 > 配置文件 > 环境变量 > 内置默认值** 的优先级。
+配置文件用 `--config`（或 `-c`）指定，未指定时查找工作目录下的 `config.yaml`、`config.yml`，再查找 `/etc/yummy/config.yaml`。
+键名与 flag 一致，示例见 [config.example.yaml](config.example.yaml)。
 
 | 参数（环境变量为对应大写下划线形式） | 默认值 | 用途 |
 |---|---|---|
@@ -106,14 +120,17 @@ worker 主动建立长连接，部署在客户网络时通常只需允许它访�
 | `--log-level` / `LOG_LEVEL` | `info` | 日志级别 debug/info/warn/error |
 | `--worker-ca-cert` / `--worker-ca-key` | 空 | worker 签发 CA，留空禁用登记 |
 | `--worker-cert` / `--worker-key` / `--worker-addr` | `127.0.0.1:8443` | worker HTTPS 监听器 |
-| worker run：`--state-dir` `--kube-apiserver` `--kube-ca-file` `--kube-token-file` `--node-name` `--build-namespace` `--runtime-namespace` | 无（必填） | worker 执行内核连接参数 |
+
+`yummy-worker run` 的 `--state-dir`、`--kube-apiserver`、`--kube-ca-file`、`--kube-token-file`、
+`--node-name`、`--build-namespace` 和 `--runtime-namespace` 需要在命令行显式传入。
 
 ## 开发命令
 
 ```bash
 make test              # Go race 测试 + React 组件测试
 make integration-test  # 使用本机 PostgreSQL/Redis 的真实存储集成测试
-make build             # 构建前端并生成 bin/platform
+make build             # 构建三个分发二进制
+make check-binary-deps # 检查三个入口的依赖边界
 make web-build         # 仅构建前端并同步到 Go 嵌入目录
 make generate          # 重新生成 Go/TypeScript 协议代码
 make smoke             # 产品冒烟：迁移/管理员/登录/建空间/OAuth 元数据最小真实链路

@@ -13,8 +13,8 @@ base_url="http://127.0.0.1:18080"
 username="smoke-admin"
 password="smoke-only-password-000"
 
-platform_bin=${PLATFORM_BIN:-bin/platform}
-test -x "$platform_bin" || { echo "缺少 ${platform_bin}，请先 make build" >&2; exit 1; }
+server_bin=${PLATFORM_BIN:-bin/yummy-server}
+test -x "$server_bin" || { echo "缺少 ${server_bin}，请先 make build-server" >&2; exit 1; }
 dsn="postgres://$dsn_user:$dsn_user@localhost:5432/$database?sslmode=disable"
 
 cleanup() {
@@ -34,11 +34,11 @@ oauth_key=$(openssl rand -base64 32)
 docker exec "$container" psql -U "$dsn_user" -d postgres -c "DROP DATABASE IF EXISTS $database" >/dev/null
 docker exec "$container" psql -U "$dsn_user" -d postgres -c "CREATE DATABASE $database OWNER $dsn_user" >/dev/null
 
-"$platform_bin" migrate --database-url "$dsn" | grep -q "数据库迁移完成"
-printf '%s' "$password" | "$platform_bin" admin init --database-url "$dsn" --username "$username" --password-stdin >/dev/null
+"$server_bin" migrate --database-url "$dsn" | grep -q "数据库迁移完成"
+printf '%s' "$password" | "$server_bin" admin init --database-url "$dsn" --username "$username" --password-stdin >/dev/null
 
 source_root=$(mktemp -d)
-"$platform_bin" serve --database-url "$dsn" --redis-addr localhost:6379 --public-addr "$public_addr" --admin-addr "$admin_addr" --public-base-url "$base_url" --session-key "$session_key" --csrf-key "$csrf_key" --master-key "$master_key" --oauth-key "$oauth_key" --source-root "$source_root" --allow-local-http &
+"$server_bin" serve --database-url "$dsn" --redis-addr localhost:6379 --public-addr "$public_addr" --admin-addr "$admin_addr" --public-base-url "$base_url" --session-key "$session_key" --csrf-key "$csrf_key" --master-key "$master_key" --oauth-key "$oauth_key" --source-root "$source_root" --allow-local-http &
 server_pid=$!
 
 for _ in $(seq 1 80); do

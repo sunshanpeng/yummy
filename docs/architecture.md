@@ -11,7 +11,7 @@ flowchart TB
         agent["CLI / Agent<br/>（PAT 认证，按需启动）"]
     end
 
-    subgraph control["控制面进程 bin/platform serve（模块化单体）"]
+    subgraph control["控制面进程 bin/yummy-server serve（模块化单体）"]
         public_listener["公共监听 :8080<br/>页面 + /api Connect RPC + /oauth<br/>+ 远端 MCP（启用 OAuth 时）<br/>+ /transfer 源码与产物传输"]
         admin_listener["管理监听 :8082（只绑回环）<br/>/healthz + /metrics（--metrics-pull）<br/>公网不可达"]
         worker_listener["worker 网关 :8443<br/>mTLS 双向流长连接"]
@@ -27,7 +27,7 @@ flowchart TB
     end
 
     subgraph worker_node["worker 节点（可多台，可在客户网络）"]
-        workerproc["bin/platform worker run<br/>journal 保证事件不丢、重投幂等"]
+        workerproc["bin/yummy-worker run<br/>journal 保证事件不丢、重投幂等"]
         subgraph k3s["k3s 集群（第一版每实例一个）"]
             buildpod["构建 Pod（按任务拉起）<br/>yummy-runner + rootless BuildKit<br/>命名空间 build-空间名"]
             apprt["应用运行时 Deployment<br/>命名空间 prod-空间名"]
@@ -61,29 +61,32 @@ flowchart TB
 | 项 | 说明 |
 |---|---|
 | 常驻进程 | 控制面 ×1 + worker ×N；构建 Pod 按任务拉起、结束即退，不算常驻 |
-| 按需客户端 | CLI（`platform client`）——不新增任何常驻服务 |
+| 按需客户端 | CLI（`yummy`）——不新增任何常驻服务 |
 | 控制面监听 | :8080 页面/API/传输（传输自带 10 分钟截止，业务 30s 超时预算）、:8082 管理面 /healthz 与 /metrics 只绑回环、:8443 worker mTLS |
 | 数据三件套 | PostgreSQL（事实源）+ source-root（归档）+ master-key，备份必须成套 |
 | 命名约定 | 构建 `build-<空间名>`、运行 `prod-<空间名>`、Deployment `<应用名>-<部署名>`、地址 `<应用名>-<后缀>.<根域名>` |
 | 网络边界 | worker 主动外连控制面，客户网络只需放行控制面 8443 入站；运行命名空间只放行同命名空间与 Traefik 入站 |
 | 可观测性 | pull：serve `--metrics-pull` 暴露 `/metrics`；push：`--otel-endpoint`（或 `OTEL_EXPORTER_OTLP_ENDPOINT`）推 OTLP，三进程统一 |
-| 一次性命令 | `migrate`（带锁迁移）、`admin init`（首位全局管理员）、`worker register`（一次性注册码登记） |
+| 一次性命令 | `migrate`（带锁迁移）、`admin init`（首位全局管理员）、`yummy-worker register`（一次性注册码登记） |
 
 ## 二、代码模块分层
 
 ```mermaid
 flowchart TB
     subgraph entry["① 入口装配"]
-        cmdp["cmd/platform<br/>唯一常驻入口二进制"]
+        cmdsrv["cmd/yummy-server<br/>控制面分发件"]
+        cmdcli["cmd/yummy<br/>按需客户端分发件"]
+        cmdworker["cmd/yummy-worker<br/>宿主机分发件"]
         cmdr["cmd/build-runner<br/>构建 Pod 一次性进程"]
-        cpcli["controlplane/cli<br/>serve · worker · migrate · admin · mcp · client"]
+        cpcli["controlplane/cli<br/>serve · migrate · admin"]
         cpsrv["controlplane/server<br/>装配全部域服务与网关"]
         webui["controlplane/webui<br/>嵌入 React SPA"]
     end
 
     subgraph edge["② 传输与聚合"]
         tr["transport<br/>11 个 Connect handler"]
-        wg["transport/workergateway<br/>worker mTLS 网关 + 事件 journal"]
+        wg["transport/workergateway<br/>控制面 mTLS 网关"]
+        wc["transport/workerclient · transport/workercli<br/>长连接、命令装配与 journal"]
         ccli["transport/clientcli<br/>CLI 客户端"]
         mcp["bff/mcp<br/>远程 MCP（OAuth，单应用绑定）"]
     end
@@ -109,21 +112,24 @@ flowchart TB
     contract["契约：api/platform/v1 → gen/go（Go）+ web/src/gen（TS）"]
     webapp["web/ React SPA（Tailwind 4 + shadcn/ui）"]
 
-    cmdp --> cpcli
-    cmdp --> cpsrv
+    cmdsrv --> cpcli
+    cmdsrv --> webui
+    cmdcli --> ccli
+    cmdworker --> wc
     cmdr --> i2
+    wc --> i2
     cpcli --> cpsrv
-    cpcli --> ccli
-    cpcli --> mcp
+    cpsrv --> mcp
     cpsrv --> tr
     cpsrv --> wg
-    cpsrv --> webui
     tr --> domains
     mcp --> domains
     wg --> domains
     domains --> infra
     tr -.-> contract
     ccli -.-> contract
+    wc -.-> contract
+    wg -.-> contract
     webapp -.-> contract
     entry -.-> cm2
     edge -.-> cm2
@@ -137,4 +143,4 @@ flowchart TB
 2. **域内高内聚**：模型、数据访问、服务同域组织；域间只通过对方显式导出的接口依赖，禁止跨域直查对方数据表或引用内部 struct。
 3. **数据访问收口**：常规 CRUD 走 GORM（gen DAO 按域渗透中），复杂 SQL（CTE、锁、RETURNING）集中在各域的数据访问文件；PG 特有能力一律带【数据库专有】注释并写明 MySQL 替代方案——业务代码不出现 SQL 字符串。
 4. **可观测性统一**：三信号 SDK 初始化只在 `internal/lib/observability`；业务侧只取 logger（`LoggerFrom(ctx)` 注入 trace_id）与 meter。
-5. **已知例外**：部署链的 kube / workerexec 共用 `runtimeconfig` 视图类型（控制面物化 → worker 消费的契约），后续以 proto 契约收敛，收敛前维持单向依赖不做反向扩散。
+5. **分发边界**：`yummy-server` 嵌入 Web 并提供网关服务端；`yummy-worker` 消费 proto 命令并依赖纯运行配置类型与校验。`make check-binary-deps` 检查三个入口各自的依赖。

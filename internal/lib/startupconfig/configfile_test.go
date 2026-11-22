@@ -1,4 +1,4 @@
-package cli
+package startupconfig
 
 import (
 	"os"
@@ -64,7 +64,7 @@ func TestResolveConfigPathDefaultSearch(t *testing.T) {
 }
 
 func TestLoadStartupConfigExplicitMissingFails(t *testing.T) {
-	if _, err := loadStartupConfig([]string{"serve", "--config", filepath.Join(t.TempDir(), "nope.yaml")}); err == nil {
+	if _, err := Load([]string{"serve", "--config", filepath.Join(t.TempDir(), "nope.yaml")}); err == nil {
 		t.Fatal("显式指定的配置文件缺失必须报错")
 	}
 }

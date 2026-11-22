@@ -8,7 +8,7 @@ package workerexec
 //   Ready 且非 Deleting 的当前发布 Pod 采样一次，CPU 复用 kube.MetricsCollector
 //   的同 startup counter 差值，首样本、counter 重置或字段缺测如实跳过不发。
 // 所有旁路 goroutine 由观察循环派生的 ctx 驱动，任何失败只丢弃旁路工作，
-// 绝不影响 observeLoop 状态机收敛；Seq=0 交给 workergateway.Journal 递增，
+// 绝不影响 observeLoop 状态机收敛；Seq=0 交给 workerclient.Journal 递增，
 // 重连重放按 journal 与控制面两侧的幂等键去重。
 
 import (

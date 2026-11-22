@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/sunshanpeng/yummy/internal/domains/deployment"
-	"github.com/sunshanpeng/yummy/internal/domains/runtimeconfig"
+	"github.com/sunshanpeng/yummy/internal/lib/runtimeconfig"
 )
 
 func TestDeploymentCommandPreservesSensitiveMetadata(t *testing.T) {

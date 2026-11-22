@@ -1,4 +1,5 @@
-package workergateway
+// Package workerclient 负责 worker 连接控制面并恢复本地执行与上报。
+package workerclient
 
 import (
 	"context"
@@ -14,8 +15,17 @@ import (
 	platformv1 "github.com/sunshanpeng/yummy/gen/go/platform/v1"
 	"github.com/sunshanpeng/yummy/gen/go/platform/v1/platformv1connect"
 	"github.com/sunshanpeng/yummy/internal/infra/workerexec"
+	"github.com/sunshanpeng/yummy/internal/lib/workerprotocol"
 	"google.golang.org/protobuf/proto"
 )
+
+// Executor 执行带 generation 和幂等身份的命令，生命周期独立于流连接。
+type Executor interface {
+	Build(context.Context, *platformv1.WorkerBuildCommand, bool, workerexec.Emitter) error
+	Deploy(context.Context, *platformv1.WorkerDeploymentCommand, bool, workerexec.Emitter) error
+}
+
+var _ Executor = (*workerexec.Executor)(nil)
 
 type WorkerConfig struct {
 	URL, NodeID, WorkerID, Version, ServerID              string
@@ -44,7 +54,7 @@ type WorkerClient struct {
 func NewWorkerClient(config WorkerConfig) (*WorkerClient, error) {
 	parsed, err := url.Parse(config.URL)
 	if err != nil || parsed.Scheme != "https" || parsed.Hostname() == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || config.NodeID == "" || config.WorkerID == "" || config.Journal == nil || config.Executor == nil || config.TLS == nil || config.TLS.InsecureSkipVerify || len(config.TLS.Certificates) == 0 && config.TLS.GetClientCertificate == nil {
-		return nil, ErrProtocol
+		return nil, workerprotocol.ErrProtocol
 	}
 	if config.HeartbeatInterval == 0 {
 		config.HeartbeatInterval = 15 * time.Second
@@ -59,12 +69,12 @@ func NewWorkerClient(config WorkerConfig) (*WorkerClient, error) {
 		config.MaxExecutions = 32
 	}
 	if config.HeartbeatInterval < 10*time.Millisecond || config.ReconnectDelay < 10*time.Millisecond || config.RetransmitInterval < 10*time.Millisecond || config.MaxExecutions < 1 || config.MaxExecutions > 256 {
-		return nil, ErrProtocol
+		return nil, workerprotocol.ErrProtocol
 	}
 	tlsConfig := config.TLS.Clone()
 	tlsConfig.MinVersion = tls.VersionTLS12
 	transport := &http.Transport{TLSClientConfig: tlsConfig, ForceAttemptHTTP2: true, Proxy: nil, TLSHandshakeTimeout: 10 * time.Second, ResponseHeaderTimeout: 30 * time.Second, IdleConnTimeout: time.Minute}
-	httpClient := &http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return ErrIdentity }}
+	httpClient := &http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return workerprotocol.ErrIdentity }}
 	return &WorkerClient{config: config, http: httpClient, transport: transport, active: map[string]bool{}}, nil
 }
 func (c *WorkerClient) report(err error) {
@@ -78,7 +88,7 @@ func (c *WorkerClient) Run(ctx context.Context) error {
 	c.mu.Lock()
 	if c.running {
 		c.mu.Unlock()
-		return ErrProtocol
+		return workerprotocol.ErrProtocol
 	}
 	c.running = true
 	c.ctx = ctx
@@ -136,7 +146,7 @@ func (c *WorkerClient) runOnce(parent context.Context) error {
 	}
 	welcome := first.GetWelcome()
 	if welcome == nil || welcome.NodeId != c.config.NodeID || welcome.WorkerId != c.config.WorkerID || welcome.ConnectionEpoch < 1 || welcome.QualificationNonce == "" || (c.config.ServerID != "" && welcome.ServerId != c.config.ServerID) {
-		return ErrIdentity
+		return workerprotocol.ErrIdentity
 	}
 	if c.config.Qualification != nil {
 		qualification := c.config.Qualification(welcome.QualificationNonce)
@@ -157,7 +167,7 @@ func (c *WorkerClient) runOnce(parent context.Context) error {
 			switch value := message.Payload.(type) {
 			case *platformv1.ControlEnvelope_Ack:
 				if value.Ack == nil {
-					receiveErrors <- ErrProtocol
+					receiveErrors <- workerprotocol.ErrProtocol
 					return
 				}
 				if value.Ack.Channel != "qualification" {
@@ -168,7 +178,7 @@ func (c *WorkerClient) runOnce(parent context.Context) error {
 				}
 			case *platformv1.ControlEnvelope_Rejection:
 				if value.Rejection == nil {
-					receiveErrors <- ErrProtocol
+					receiveErrors <- workerprotocol.ErrProtocol
 					return
 				}
 				if value.Rejection.Channel != "qualification" {
@@ -183,7 +193,7 @@ func (c *WorkerClient) runOnce(parent context.Context) error {
 					continue
 				}
 				// 资格失败不等于断线；保留未就绪状态并允许运维发现问题。
-				c.report(ErrQualification)
+				c.report(workerprotocol.ErrQualification)
 			case *platformv1.ControlEnvelope_BuildCommand:
 				if err := c.startBuild(parent, value.BuildCommand); err != nil {
 					receiveErrors <- err
@@ -195,7 +205,7 @@ func (c *WorkerClient) runOnce(parent context.Context) error {
 					return
 				}
 			default:
-				receiveErrors <- ErrProtocol
+				receiveErrors <- workerprotocol.ErrProtocol
 				return
 			}
 		}
@@ -235,7 +245,7 @@ func (c *WorkerClient) runOnce(parent context.Context) error {
 				value = c.config.Heartbeat()
 			}
 			if value == nil {
-				return ErrProtocol
+				return workerprotocol.ErrProtocol
 			}
 			select {
 			case <-ctx.Done():
@@ -254,7 +264,7 @@ func (c *WorkerClient) runOnce(parent context.Context) error {
 // 不把某次成功校验缓存为永久权限。连接异常或身份撤销均失败关闭。
 func (c *WorkerClient) CheckGeneration(ctx context.Context, request *platformv1.WorkerGenerationRequest) error {
 	if request == nil {
-		return ErrProtocol
+		return workerprotocol.ErrProtocol
 	}
 	client := platformv1connect.NewWorkerGatewayClient(c.http, c.config.URL, append(c.config.Instrumentation, connect.WithGRPC(), connect.WithReadMaxBytes(1<<20), connect.WithSendMaxBytes(1<<20))...)
 	response, err := client.CheckGeneration(ctx, connect.NewRequest(request))
@@ -262,18 +272,18 @@ func (c *WorkerClient) CheckGeneration(ctx context.Context, request *platformv1.
 		return err
 	}
 	if response.Msg == nil || !response.Msg.Current {
-		return ErrIdentity
+		return workerprotocol.ErrIdentity
 	}
 	return nil
 }
 
 func (c *WorkerClient) startBuild(ctx context.Context, command *platformv1.WorkerBuildCommand) error {
 	if command == nil || command.AttemptId == "" || command.StableJobName == "" || command.NodeId != c.config.NodeID || command.WorkerId != c.config.WorkerID {
-		return ErrIdentity
+		return workerprotocol.ErrIdentity
 	}
 	command = proto.Clone(command).(*platformv1.WorkerBuildCommand)
 	if command.Action != "RUN" && command.Action != "CANCEL" && command.Action != "RECONCILE" {
-		return ErrProtocol
+		return workerprotocol.ErrProtocol
 	}
 	fingerprint, err := buildFingerprint(command)
 	if err != nil {
@@ -285,12 +295,12 @@ func (c *WorkerClient) startBuild(ctx context.Context, command *platformv1.Worke
 }
 func (c *WorkerClient) startDeployment(ctx context.Context, command *platformv1.WorkerDeploymentCommand) error {
 	if command == nil || command.OperationId == "" || command.Generation < 1 || command.NodeId != c.config.NodeID || command.WorkerId != c.config.WorkerID {
-		return ErrIdentity
+		return workerprotocol.ErrIdentity
 	}
 	switch command.Action {
 	case "DEPLOY", "ROLLBACK", "RECOVERY", "RESTART", "STOP", "START", "RECONCILE":
 	default:
-		return ErrProtocol
+		return workerprotocol.ErrProtocol
 	}
 	command = proto.Clone(command).(*platformv1.WorkerDeploymentCommand)
 	fingerprint, err := deploymentFingerprint(command)
@@ -301,7 +311,7 @@ func (c *WorkerClient) startDeployment(ctx context.Context, command *platformv1.
 		return err
 	}
 	// 观察恢复用独立 journal 执行键：journal spool 跨重启持久化原 DEPLOY 指纹，
-	// RECONCILE 的 Action 不同必然指纹失配（ErrProtocol）；独立键让恢复与原操作
+	// RECONCILE 的 Action 不同必然指纹失配（workerprotocol.ErrProtocol）；独立键让恢复与原操作
 	// 的重投证据互不干扰，恢复完成与否都不封存原操作。
 	key := "deployment:" + command.OperationId
 	if command.Action == "RECONCILE" {
@@ -323,7 +333,7 @@ func (c *WorkerClient) start(ctx context.Context, key, action, fingerprint strin
 	}
 	if len(c.active) >= c.config.MaxExecutions {
 		c.mu.Unlock()
-		return ErrSpoolFull
+		return workerprotocol.ErrSpoolFull
 	}
 	reconcile, done, err := c.config.Journal.begin(key, fingerprint)
 	if err != nil {
@@ -377,7 +387,7 @@ func (e *journalEmitter) failure() error      { e.mu.Lock(); defer e.mu.Unlock()
 func (e *journalEmitter) terminalBuild() bool { e.mu.Lock(); defer e.mu.Unlock(); return e.terminal }
 func (e *journalEmitter) BuildEvent(value *platformv1.WorkerBuildEvent) error {
 	if value == nil {
-		return ErrProtocol
+		return workerprotocol.ErrProtocol
 	}
 	err := e.persist(&platformv1.WorkerEnvelope{Payload: &platformv1.WorkerEnvelope_BuildEvent{BuildEvent: value}})
 	if err == nil && (value.Kind == "SUCCEEDED" || value.Kind == "FAILED" || value.Kind == "STOPPED") {
@@ -389,25 +399,25 @@ func (e *journalEmitter) BuildEvent(value *platformv1.WorkerBuildEvent) error {
 }
 func (e *journalEmitter) BuildLog(value *platformv1.WorkerBuildLog) error {
 	if value == nil {
-		return ErrProtocol
+		return workerprotocol.ErrProtocol
 	}
 	return e.persist(&platformv1.WorkerEnvelope{Payload: &platformv1.WorkerEnvelope_BuildLog{BuildLog: value}})
 }
 func (e *journalEmitter) Observation(value *platformv1.WorkerDeploymentObservation) error {
 	if value == nil {
-		return ErrProtocol
+		return workerprotocol.ErrProtocol
 	}
 	return e.persist(&platformv1.WorkerEnvelope{Payload: &platformv1.WorkerEnvelope_DeploymentObservation{DeploymentObservation: value}})
 }
 func (e *journalEmitter) RuntimeLog(value *platformv1.WorkerRuntimeLog) error {
 	if value == nil {
-		return ErrProtocol
+		return workerprotocol.ErrProtocol
 	}
 	return e.persist(&platformv1.WorkerEnvelope{Payload: &platformv1.WorkerEnvelope_RuntimeLog{RuntimeLog: value}})
 }
 func (e *journalEmitter) RuntimeMetric(value *platformv1.WorkerRuntimeMetric) error {
 	if value == nil {
-		return ErrProtocol
+		return workerprotocol.ErrProtocol
 	}
 	return e.persist(&platformv1.WorkerEnvelope{Payload: &platformv1.WorkerEnvelope_RuntimeMetric{RuntimeMetric: value}})
 }

@@ -194,7 +194,7 @@ func requireTarget(p profile) (string, string, error) {
 	return w, p.Application, nil
 }
 
-// Command 创建可挂到产品根命令的客户端树；不会读取浏览器 Cookie。
+// Command 创建用户侧 CLI 的根命令。
 func Command() *cobra.Command {
 	v := viper.New()
 	v.SetEnvPrefix("YUMMY")
@@ -202,7 +202,7 @@ func Command() *cobra.Command {
 	v.AutomaticEnv()
 	defaultDir, _ := defaultConfigDir()
 	a := &clientApp{v: v}
-	root := &cobra.Command{Use: "client", Short: "通过正式 API 操作 Yummy", SilenceUsage: true, SilenceErrors: true}
+	root := &cobra.Command{Use: "yummy", Short: "通过正式 API 操作 Yummy", SilenceUsage: true, SilenceErrors: true}
 	root.PersistentFlags().String("profile", "default", "本地配置名称")
 	root.PersistentFlags().String("config-dir", defaultDir, "安全配置目录")
 	root.PersistentFlags().String("server", "", "实例根 URL")

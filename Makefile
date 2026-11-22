@@ -5,7 +5,7 @@ PROTOC ?= $(shell command -v protoc 2>/dev/null || echo work/protoc/bin/protoc)
 export GOPROXY ?= https://goproxy.cn,https://proxy.golang.org,direct
 export GOSUMDB ?= sum.golang.google.cn
 
-.PHONY: install generate web-build build test integration-test smoke
+.PHONY: install generate web-build build build-server build-cli build-worker check-binary-deps test integration-test smoke
 
 install:
 	pnpm --dir web install --frozen-lockfile
@@ -29,11 +29,24 @@ web-build:
 	pnpm --dir web build
 	rsync -a --delete web/dist/ internal/controlplane/webui/dist/
 
-build: web-build
-	mkdir -p bin
-	go build -trimpath -ldflags="-s -w" -o bin/platform ./cmd/platform
+build: build-server build-cli build-worker
 
-test:
+build-server: web-build
+	mkdir -p bin
+	go build -trimpath -ldflags="-s -w" -o bin/yummy-server ./cmd/yummy-server
+
+build-cli:
+	mkdir -p bin
+	go build -trimpath -ldflags="-s -w" -o bin/yummy ./cmd/yummy
+
+build-worker:
+	mkdir -p bin
+	go build -trimpath -ldflags="-s -w" -o bin/yummy-worker ./cmd/yummy-worker
+
+check-binary-deps:
+	bash scripts/check-binary-deps.sh
+
+test: check-binary-deps
 	go test ./... -race -count=1
 	pnpm --dir web test --run
 
@@ -43,6 +56,6 @@ integration-test:
 	TEST_REDIS_ADDR="localhost:6379" \
 	go test ./internal/... -count=1
 
-# 产品冒烟：对 bin/platform 做迁移/管理员/登录/建空间/OAuth 元数据最小真实链路验证。
-smoke: build
+# 产品冒烟：对 bin/yummy-server 做迁移/管理员/登录/建空间/OAuth 元数据最小真实链路验证。
+smoke: build-server
 	./scripts/smoke-product.sh

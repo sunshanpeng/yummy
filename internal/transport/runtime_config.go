@@ -8,16 +8,17 @@ import (
 	platformv1 "github.com/sunshanpeng/yummy/gen/go/platform/v1"
 	"github.com/sunshanpeng/yummy/gen/go/platform/v1/platformv1connect"
 	"github.com/sunshanpeng/yummy/internal/domains/authorization"
-	"github.com/sunshanpeng/yummy/internal/domains/runtimeconfig"
+	runtimeconfigdomain "github.com/sunshanpeng/yummy/internal/domains/runtimeconfig"
+	"github.com/sunshanpeng/yummy/internal/lib/runtimeconfig"
 	"go.uber.org/zap"
 )
 
 type RuntimeConfigHandler struct {
-	Service *runtimeconfig.Service
+	Service *runtimeconfigdomain.Service
 	Log     *zap.Logger
 }
 
-func NewRuntimeConfigHandler(service *runtimeconfig.Service, log *zap.Logger, opts ...connect.HandlerOption) (string, http.Handler) {
+func NewRuntimeConfigHandler(service *runtimeconfigdomain.Service, log *zap.Logger, opts ...connect.HandlerOption) (string, http.Handler) {
 	return platformv1connect.NewRuntimeConfigServiceHandler(&RuntimeConfigHandler{service, log}, append(opts, connect.WithCodec(StrictJSONCodec{}), connect.WithReadMaxBytes(4<<20), connect.WithInterceptors(ValidationInterceptor()))...)
 }
 func runtimeMessage(v runtimeconfig.View) *platformv1.RuntimeConfig {

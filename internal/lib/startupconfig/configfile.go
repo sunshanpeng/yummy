@@ -1,14 +1,15 @@
-// 配置文件加载与优先级归并。同一配置项的读取优先级固定为：
+// Package startupconfig 负责配置文件加载与优先级归并。同一配置项的读取优先级固定为：
 // 显式命令行参数 > 配置文件 > 环境变量 > 内置默认值。
 // 配置文件承接"启动时加载且运行中不可变"的那一层（AGENTS.md 配置分层），
 // 运行中可修改的参数仍走数据库 instance_settings，本文件不涉及。
-package cli
+package startupconfig
 
 import (
 	"fmt"
 	"os"
 	"strings"
 
+	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
@@ -94,10 +95,10 @@ func applyConfigSettings(v *viper.Viper, settings map[string]any, flags *pflag.F
 	}
 }
 
-// loadStartupConfig 是 Execute 的入口辅助：解析配置文件路径并加载为扁平键值。
+// Load 是 Execute 的入口辅助：解析配置文件路径并加载为扁平键值。
 // 显式指定（--config / YUMMY_CONFIG）的路径缺失直接报错；默认查找路径全部
 // 未命中时静默返回空（纯环境变量/flag 的部署形态保持原样）。
-func loadStartupConfig(args []string) (map[string]any, error) {
+func Load(args []string) (map[string]any, error) {
 	path, explicit := resolveConfigPath(args)
 	if path == "" {
 		return nil, nil
@@ -109,4 +110,30 @@ func loadStartupConfig(args []string) (map[string]any, error) {
 		return nil, nil
 	}
 	return loadConfigSettings(path)
+}
+
+// NewCommand 装配常驻进程共用的启动旗标与读取优先级。
+func NewCommand(name, summary string, settings map[string]any) (*cobra.Command, *viper.Viper) {
+	config := viper.New()
+	config.SetEnvKeyReplacer(envKeyReplacer())
+	config.AutomaticEnv()
+	root := &cobra.Command{Use: name, Short: summary, SilenceUsage: true, SilenceErrors: true}
+	root.SetOut(os.Stdout)
+	root.SetErr(os.Stderr)
+	root.PersistentFlags().StringP("config", "c", "", "启动配置文件路径（yaml/toml/json），未指定时依次查找 ./config.yaml、/etc/yummy/config.yaml")
+	if len(settings) > 0 {
+		root.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {
+			applyConfigSettings(config, settings, cmd.Flags())
+			return nil
+		}
+	}
+	otelEndpoint := config.GetString("otel-endpoint")
+	if otelEndpoint == "" {
+		otelEndpoint = os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+	}
+	root.PersistentFlags().String("otel-endpoint", otelEndpoint, "OTLP HTTP 导出端点（trace/metric/log push），留空关闭；未提供时回退 OTEL_EXPORTER_OTLP_ENDPOINT")
+	_ = config.BindPFlag("otel-endpoint", root.PersistentFlags().Lookup("otel-endpoint"))
+	root.PersistentFlags().String("log-level", config.GetString("log-level"), "日志级别：debug / info / warn / error")
+	_ = config.BindPFlag("log-level", root.PersistentFlags().Lookup("log-level"))
+	return root, config
 }
