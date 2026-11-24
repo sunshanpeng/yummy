@@ -13,6 +13,10 @@ import (
 	"strings"
 )
 
+// RegistrySecrets 校验 dockerconfig 只含固定 auths 形态，并返回需要从构建输出脱敏的已知明文
+// （整份配置、auth 及其 base64 解码形态、密码、令牌）。宿主构建路径与 Pod 内 runner 共用同一规则。
+func RegistrySecrets(data []byte) ([][]byte, error) { return registrySecrets(data) }
+
 func registrySecrets(data []byte) ([][]byte, error) {
 	var config struct {
 		Auths map[string]struct{ Auth, Username, Password, IdentityToken, RegistryToken string } `json:"auths"`

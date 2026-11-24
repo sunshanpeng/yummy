@@ -17,6 +17,12 @@ type redactingWriter struct {
 	hold    int
 }
 
+// NewRedactingWriter 返回对已知明文做尽力脱敏的写入器，Pod 内 runner 与宿主构建路径共用。
+// 写入器会扣留最长秘密长度的尾部以识别跨写入边界的秘密，输出结束后必须 Close 才会冲出尾部。
+func NewRedactingWriter(out io.Writer, secrets [][]byte) io.WriteCloser {
+	return newRedactingWriter(out, secrets)
+}
+
 func newRedactingWriter(out io.Writer, secrets [][]byte) *redactingWriter {
 	r := &redactingWriter{out: out}
 	for _, s := range secrets {
@@ -39,7 +45,8 @@ func (r *redactingWriter) Write(p []byte) (int, error) {
 func (r *redactingWriter) Close() error { r.mu.Lock(); defer r.mu.Unlock(); return r.emit(true) }
 func (r *redactingWriter) emit(final bool) error {
 	cutoff := len(r.pending) - r.hold + 1
-	if final {
+	// 无秘密（hold 为 0）时没有需要跨写入识别的内容，不扣留；否则 cutoff 会超出 pending 长度。
+	if final || r.hold == 0 {
 		cutoff = len(r.pending)
 	}
 	if cutoff < 0 {

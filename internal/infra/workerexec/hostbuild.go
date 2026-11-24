@@ -81,7 +81,14 @@ func (e *Executor) runHostBuild(ctx context.Context, command *platformv1.WorkerB
 	return nil
 }
 
-func (e *Executor) hostBuildRun(ctx context.Context, command *platformv1.WorkerBuildCommand, task kube.BuildTask, jobUID string, emitter Emitter) error {
+// hostSecretPath 是第 i 个构建密钥的文件路径。与 pod 路径同一契约：
+// 固定目录 buildrunner.BuildAuthDir 下的 secret-<序号>，参数校验器只接受该形态。
+func hostSecretPath(i int) string {
+	return filepath.Join(buildrunner.BuildAuthDir, "secret-"+strconv.Itoa(i))
+}
+
+// hostBuildArgs 生成交给固定校验器的 buildctl 参数；args[0] 是校验契约的子命令标记。
+func hostBuildArgs(task kube.BuildTask) []string {
 	args := []string{"build", "--frontend=dockerfile.v0",
 		"--metadata-file=" + HostBuildFixedMetadataPath,
 		"--local=context=/workspace/source/" + task.Context,
@@ -95,10 +102,71 @@ func (e *Executor) hostBuildRun(ctx context.Context, command *platformv1.WorkerB
 	for _, key := range sortedBuildArgKeys(task.BuildArgs) {
 		args = append(args, "--opt=build-arg:"+key+"="+task.BuildArgs[key])
 	}
-	// 与 pod 路径同一密钥键名契约（secret-N）：校验器只接受该形态的 src 基名。
 	for i, secret := range task.Secrets {
-		args = append(args, "--secret=id="+secret.ID+",src=/workspace/secrets/secret-"+strconv.Itoa(i))
+		args = append(args, "--secret=id="+secret.ID+",src="+hostSecretPath(i))
 	}
+	return args
+}
+
+// writeHostSecrets 把构建密钥写成 dir 下的 secret-<序号> 文件。目录先整体清掉
+// （上次异常退出可能残留旧密钥），再以 0700 重建，文件 0600；没有密钥时不创建目录。
+// buildctl 在客户端读取这些文件并经会话交给守护进程，守护用户不需要读取权限。
+func writeHostSecrets(dir string, secrets []kube.BuildSecret) error {
+	if err := os.RemoveAll(dir); err != nil {
+		return err
+	}
+	if len(secrets) == 0 {
+		return nil
+	}
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return err
+	}
+	// MkdirAll 受 umask 影响，显式设置才能保证 0700。
+	if err := os.Chmod(dir, 0700); err != nil {
+		return err
+	}
+	for i, secret := range secrets {
+		name := filepath.Join(dir, "secret-"+strconv.Itoa(i))
+		if err := os.WriteFile(name, secret.Value, 0600); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// hostRedactionSecrets 汇总需要从构建输出脱敏的已知明文：仓库凭据（与 Pod 路径同一规则，
+// 含 base64 解码形态）与全部构建密钥值。仓库凭据形态不合规时失败关闭。
+func hostRedactionSecrets(task kube.BuildTask) ([][]byte, error) {
+	var known [][]byte
+	if len(task.RegistryDockerConfig) > 0 {
+		registry, err := buildrunner.RegistrySecrets(task.RegistryDockerConfig)
+		if err != nil {
+			return nil, err
+		}
+		known = append(known, registry...)
+	}
+	for _, secret := range task.Secrets {
+		known = append(known, secret.Value)
+	}
+	return known, nil
+}
+
+// hostLogWriter 把写入按协议块上限切分后上报。脱敏器会补回上次扣留的尾部，
+// [REDACTED] 占位也可能比原文长，单次写入可能超过 maxLogChunk；
+// 直接交给 emitChunk 会被截断而丢字节，所以在这里切分。
+type hostLogWriter struct{ emit func([]byte) }
+
+func (w hostLogWriter) Write(p []byte) (int, error) {
+	for rest := p; len(rest) > 0; {
+		n := min(len(rest), maxLogChunk)
+		w.emit(rest[:n])
+		rest = rest[n:]
+	}
+	return len(p), nil
+}
+
+func (e *Executor) hostBuildRun(ctx context.Context, command *platformv1.WorkerBuildCommand, task kube.BuildTask, jobUID string, emitter Emitter) error {
+	args := hostBuildArgs(task)
 	if err := buildrunner.ValidateBuildArgs(args); err != nil {
 		// 可运维性：只输出参数键名（不含值，防泄漏 build-arg 敏感值）。
 		keys := make([]string, 0, len(args))
@@ -113,6 +181,11 @@ func (e *Executor) hostBuildRun(ctx context.Context, command *platformv1.WorkerB
 			keys = append(keys, key)
 		}
 		return fmt.Errorf("workerexec: 构建参数校验失败 %w（键名序列: %v）", err, keys)
+	}
+	// 尽早汇总脱敏表：仓库凭据形态不合规时在写任何文件、启动任何进程之前失败关闭。
+	redactionSecrets, err := hostRedactionSecrets(task)
+	if err != nil {
+		return fmt.Errorf("workerexec: 构建输出脱敏表生成失败: %w", err)
 	}
 
 	// 固定工作根：worker(root) 准备源码（世界可读供守护读取），守护写 metadata。
@@ -173,6 +246,13 @@ func (e *Executor) hostBuildRun(ctx context.Context, command *platformv1.WorkerB
 		return err
 	}
 
+	// 构建密钥文件：固定目录、0700/0600，构建结束（含失败、取消）无条件清理。
+	// defer 先于写入登记，写到一半失败也不会残留。
+	defer os.RemoveAll(buildrunner.BuildAuthDir)
+	if err := writeHostSecrets(buildrunner.BuildAuthDir, task.Secrets); err != nil {
+		return err
+	}
+
 	// buildctl 提交：构建在守护进程侧执行；stdout/stderr 合流后分块上报。
 	// args[0] 是固定校验契约的子命令标记；buildctl 实际参数从 args[1:] 起，
 	// metadata 由 buildctl --metadata-file 写入固定路径（与 pod 路径同契约）。
@@ -204,6 +284,9 @@ func (e *Executor) hostBuildRun(ctx context.Context, command *platformv1.WorkerB
 	if err != nil {
 		return err
 	}
+	// 日志脱敏与 Pod 路径同一实现：仓库凭据与构建密钥的已知明文替换为 [REDACTED]。
+	// 脱敏器会扣留最长秘密长度的尾部，输出读完后必须 Close 才会冲出。
+	redactor := buildrunner.NewRedactingWriter(hostLogWriter{emit: emitChunk}, redactionSecrets)
 	cmd.Stdout = pw
 	cmd.Stderr = pw
 	if err := cmd.Start(); err != nil {
@@ -218,7 +301,7 @@ func (e *Executor) hostBuildRun(ctx context.Context, command *platformv1.WorkerB
 		for {
 			n, readErr := pr.Read(buffer)
 			if n > 0 {
-				emitChunk(buffer[:n])
+				_, _ = redactor.Write(buffer[:n])
 			}
 			if readErr != nil {
 				return
@@ -228,6 +311,8 @@ func (e *Executor) hostBuildRun(ctx context.Context, command *platformv1.WorkerB
 	err = cmd.Wait()
 	pw.Close()
 	wg.Wait()
+	// 先冲出被扣留的尾部，终态事件携带 LogsComplete 时日志必须已经完整上报。
+	_ = redactor.Close()
 	if err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -264,24 +349,6 @@ func (e *Executor) cancelHostBuild(ctx context.Context, command *platformv1.Work
 		}
 	}
 	return emitter.BuildEvent(&platformv1.WorkerBuildEvent{AttemptId: command.AttemptId, Kind: "STOPPED", JobUid: command.JobUid, LogsComplete: true})
-}
-
-func writeHostTempFile(pattern string, content []byte) (string, error) {
-	file, err := os.CreateTemp("", pattern)
-	if err != nil {
-		return "", err
-	}
-	if _, err := file.Write(content); err != nil {
-		file.Close()
-		os.Remove(file.Name())
-		return "", err
-	}
-	if err := file.Chmod(0600); err != nil {
-		file.Close()
-		os.Remove(file.Name())
-		return "", err
-	}
-	return file.Name(), file.Close()
 }
 
 // hostWorldReadable 让守护用户读取 worker(root) 准备的源码上下文。

@@ -168,6 +168,30 @@ func TestRedactionCrossWriteAndFlush(t *testing.T) {
 		}
 	}
 }
+
+// 没有任何已知秘密时脱敏器应原样透传：此前 hold 为 0 会让 cutoff 多出 1 而越界 panic。
+func TestRedactionWithoutSecretsPassesThrough(t *testing.T) {
+	for _, secrets := range [][][]byte{nil, {}, {nil, {}}} {
+		var output bytes.Buffer
+		r := NewRedactingWriter(&output, secrets)
+		if _, err := r.Write([]byte("plain ")); err != nil {
+			t.Fatal(err)
+		}
+		// 无秘密时不需要扣留尾部：Close 之前内容就应已经写出。
+		if output.String() != "plain " {
+			t.Fatalf("无秘密时不应扣留输出: %q", output.String())
+		}
+		if _, err := r.Write([]byte("text")); err != nil {
+			t.Fatal(err)
+		}
+		if err := r.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if output.String() != "plain text" {
+			t.Fatal(output.String())
+		}
+	}
+}
 func TestRegistryCredentials0600AndHelperForbidden(t *testing.T) {
 	p := testPaths(t)
 	config := []byte(`{"auths":{"registry.example":{"auth":"dXNlcjpwYXNzd29yZA=="}}}`)

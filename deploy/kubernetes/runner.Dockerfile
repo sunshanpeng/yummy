@@ -10,6 +10,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY internal/infra/buildrunner ./internal/infra/buildrunner
 COPY internal/infra/sourcearchive ./internal/infra/sourcearchive
+COPY internal/lib/observability ./internal/lib/observability
 COPY cmd/build-runner ./cmd/build-runner
 ARG TARGETOS=linux
 ARG TARGETARCH=amd64
