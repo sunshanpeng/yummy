@@ -20,23 +20,22 @@ export const metricWindows = [
 // GetRuntimeLogs 无限分页：podUid/container 变化会改变查询键，游标自动归零。
 // 游标与服务端查询作用域绑定，跨过滤条件的游标会被服务端拒绝，因此过滤条件必须进查询键。
 export function useRuntimeLogs(
-  input: { workspaceId: string; applicationId: string; podUid?: string; container?: string },
+  input: { workspaceId: string; applicationId: string; podUid: string; container: string; since: string; until: string },
   options?: { enabled?: boolean },
 ) {
   const user = useUser();
   const scope = useContext(ScopeContext);
-  const podUid = input.podUid ?? "";
-  const container = input.container ?? "";
+  const request = { ...input, limit: runtimeLogPageSize };
   const descriptor = createQueryOptions(
     DeploymentService.method.getRuntimeLogs,
-    { workspaceId: input.workspaceId, applicationId: input.applicationId, limit: runtimeLogPageSize, cursor: "", podUid, container },
+    { ...request, cursor: "" },
     { transport: platform.transport },
   );
   return useInfiniteQuery({
     queryKey: ["scope", user.id, user.authVersion.toString(), scope, ...descriptor.queryKey],
     queryFn: async ({ pageParam, signal }) => {
       const response = await platform.deployments.getRuntimeLogs(
-        { workspaceId: input.workspaceId, applicationId: input.applicationId, limit: runtimeLogPageSize, cursor: pageParam, podUid, container },
+        { ...request, cursor: pageParam },
         { signal },
       );
       return response;

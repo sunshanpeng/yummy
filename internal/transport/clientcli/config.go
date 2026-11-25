@@ -20,13 +20,19 @@ const maxConfigBytes = 1 << 20
 
 var profilePattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$`)
 
+type projectTarget struct {
+	Workspace   string `json:"workspace"`
+	Application string `json:"application"`
+}
+
 type profile struct {
-	Server       string    `json:"server"`
-	Workspace    string    `json:"workspace,omitempty"`
-	Application  string    `json:"application,omitempty"`
-	Token        string    `json:"token,omitempty"`
-	RefreshToken string    `json:"refresh_token,omitempty"`
-	TokenExpiry  time.Time `json:"token_expiry,omitempty"`
+	Server       string                   `json:"server"`
+	Workspace    string                   `json:"workspace,omitempty"`
+	Application  string                   `json:"application,omitempty"`
+	Token        string                   `json:"token,omitempty"`
+	RefreshToken string                   `json:"refresh_token,omitempty"`
+	TokenExpiry  time.Time                `json:"token_expiry,omitempty"`
+	Projects     map[string]projectTarget `json:"projects,omitempty"`
 }
 
 type publicProfile struct {
@@ -139,6 +145,9 @@ func (s configStore) change(name string, update func(*profile) error) (profile, 
 		data, err := json.Marshal(current)
 		if err != nil {
 			return err
+		}
+		if len(data) > maxConfigBytes {
+			return errors.New("profile 文件超过大小限制")
 		}
 		return atomicSecureWrite(root, name+".json", data)
 	})

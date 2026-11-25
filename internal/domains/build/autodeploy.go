@@ -28,14 +28,15 @@ type VerifiedArtifact struct {
 // VERIFIED，携带构建时冻结的发布期望；候选是否已有发布由部署域按自身
 // 事实过滤，本视图不做该判定。
 type AutoDeployCandidate struct {
-	BuildID                string
-	WorkspaceID            string
-	ApplicationID          string
-	ActorID                string
-	ActorAuthVersion       int64
-	RuntimeConfigRevision  int64
-	ExpectedServingRelease string
-	Artifact               VerifiedArtifact
+	BuildID                   string
+	WorkspaceID               string
+	ApplicationID             string
+	ActorID                   string
+	ActorAuthVersion          int64
+	RuntimeConfigRevision     int64
+	ExpectedServingRelease    string
+	ExpectedRuntimeGeneration *int64
+	Artifact                  VerifiedArtifact
 }
 
 // AutoDeployCandidates 返回最多 limit 条自动发布候选（auto_deploy=TRUE、构建
@@ -46,22 +47,23 @@ func (s *Service) AutoDeployCandidates(ctx context.Context, limit int) ([]AutoDe
 		return nil, authorization.ErrInvalid
 	}
 	var rows []struct {
-		BuildID                string `gorm:"column:build_id"`
-		WorkspaceID            string
-		ApplicationID          string
-		ActorID                string
-		ActorAuthVersion       int64  `gorm:"column:actor_auth_version"`
-		RuntimeConfigRevision  int64  `gorm:"column:runtime_config_revision"`
-		ExpectedServingRelease string `gorm:"column:expected_serving_release"`
-		ArtifactID             string `gorm:"column:artifact_id"`
-		RegistryID             string `gorm:"column:registry_id"`
-		CredentialVersion      int64  `gorm:"column:credential_version"`
-		Repository             string
-		Digest                 string
-		Platform               string
+		BuildID                   string `gorm:"column:build_id"`
+		WorkspaceID               string
+		ApplicationID             string
+		ActorID                   string
+		ActorAuthVersion          int64  `gorm:"column:actor_auth_version"`
+		RuntimeConfigRevision     int64  `gorm:"column:runtime_config_revision"`
+		ExpectedServingRelease    string `gorm:"column:expected_serving_release"`
+		ExpectedRuntimeGeneration *int64 `gorm:"column:expected_runtime_generation"`
+		ArtifactID                string `gorm:"column:artifact_id"`
+		RegistryID                string `gorm:"column:registry_id"`
+		CredentialVersion         int64  `gorm:"column:credential_version"`
+		Repository                string
+		Digest                    string
+		Platform                  string
 	}
 	err := s.db.WithContext(ctx).Table("builds AS b").
-		Select("b.id AS build_id, b.workspace_id, b.application_id, b.actor_id, b.actor_auth_version, b.runtime_config_revision, b.expected_serving_release, a.id AS artifact_id, a.registry_id, a.credential_version, a.repository, a.digest, a.platform").
+		Select("b.id AS build_id, b.workspace_id, b.application_id, b.actor_id, b.actor_auth_version, b.runtime_config_revision, b.expected_serving_release, b.expected_runtime_generation, a.id AS artifact_id, a.registry_id, a.credential_version, a.repository, a.digest, a.platform").
 		Joins("JOIN build_artifacts a ON a.build_id = b.id AND a.workspace_id = b.workspace_id AND a.application_id = b.application_id").
 		Where("b.auto_deploy = TRUE AND b.state = ? AND a.state = 'VERIFIED' AND a.verified_at IS NOT NULL", Succeeded).
 		Order("b.created_at, b.id").
@@ -73,13 +75,14 @@ func (s *Service) AutoDeployCandidates(ctx context.Context, limit int) ([]AutoDe
 	out := make([]AutoDeployCandidate, 0, len(rows))
 	for _, row := range rows {
 		out = append(out, AutoDeployCandidate{
-			BuildID:                row.BuildID,
-			WorkspaceID:            row.WorkspaceID,
-			ApplicationID:          row.ApplicationID,
-			ActorID:                row.ActorID,
-			ActorAuthVersion:       row.ActorAuthVersion,
-			RuntimeConfigRevision:  row.RuntimeConfigRevision,
-			ExpectedServingRelease: row.ExpectedServingRelease,
+			BuildID:                   row.BuildID,
+			WorkspaceID:               row.WorkspaceID,
+			ApplicationID:             row.ApplicationID,
+			ActorID:                   row.ActorID,
+			ActorAuthVersion:          row.ActorAuthVersion,
+			RuntimeConfigRevision:     row.RuntimeConfigRevision,
+			ExpectedServingRelease:    row.ExpectedServingRelease,
+			ExpectedRuntimeGeneration: row.ExpectedRuntimeGeneration,
 			Artifact: VerifiedArtifact{
 				ID:                row.ArtifactID,
 				WorkspaceID:       row.WorkspaceID,

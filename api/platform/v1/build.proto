@@ -33,6 +33,7 @@ message BuildInput {
   string source_snapshot_id = 1; int64 config_revision = 2; int64 expected_policy_revision = 3;
   BuildOverrides overrides = 4; string idempotency_key = 5; bool auto_deploy = 6; int64 runtime_config_revision = 7;
   string expected_serving_release = 8;
+  optional int64 expected_runtime_generation = 9;
 }
 message GetBuildConfigRequest { string workspace_id = 1; string application_id = 2; }
 message GetBuildConfigResponse { BuildConfig config = 1; int64 revision = 2; }

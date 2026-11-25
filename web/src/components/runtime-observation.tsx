@@ -22,7 +22,7 @@ export function RuntimeObservation({ status, statusPending }: { status?: Runtime
   }
   return (
     <div className="stack">
-      <RuntimeLogsCard />
+      {can(app, "logs:read") && <RuntimeLogsCard />}
       <RuntimeMetricsCard />
     </div>
   );

@@ -83,9 +83,9 @@ func TestOAuthHTTPAndMCPWiring(t *testing.T) {
 	verifier := "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHijklmn"
 	hash := sha256.Sum256([]byte(verifier))
 	callback := "http://127.0.0.1:45678/callback"
-	login := func(clientID, resource string) string {
+	login := func(clientID, resource, scope string) string {
 		t.Helper()
-		query := url.Values{"response_type": {"code"}, "client_id": {clientID}, "redirect_uri": {callback}, "scope": {"application:read"}, "state": {"integration-long-random-state-12345"}, "code_challenge": {base64.RawURLEncoding.EncodeToString(hash[:])}, "code_challenge_method": {"S256"}, "resource": {resource}}
+		query := url.Values{"response_type": {"code"}, "client_id": {clientID}, "redirect_uri": {callback}, "scope": {scope}, "state": {"integration-long-random-state-12345"}, "code_challenge": {base64.RawURLEncoding.EncodeToString(hash[:])}, "code_challenge_method": {"S256"}, "resource": {resource}}
 		res, err := client.Get(base + "/oauth/authorize?" + query.Encode())
 		if err != nil {
 			t.Fatal(err)
@@ -153,7 +153,7 @@ func TestOAuthHTTPAndMCPWiring(t *testing.T) {
 		}
 		return token.Access
 	}
-	token := login("yummy-cli", base+"/api")
+	token := login("yummy-cli", base+"/api", "application:read")
 	bearer := connect.WithInterceptors(connect.UnaryInterceptorFunc(func(next connect.UnaryFunc) connect.UnaryFunc {
 		return func(ctx context.Context, r connect.AnyRequest) (connect.AnyResponse, error) {
 			r.Header().Set("Authorization", "Bearer "+token)
@@ -163,6 +163,13 @@ func TestOAuthHTTPAndMCPWiring(t *testing.T) {
 	oauthApps := platformv1connect.NewApplicationServiceClient(http.DefaultClient, base+"/api", bearer)
 	if _, err = oauthApps.GetApplication(context.Background(), connect.NewRequest(&platformv1.GetApplicationRequest{WorkspaceId: workspaceID, ApplicationId: appID})); err != nil {
 		t.Fatalf("OAuth API 访问: %v", err)
+	}
+	oauthRuntime := platformv1connect.NewDeploymentServiceClient(http.DefaultClient, base+"/api", bearer)
+	if _, err := oauthRuntime.GetRuntimeLogs(context.Background(), connect.NewRequest(&platformv1.GetRuntimeLogsRequest{WorkspaceId: workspaceID, ApplicationId: appID})); connect.CodeOf(err) != connect.CodeNotFound {
+		t.Fatalf("仅应用读取权限不能查看运行日志: %v", err)
+	}
+	if _, err := oauthRuntime.GetRuntimeMetrics(context.Background(), connect.NewRequest(&platformv1.GetRuntimeMetricsRequest{WorkspaceId: workspaceID, ApplicationId: appID})); connect.CodeOf(err) != connect.CodeNotFound {
+		t.Fatalf("仅应用读取权限不能查看运行指标: %v", err)
 	}
 	resource := base + "/mcp/apps/" + appID
 	request, _ := http.NewRequest(http.MethodPost, resource, strings.NewReader(`{}`))
@@ -177,10 +184,10 @@ func TestOAuthHTTPAndMCPWiring(t *testing.T) {
 		t.Fatalf("API token 跨资源访问 MCP: %d", res.StatusCode)
 	}
 	principal := authorization.Principal{UserID: admin.ID, AuthVersion: admin.AuthVersion}
-	if err = product.OAuth.RegisterClient(context.Background(), principal, oauth.ClientInput{ID: "mcp-test", Name: "集成 MCP", RedirectURIs: []string{callback}, Scopes: []string{"application:read"}, Resources: []string{resource}}); err != nil {
+	if err = product.OAuth.RegisterClient(context.Background(), principal, oauth.ClientInput{ID: "mcp-test", Name: "集成 MCP", RedirectURIs: []string{callback}, Scopes: []string{"application:read", "logs:read", "runtime:read"}, Resources: []string{resource}}); err != nil {
 		t.Fatal(err)
 	}
-	mcpToken := login("mcp-test", resource)
+	mcpToken := login("mcp-test", resource, "application:read logs:read runtime:read")
 	request, _ = http.NewRequest(http.MethodPost, resource, strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"1"}}}`))
 	request.Header.Set("Authorization", "Bearer "+mcpToken)
 	request.Header.Set("Content-Type", "application/json")
@@ -193,6 +200,22 @@ func TestOAuthHTTPAndMCPWiring(t *testing.T) {
 	_ = res.Body.Close()
 	if res.StatusCode != 200 || !bytes.Contains(data, []byte("yummy-application")) {
 		t.Fatalf("MCP initialize: %d %s", res.StatusCode, data)
+	}
+	for tool, field := range map[string]string{"runtime_logs": "resumeCursor", "runtime_metrics": "samples"} {
+		body, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": map[string]any{"name": tool, "arguments": map[string]any{}}})
+		req, _ := http.NewRequest(http.MethodPost, resource, bytes.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+mcpToken)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json, text/event-stream")
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		result, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusOK || !bytes.Contains(result, []byte(`"`+field+`"`)) || bytes.Contains(result, []byte(`"isError":true`)) {
+			t.Fatalf("MCP %s: %d %s", tool, resp.StatusCode, result)
+		}
 	}
 	connections, err := product.OAuth.ListConnections(context.Background(), principal)
 	if err != nil || len(connections) != 2 {

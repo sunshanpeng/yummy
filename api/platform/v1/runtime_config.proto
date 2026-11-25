@@ -5,6 +5,8 @@ option go_package = "github.com/sunshanpeng/yummy/gen/go/platform/v1;platformv1"
 service RuntimeConfigService {
   rpc GetRuntimeConfig(GetRuntimeConfigRequest) returns (GetRuntimeConfigResponse);
   rpc SaveRuntimeConfig(SaveRuntimeConfigRequest) returns (SaveRuntimeConfigResponse);
+  rpc CompareRuntimeConfigs(CompareRuntimeConfigsRequest) returns (CompareRuntimeConfigsResponse);
+  rpc RestoreRuntimeConfig(RestoreRuntimeConfigRequest) returns (RestoreRuntimeConfigResponse);
 }
 message RuntimeResources { int64 cpu_request_milli = 1; int64 cpu_limit_milli = 2; int64 memory_request_mib = 3; int64 memory_limit_mib = 4; }
 message RuntimeProbe { string path = 1; int32 initial_delay_seconds = 2; int32 period_seconds = 3; int32 timeout_seconds = 4; int32 failure_threshold = 5; }
@@ -29,3 +31,25 @@ message SaveRuntimeConfigRequest {
   repeated string domains = 13; RuntimeResources resources = 14; string idempotency_key = 15;
 }
 message SaveRuntimeConfigResponse { RuntimeConfig config = 1; }
+// 复制指定历史版本为新草稿，已发布版本与历史配置仍保留。
+message RestoreRuntimeConfigRequest {
+  string workspace_id = 1;
+  string application_id = 2;
+  int64 source_revision = 3;
+  int64 expected_revision = 4;
+  string idempotency_key = 5;
+}
+message RestoreRuntimeConfigResponse { RuntimeConfig config = 1; }
+message CompareRuntimeConfigsRequest {
+  string workspace_id = 1;
+  string application_id = 2;
+  int64 base_revision = 3;
+  int64 target_revision = 4;
+}
+// 只返回字段和键名，不返回变量值、文件内容或密文。
+message RuntimeConfigChange {
+  string field = 1;
+  string name = 2;
+  string operation = 3;
+}
+message CompareRuntimeConfigsResponse { repeated RuntimeConfigChange changes = 1; }

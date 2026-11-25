@@ -233,27 +233,36 @@ func (s *Service) ApplyRuntimeMetric(ctx context.Context, worker WorkerIdentity,
 }
 
 // ListRuntimeLogs 按 (created_at, id) 时间正序分页返回运行日志块，可按 pod/container 过滤。
-// 授权走 access.Do + application:read；游标绑定查询作用域，跨应用或改参的游标无效。
-func (s *Service) ListRuntimeLogs(ctx context.Context, p authorization.Principal, ws, app string, limit int, cursor, podUID, container string) (RuntimeLogPage, error) {
+// 授权走 access.Do + logs:read；游标绑定查询作用域，跨应用或改参的游标无效。
+func (s *Service) ListRuntimeLogs(ctx context.Context, p authorization.Principal, ws, app string, filter RuntimeLogQuery) (RuntimeLogPage, error) {
 	result := RuntimeLogPage{Items: []RuntimeLog{}}
-	if len(podUID) > 64 || len(container) > 128 {
+	if len(filter.PodUID) > 64 || len(filter.Container) > 128 || !filter.Since.IsZero() && !filter.Until.IsZero() && filter.Until.Before(filter.Since) {
 		return result, authorization.ErrInvalid
 	}
-	scope := "runtime-logs:" + ws + ":" + app + ":" + p.UserID + ":" + p.TokenID + ":" + podUID + ":" + container
-	limit, after, err := store.ParsePage(limit, cursor, scope)
+	scope := "runtime-logs:" + ws + ":" + app + ":" + p.UserID + ":" + p.TokenID + ":" + filter.PodUID + ":" + filter.Container
+	if !filter.Since.IsZero() || !filter.Until.IsZero() {
+		scope += ":" + filter.Since.UTC().Format(time.RFC3339Nano) + ":" + filter.Until.UTC().Format(time.RFC3339Nano)
+	}
+	limit, after, err := store.ParsePage(filter.Limit, filter.Cursor, scope)
 	if err != nil {
 		return result, authorization.ErrInvalid
 	}
 	err = s.access.Do(ctx, p, false, func(tx *gorm.DB, current authorization.Principal) error {
-		if _, _, err := s.access.Application(tx, current, ws, app, authorization.ApplicationRead); err != nil {
+		if _, _, err := s.access.Application(tx, current, ws, app, authorization.LogsRead); err != nil {
 			return err
 		}
 		query := tx.Where("workspace_id = ? AND application_id = ?", ws, app)
-		if podUID != "" {
-			query = query.Where("pod_uid = ?", podUID)
+		if filter.PodUID != "" {
+			query = query.Where("pod_uid = ?", filter.PodUID)
 		}
-		if container != "" {
-			query = query.Where("container = ?", container)
+		if filter.Container != "" {
+			query = query.Where("container = ?", filter.Container)
+		}
+		if !filter.Since.IsZero() {
+			query = query.Where("created_at >= ?", filter.Since)
+		}
+		if !filter.Until.IsZero() {
+			query = query.Where("created_at <= ?", filter.Until)
 		}
 		if after != "" {
 			stamp, id, ok := splitRuntimeLogCursor(after)
@@ -270,6 +279,10 @@ func (s *Service) ListRuntimeLogs(ctx context.Context, p authorization.Principal
 			result.NextCursor = store.NextCursor(scope, runtimeLogCursor(rows[limit-1]))
 			rows = rows[:limit]
 		}
+		result.ResumeCursor = filter.Cursor
+		if len(rows) != 0 {
+			result.ResumeCursor = store.NextCursor(scope, runtimeLogCursor(rows[len(rows)-1]))
+		}
 		for _, row := range rows {
 			result.Items = append(result.Items, RuntimeLog{ID: row.ID, WorkspaceID: row.WorkspaceID, ApplicationID: row.ApplicationID, PodUID: row.PodUID, Container: row.Container, RestartCount: row.RestartCount, Seq: row.Seq, Content: row.Content, Truncated: row.Truncated, CreatedAt: row.CreatedAt})
 		}
@@ -285,7 +298,7 @@ func (s *Service) ListRuntimeMetrics(ctx context.Context, p authorization.Princi
 	}
 	var rows []runtimeMetricSampleRecord
 	err := s.access.Do(ctx, p, false, func(tx *gorm.DB, current authorization.Principal) error {
-		if _, _, err := s.access.Application(tx, current, ws, app, authorization.ApplicationRead); err != nil {
+		if _, _, err := s.access.Application(tx, current, ws, app, authorization.RuntimeRead); err != nil {
 			return err
 		}
 		query := tx.Where("workspace_id = ? AND application_id = ?", ws, app)

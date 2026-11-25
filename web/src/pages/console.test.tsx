@@ -191,6 +191,34 @@ describe("正式页面权限与作用域", () => {
     await user.click(screen.getByRole("button", { name: "保存运行配置" }));
     expect(save).toHaveBeenCalledWith(expect.objectContaining({ expectedRevision: 2n, variables: [{ name: "API_KEY", value: "", sensitive: true, keepExisting: true }], files: [{ path: "/app/secret", content: "", sensitive: true, keepExisting: true }] }));
   });
+  it("导入变量只预览键名，保留既有敏感值并将新变量加入未保存草稿", async () => {
+    vi.spyOn(platform.transport, "unary").mockImplementation(async (method) => {
+      const values = method.name === "GetWorkspace"
+        ? { workspace: { id: "w1", slug: "w1", name: "空间" } }
+        : method.name === "GetApplication"
+          ? { application: { id: "a1", workspaceId: "w1", name: "app1", capabilities: ["config:read", "config:write"] } }
+          : method.name === "GetRuntimeConfig"
+            ? { config: { revision: 1n, type: "HTTP", port: 8080, variables: [{ name: "TOKEN", sensitive: true, configured: true }] } }
+            : {};
+      return { stream: false, service: method.parent, method, header: new Headers(), trailer: new Headers(), message: create(method.output, values) };
+    });
+    const save = vi.spyOn(platform.runtime, "saveRuntimeConfig").mockResolvedValue(create(SaveRuntimeConfigResponseSchema, { config: { revision: 2n } }));
+    mount("/w/w1/apps/app1/deployments/runtime-config");
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "导入 .env" }));
+    await user.type(screen.getByLabelText(".env 内容"), "TOKEN=should-not-replace{Enter}NEW_TOKEN=new-secret");
+    await user.click(screen.getByRole("button", { name: "预览导入" }));
+    expect(screen.getByText("保留敏感值")).toBeTruthy();
+    expect(screen.getByText("新增 · 敏感")).toBeTruthy();
+    expect(screen.queryByText("new-secret")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "应用到表单" }));
+    expect(save).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "保存运行配置" }));
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({ variables: [
+      { name: "TOKEN", value: "", sensitive: true, keepExisting: true },
+      { name: "NEW_TOKEN", value: "new-secret", sensitive: true, keepExisting: false },
+    ] }));
+  });
   it("首次进入运行配置提供语言模板与必填标注", async () => {
     vi.spyOn(platform.transport, "unary").mockImplementation(async (method) => {
       const values = method.name === "GetWorkspace" ? { workspace: { id: "w1", slug: "w1", name: "空间", capabilities: ["workspace:read"] } } : method.name === "ListWorkspaces" ? { workspaces: [] } : method.name === "GetApplication" ? { application: { id: "a1", workspaceId: "w1", name: "app", capabilities: ["config:read", "config:write"] } } : method.name === "ResolveExecution" ? { summary: { policyRevision: 1n, ready: true, platform: "linux/amd64" } } : { config: { workspaceId: "w1", applicationId: "a1", revision: 0n, type: "HTTP", port: 8080 } };

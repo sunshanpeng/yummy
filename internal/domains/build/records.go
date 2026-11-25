@@ -23,6 +23,7 @@ type buildRecord struct {
 	AutoDeploy                                                     bool
 	RuntimeConfigRevision                                          *int64
 	ExpectedServingRelease                                         string
+	ExpectedRuntimeGeneration                                      *int64 `gorm:"column:expected_runtime_generation"`
 	RetryOf                                                        *string
 	State, Stage, DesiredState, StopReason, ErrorCode, QueueReason string
 	Version, LogsBytes                                             int64

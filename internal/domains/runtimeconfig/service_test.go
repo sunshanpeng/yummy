@@ -228,3 +228,45 @@ func TestLatestRevisionFacts(t *testing.T) {
 		t.Fatalf("草稿版本事实错误: %d %t %v", revision, confirmed, err)
 	}
 }
+
+func TestRestoreRevisionKeepsDraftHistoryAndRestoresSensitiveValues(t *testing.T) {
+	s, db, p := setup(t)
+	ctx := context.Background()
+	base := runtimeconfig.DefaultInput()
+	base.Confirmed = true
+	base.Variables = []runtimeconfig.VariableInput{{Name: "TOKEN", Sensitive: true, Value: "original-secret"}}
+	if _, err := s.Save(ctx, p, "space", "app", base); err != nil {
+		t.Fatal(err)
+	}
+	draft := base
+	draft.ExpectedRevision = 1
+	draft.Variables = []runtimeconfig.VariableInput{{Name: "TOKEN", Sensitive: true, Value: "draft-secret"}}
+	if _, err := s.Save(ctx, p, "space", "app", draft); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.RestoreRevision(ctx, p, "space", "app", 1, 3, "stale"); !errors.Is(err, authorization.ErrConflict) {
+		t.Fatalf("过期草稿应被拒绝：%v", err)
+	}
+	restored, err := s.RestoreRevision(ctx, p, "space", "app", 1, 2, "restore")
+	if err != nil || restored.Revision != 3 || len(restored.Variables) != 1 || restored.Variables[0].Value != "" {
+		t.Fatalf("恢复后的公开配置 = %#v, %v", restored, err)
+	}
+	replayed, err := s.RestoreRevision(ctx, p, "space", "app", 1, 2, "restore")
+	if err != nil || replayed.Revision != 3 {
+		t.Fatalf("重试生成了不同配置：%#v, %v", replayed, err)
+	}
+	changed, err := s.Compare(ctx, p, "space", "app", 1, 2)
+	if err != nil || len(changed) != 1 || changed[0] != (Change{Field: "variable", Name: "TOKEN", Operation: "UPDATED"}) {
+		t.Fatalf("敏感配置差异只应显示名称和变更类型：%#v, %v", changed, err)
+	}
+	unchanged, err := s.Compare(ctx, p, "space", "app", 1, 3)
+	if err != nil || len(unchanged) != 0 {
+		t.Fatalf("重新加密的同一密钥不应标为有变更：%#v, %v", unchanged, err)
+	}
+	for revision, secret := range map[int64]string{1: "original-secret", 2: "draft-secret", 3: "original-secret"} {
+		value, err := s.MaterializeForDeployment(db, "space", "app", revision)
+		if err != nil || value.Variables["TOKEN"] != secret {
+			t.Fatalf("配置版本 %d 的密钥与预期不一致：%v", revision, err)
+		}
+	}
+}

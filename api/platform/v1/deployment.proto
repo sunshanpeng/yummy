@@ -2,6 +2,7 @@ syntax = "proto3";
 package platform.v1;
 option go_package = "github.com/sunshanpeng/yummy/gen/go/platform/v1;platformv1";
 service DeploymentService {
+  rpc PreviewDeployment(PreviewDeploymentRequest) returns (PreviewDeploymentResponse);
   rpc CreateDeployment(CreateDeploymentRequest) returns (CreateDeploymentResponse);
   rpc GetDeployment(GetDeploymentRequest) returns (GetDeploymentResponse);
   rpc ListDeployments(ListDeploymentsRequest) returns (ListDeploymentsResponse);
@@ -29,6 +30,15 @@ message RuntimeStatus {
   string workspace_id = 1; string application_id = 2; int64 generation = 3; string desired_state = 4;
   string desired_release_id = 5; string serving_release_id = 6; int64 serving_generation = 7;
   int64 observed_generation = 8; string observed_state = 9; string active_operation_id = 10; string last_observed_at = 11;
+  int64 serving_config_revision = 12;
+}
+message PreviewDeploymentRequest {
+  string workspace_id = 1; string application_id = 2; string artifact_id = 3; int64 runtime_config_revision = 4;
+  int64 expected_policy_revision = 5; ExpectedRuntime expected = 6; string target_release_id = 7;
+}
+message PreviewDeploymentResponse {
+  string artifact_digest = 1; string platform = 2; int64 runtime_config_revision = 3;
+  repeated string domains = 4; string tls_status = 5;
 }
 message CreateDeploymentRequest {
   string workspace_id = 1; string application_id = 2; string artifact_id = 3; int64 runtime_config_revision = 4;
@@ -50,8 +60,16 @@ message RuntimeLogChunk {
   string id = 1; string workspace_id = 2; string application_id = 3; string pod_uid = 4;
   string container = 5; int32 restart_count = 6; int64 seq = 7; bytes content = 8; bool truncated = 9; string created_at = 10;
 }
-message GetRuntimeLogsRequest { string workspace_id = 1; string application_id = 2; int32 limit = 3; string cursor = 4; string pod_uid = 5; string container = 6; }
-message GetRuntimeLogsResponse { repeated RuntimeLogChunk chunks = 1; string next_cursor = 2; }
+message GetRuntimeLogsRequest {
+  string workspace_id = 1; string application_id = 2; int32 limit = 3; string cursor = 4; string pod_uid = 5; string container = 6;
+  // 可选的 RFC3339 落库时间边界，包含边界时刻。
+  string since = 7; string until = 8;
+}
+message GetRuntimeLogsResponse {
+  repeated RuntimeLogChunk chunks = 1; string next_cursor = 2;
+  // 已读到的最后位置，尾页或当前没有新日志时仍可用来继续追踪。
+  string resume_cursor = 3;
+}
 // 基础监控采样点；since/until 为可选 RFC3339 时间，缺省覆盖全部保留窗口（24 小时）。
 message RuntimeMetricSample {
   string id = 1; string workspace_id = 2; string application_id = 3; string release_id = 4;

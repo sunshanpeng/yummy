@@ -212,38 +212,49 @@ func TestListRuntimeLogsPaginationFilterAndAccess(t *testing.T) {
 	seedRuntimeLogs(t, e, "app_one", "pod-list", "list", 5, 64, 100000)
 	ctx := context.Background()
 	viewer := authorization.Principal{UserID: "viewer", AuthVersion: 1}
-	page, err := e.service.ListRuntimeLogs(ctx, e.root, "space", "app_one", 2, "", "", "")
+	page, err := e.service.ListRuntimeLogs(ctx, e.root, "space", "app_one", RuntimeLogQuery{Limit: 2})
 	if err != nil || len(page.Items) != 2 || page.Items[0].Seq != 1 || page.Items[1].Seq != 2 || page.NextCursor == "" {
 		t.Fatalf("第一页错误: %+v %v", page, err)
 	}
-	second, err := e.service.ListRuntimeLogs(ctx, e.root, "space", "app_one", 2, page.NextCursor, "", "")
+	second, err := e.service.ListRuntimeLogs(ctx, e.root, "space", "app_one", RuntimeLogQuery{Limit: 2, Cursor: page.NextCursor})
 	if err != nil || len(second.Items) != 2 || second.Items[0].Seq != 3 || second.Items[1].Seq != 4 || second.NextCursor == "" {
 		t.Fatalf("第二页错误: %+v %v", second, err)
 	}
-	third, err := e.service.ListRuntimeLogs(ctx, e.root, "space", "app_one", 2, second.NextCursor, "", "")
-	if err != nil || len(third.Items) != 1 || third.Items[0].Seq != 5 || third.NextCursor != "" {
+	third, err := e.service.ListRuntimeLogs(ctx, e.root, "space", "app_one", RuntimeLogQuery{Limit: 2, Cursor: second.NextCursor})
+	if err != nil || len(third.Items) != 1 || third.Items[0].Seq != 5 || third.NextCursor != "" || third.ResumeCursor == "" {
 		t.Fatalf("尾页错误: %+v %v", third, err)
 	}
-	filtered, err := e.service.ListRuntimeLogs(ctx, e.root, "space", "app_one", 10, "", "pod-list", "app")
+	bounded, err := e.service.ListRuntimeLogs(ctx, e.root, "space", "app_one", RuntimeLogQuery{Since: second.Items[0].CreatedAt, Until: third.Items[0].CreatedAt, Limit: 1})
+	if err != nil || len(bounded.Items) != 1 || bounded.Items[0].Seq != 3 || bounded.NextCursor == "" {
+		t.Fatalf("时间范围不准确: %+v %v", bounded, err)
+	}
+	if _, err := e.service.ListRuntimeLogs(ctx, e.root, "space", "app_one", RuntimeLogQuery{Cursor: bounded.NextCursor}); !errors.Is(err, authorization.ErrInvalid) {
+		t.Fatalf("时间过滤游标可跨范围复用: %v", err)
+	}
+	resumed, err := e.service.ListRuntimeLogs(ctx, e.root, "space", "app_one", RuntimeLogQuery{Limit: 2, Cursor: third.ResumeCursor})
+	if err != nil || len(resumed.Items) != 0 || resumed.ResumeCursor != third.ResumeCursor {
+		t.Fatalf("追踪游标重复读取尾页: %+v %v", resumed, err)
+	}
+	filtered, err := e.service.ListRuntimeLogs(ctx, e.root, "space", "app_one", RuntimeLogQuery{Limit: 10, PodUID: "pod-list", Container: "app"})
 	if err != nil || len(filtered.Items) != 5 {
 		t.Fatalf("pod/container 过滤错误: %+v %v", filtered, err)
 	}
-	empty, err := e.service.ListRuntimeLogs(ctx, e.root, "space", "app_one", 10, "", "pod-none", "")
+	empty, err := e.service.ListRuntimeLogs(ctx, e.root, "space", "app_one", RuntimeLogQuery{Limit: 10, PodUID: "pod-none"})
 	if err != nil || len(empty.Items) != 0 {
 		t.Fatalf("空过滤应返回空: %+v %v", empty, err)
 	}
 	// 游标绑定过滤作用域：换过滤条件的游标无效。
-	if _, err := e.service.ListRuntimeLogs(ctx, e.root, "space", "app_one", 2, page.NextCursor, "pod-list", ""); !errors.Is(err, authorization.ErrInvalid) {
+	if _, err := e.service.ListRuntimeLogs(ctx, e.root, "space", "app_one", RuntimeLogQuery{Limit: 2, Cursor: page.NextCursor, PodUID: "pod-list"}); !errors.Is(err, authorization.ErrInvalid) {
 		t.Fatalf("跨作用域游标应无效: %v", err)
 	}
 	// viewer 是 app_one 成员（viewer 角色，含 application:read）可读；非成员应用拒绝。
-	if _, err := e.service.ListRuntimeLogs(ctx, viewer, "space", "app_one", 10, "", "", ""); err != nil {
+	if _, err := e.service.ListRuntimeLogs(ctx, viewer, "space", "app_one", RuntimeLogQuery{Limit: 10}); err != nil {
 		t.Fatalf("应用成员应可读: %v", err)
 	}
-	if _, err := e.service.ListRuntimeLogs(ctx, viewer, "space", "app_two", 10, "", "", ""); !errors.Is(err, authorization.ErrNotFound) {
+	if _, err := e.service.ListRuntimeLogs(ctx, viewer, "space", "app_two", RuntimeLogQuery{Limit: 10}); !errors.Is(err, authorization.ErrNotFound) {
 		t.Fatalf("跨应用应拒绝: %v", err)
 	}
-	if _, err := e.service.ListRuntimeLogs(ctx, authorization.Principal{UserID: "ghost", AuthVersion: 1}, "space", "app_one", 10, "", "", ""); !errors.Is(err, authorization.ErrUnauthenticated) {
+	if _, err := e.service.ListRuntimeLogs(ctx, authorization.Principal{UserID: "ghost", AuthVersion: 1}, "space", "app_one", RuntimeLogQuery{Limit: 10}); !errors.Is(err, authorization.ErrUnauthenticated) {
 		t.Fatalf("未知身份应拒绝: %v", err)
 	}
 }

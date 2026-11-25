@@ -85,22 +85,7 @@ func (a *clientApp) buildCommand() *cobra.Command {
 		if e != nil {
 			return e
 		}
-		for {
-			r, e := c.build.ReadBuildLogs(cmd.Context(), auth(c.token, &platformv1.ReadBuildLogsRequest{WorkspaceId: w, ApplicationId: id, BuildId: args[0], AfterSeq: after, Limit: logLimit}))
-			if e != nil {
-				return rpcError(e)
-			}
-			if e = output(cmd, r.Msg); e != nil {
-				return e
-			}
-			if !follow || r.Msg.Complete {
-				return nil
-			}
-			after = r.Msg.NextSeq
-			if e = waitContext(cmd, time.Second); e != nil {
-				return e
-			}
-		}
+		return a.buildLogs(cmd, c, w, id, args[0], after, logLimit, follow)
 	}}
 	logs.Flags().Int64Var(&after, "after", 0, "日志序号游标")
 	logs.Flags().Int32Var(&logLimit, "limit", 100, "日志块数上限")
@@ -189,6 +174,26 @@ func (a *clientApp) buildCommand() *cobra.Command {
 	root.AddCommand(config, list, get, cancel, logs, watch, newSubmit("preview"), newSubmit("create"), newSubmit("retry BUILD_ID"))
 	return root
 }
+func (a *clientApp) buildLogs(cmd *cobra.Command, c *apiClient, ws, app, buildID string, after int64, limit int32, follow bool) error {
+	for {
+		r, err := c.build.ReadBuildLogs(cmd.Context(), auth(c.token, &platformv1.ReadBuildLogsRequest{WorkspaceId: ws, ApplicationId: app, BuildId: buildID, AfterSeq: after, Limit: limit}))
+		if err != nil {
+			return rpcError(err)
+		}
+		if err := output(cmd, r.Msg); err != nil || !follow || r.Msg.Complete {
+			return err
+		}
+		after = r.Msg.NextSeq
+		if err := waitContext(cmd, time.Second); err != nil {
+			return err
+		}
+		c, err = a.clientForServer(c.base)
+		if err != nil {
+			return err
+		}
+	}
+}
+
 func waitContext(cmd *cobra.Command, d time.Duration) error {
 	timer := time.NewTimer(d)
 	defer timer.Stop()

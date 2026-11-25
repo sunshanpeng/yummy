@@ -81,14 +81,15 @@ type Overrides struct {
 	SecretRefs []SecretRef       `json:"secretRefs,omitempty"`
 }
 type CreateInput struct {
-	SourceSnapshotID       string    `json:"sourceSnapshotId"`
-	ConfigRevision         int64     `json:"configRevision"`
-	ExpectedPolicyRevision int64     `json:"expectedPolicyRevision"`
-	Overrides              Overrides `json:"overrides"`
-	IdempotencyKey         string    `json:"idempotencyKey"`
-	AutoDeploy             bool      `json:"autoDeploy"`
-	RuntimeConfigRevision  int64     `json:"runtimeConfigRevision"`
-	ExpectedServingRelease string    `json:"expectedServingRelease"`
+	SourceSnapshotID          string    `json:"sourceSnapshotId"`
+	ConfigRevision            int64     `json:"configRevision"`
+	ExpectedPolicyRevision    int64     `json:"expectedPolicyRevision"`
+	Overrides                 Overrides `json:"overrides"`
+	IdempotencyKey            string    `json:"idempotencyKey"`
+	AutoDeploy                bool      `json:"autoDeploy"`
+	RuntimeConfigRevision     int64     `json:"runtimeConfigRevision"`
+	ExpectedServingRelease    string    `json:"expectedServingRelease"`
+	ExpectedRuntimeGeneration *int64    `json:"expectedRuntimeGeneration,omitempty"`
 }
 type Preview struct {
 	SourceSnapshotID      string                     `json:"sourceSnapshotId"`

@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file platform/v1/deployment.proto.
  */
 export const file_platform_v1_deployment: GenFile = /*@__PURE__*/
-  fileDesc("ChxwbGF0Zm9ybS92MS9kZXBsb3ltZW50LnByb3RvEgtwbGF0Zm9ybS52MSJaCg9FeHBlY3RlZFJ1bnRpbWUSEgoKZ2VuZXJhdGlvbhgBIAEoAxIaChJzZXJ2aW5nX3JlbGVhc2VfaWQYAiABKAkSFwoPY29uZmlnX3JldmlzaW9uGAMgASgDIncKCVBsYWNlbWVudBIPCgdub2RlX2lkGAEgASgJEhcKD3BvbGljeV9yZXZpc2lvbhgCIAEoAxIUCgxydW50aW1lX3R5cGUYAyABKAkSFgoOZGVmYXVsdF9kb21haW4YBCABKAkSEgoKY3JlYXRlZF9hdBgFIAEoCSKEAQoPUmVsZWFzZUFydGlmYWN0EgoKAmlkGAEgASgJEhMKC3JlZ2lzdHJ5X2lkGAIgASgJEhoKEmNyZWRlbnRpYWxfdmVyc2lvbhgDIAEoAxISCgpyZXBvc2l0b3J5GAQgASgJEg4KBmRpZ2VzdBgFIAEoCRIQCghwbGF0Zm9ybRgGIAEoCSK4AgoHUmVsZWFzZRIKCgJpZBgBIAEoCRIUCgx3b3Jrc3BhY2VfaWQYAiABKAkSFgoOYXBwbGljYXRpb25faWQYAyABKAkSLgoIYXJ0aWZhY3QYBCABKAsyHC5wbGF0Zm9ybS52MS5SZWxlYXNlQXJ0aWZhY3QSHwoXcnVudGltZV9jb25maWdfcmV2aXNpb24YBSABKAMSKQoJcGxhY2VtZW50GAYgASgLMhYucGxhdGZvcm0udjEuUGxhY2VtZW50Eg8KB2RvbWFpbnMYByADKAkSGwoTcHJldmlvdXNfc2VydmluZ19pZBgIIAEoCRITCgtyb2xsYmFja19vZhgJIAEoCRIOCgZzb3VyY2UYCiABKAkSEAoIYWN0b3JfaWQYCyABKAkSEgoKY3JlYXRlZF9hdBgMIAEoCSKKAgoTRGVwbG95bWVudE9wZXJhdGlvbhIKCgJpZBgBIAEoCRIUCgx3b3Jrc3BhY2VfaWQYAiABKAkSFgoOYXBwbGljYXRpb25faWQYAyABKAkSEgoKcmVsZWFzZV9pZBgEIAEoCRISCgpnZW5lcmF0aW9uGAUgASgDEg4KBmFjdGlvbhgGIAEoCRINCgVzdGF0ZRgHIAEoCRIOCgZhY3RpdmUYCCABKAgSEAoIYWN0b3JfaWQYCSABKAkSEgoKZXJyb3JfY29kZRgKIAEoCRITCgtyZWNvdmVyeV9vZhgLIAEoCRISCgpjcmVhdGVkX2F0GAwgASgJEhMKC2ZpbmlzaGVkX2F0GA0gASgJImgKCkRlcGxveW1lbnQSJQoHcmVsZWFzZRgBIAEoCzIULnBsYXRmb3JtLnYxLlJlbGVhc2USMwoJb3BlcmF0aW9uGAIgASgLMiAucGxhdGZvcm0udjEuRGVwbG95bWVudE9wZXJhdGlvbiKoAgoNUnVudGltZVN0YXR1cxIUCgx3b3Jrc3BhY2VfaWQYASABKAkSFgoOYXBwbGljYXRpb25faWQYAiABKAkSEgoKZ2VuZXJhdGlvbhgDIAEoAxIVCg1kZXNpcmVkX3N0YXRlGAQgASgJEhoKEmRlc2lyZWRfcmVsZWFzZV9pZBgFIAEoCRIaChJzZXJ2aW5nX3JlbGVhc2VfaWQYBiABKAkSGgoSc2VydmluZ19nZW5lcmF0aW9uGAcgASgDEhsKE29ic2VydmVkX2dlbmVyYXRpb24YCCABKAMSFgoOb2JzZXJ2ZWRfc3RhdGUYCSABKAkSGwoTYWN0aXZlX29wZXJhdGlvbl9pZBgKIAEoCRIYChBsYXN0X29ic2VydmVkX2F0GAsgASgJIugBChdDcmVhdGVEZXBsb3ltZW50UmVxdWVzdBIUCgx3b3Jrc3BhY2VfaWQYASABKAkSFgoOYXBwbGljYXRpb25faWQYAiABKAkSEwoLYXJ0aWZhY3RfaWQYAyABKAkSHwoXcnVudGltZV9jb25maWdfcmV2aXNpb24YBCABKAMSIAoYZXhwZWN0ZWRfcG9saWN5X3JldmlzaW9uGAUgASgDEi4KCGV4cGVjdGVkGAYgASgLMhwucGxhdGZvcm0udjEuRXhwZWN0ZWRSdW50aW1lEhcKD2lkZW1wb3RlbmN5X2tleRgHIAEoCSJHChhDcmVhdGVEZXBsb3ltZW50UmVzcG9uc2USKwoKZGVwbG95bWVudBgBIAEoCzIXLnBsYXRmb3JtLnYxLkRlcGxveW1lbnQiWgoUR2V0RGVwbG95bWVudFJlcXVlc3QSFAoMd29ya3NwYWNlX2lkGAEgASgJEhYKDmFwcGxpY2F0aW9uX2lkGAIgASgJEhQKDG9wZXJhdGlvbl9pZBgDIAEoCSJEChVHZXREZXBsb3ltZW50UmVzcG9uc2USKwoKZGVwbG95bWVudBgBIAEoCzIXLnBsYXRmb3JtLnYxLkRlcGxveW1lbnQiZQoWTGlzdERlcGxveW1lbnRzUmVxdWVzdBIUCgx3b3Jrc3BhY2VfaWQYASABKAkSFgoOYXBwbGljYXRpb25faWQYAiABKAkSDQoFbGltaXQYAyABKAUSDgoGY3Vyc29yGAQgASgJIlwKF0xpc3REZXBsb3ltZW50c1Jlc3BvbnNlEiwKC2RlcGxveW1lbnRzGAEgAygLMhcucGxhdGZvcm0udjEuRGVwbG95bWVudBITCgtuZXh0X2N1cnNvchgCIAEoCSJHChdHZXRSdW50aW1lU3RhdHVzUmVxdWVzdBIUCgx3b3Jrc3BhY2VfaWQYASABKAkSFgoOYXBwbGljYXRpb25faWQYAiABKAkiRgoYR2V0UnVudGltZVN0YXR1c1Jlc3BvbnNlEioKBnN0YXR1cxgBIAEoCzIaLnBsYXRmb3JtLnYxLlJ1bnRpbWVTdGF0dXMizwEKGVJvbGxiYWNrRGVwbG95bWVudFJlcXVlc3QSFAoMd29ya3NwYWNlX2lkGAEgASgJEhYKDmFwcGxpY2F0aW9uX2lkGAIgASgJEhkKEXRhcmdldF9yZWxlYXNlX2lkGAMgASgJEiAKGGV4cGVjdGVkX3BvbGljeV9yZXZpc2lvbhgEIAEoAxIuCghleHBlY3RlZBgFIAEoCzIcLnBsYXRmb3JtLnYxLkV4cGVjdGVkUnVudGltZRIXCg9pZGVtcG90ZW5jeV9rZXkYBiABKAkiSQoaUm9sbGJhY2tEZXBsb3ltZW50UmVzcG9uc2USKwoKZGVwbG95bWVudBgBIAEoCzIXLnBsYXRmb3JtLnYxLkRlcGxveW1lbnQinQEKFENoYW5nZVJ1bnRpbWVSZXF1ZXN0EhQKDHdvcmtzcGFjZV9pZBgBIAEoCRIWCg5hcHBsaWNhdGlvbl9pZBgCIAEoCRIOCgZhY3Rpb24YAyABKAkSLgoIZXhwZWN0ZWQYBCABKAsyHC5wbGF0Zm9ybS52MS5FeHBlY3RlZFJ1bnRpbWUSFwoPaWRlbXBvdGVuY3lfa2V5GAUgASgJIkQKFUNoYW5nZVJ1bnRpbWVSZXNwb25zZRIrCgpkZXBsb3ltZW50GAEgASgLMhcucGxhdGZvcm0udjEuRGVwbG95bWVudCLLAQoPUnVudGltZUxvZ0NodW5rEgoKAmlkGAEgASgJEhQKDHdvcmtzcGFjZV9pZBgCIAEoCRIWCg5hcHBsaWNhdGlvbl9pZBgDIAEoCRIPCgdwb2RfdWlkGAQgASgJEhEKCWNvbnRhaW5lchgFIAEoCRIVCg1yZXN0YXJ0X2NvdW50GAYgASgFEgsKA3NlcRgHIAEoAxIPCgdjb250ZW50GAggASgMEhEKCXRydW5jYXRlZBgJIAEoCBISCgpjcmVhdGVkX2F0GAogASgJIogBChVHZXRSdW50aW1lTG9nc1JlcXVlc3QSFAoMd29ya3NwYWNlX2lkGAEgASgJEhYKDmFwcGxpY2F0aW9uX2lkGAIgASgJEg0KBWxpbWl0GAMgASgFEg4KBmN1cnNvchgEIAEoCRIPCgdwb2RfdWlkGAUgASgJEhEKCWNvbnRhaW5lchgGIAEoCSJbChZHZXRSdW50aW1lTG9nc1Jlc3BvbnNlEiwKBmNodW5rcxgBIAMoCzIcLnBsYXRmb3JtLnYxLlJ1bnRpbWVMb2dDaHVuaxITCgtuZXh0X2N1cnNvchgCIAEoCSLzAQoTUnVudGltZU1ldHJpY1NhbXBsZRIKCgJpZBgBIAEoCRIUCgx3b3Jrc3BhY2VfaWQYAiABKAkSFgoOYXBwbGljYXRpb25faWQYAyABKAkSEgoKcmVsZWFzZV9pZBgEIAEoCRISCgpnZW5lcmF0aW9uGAUgASgDEg8KB3BvZF91aWQYBiABKAkSFgoOY3B1X25hbm9fY29yZXMYByABKAMSGQoRY3B1X3dpbmRvd19taWxsaXMYCCABKAMSIAoYbWVtb3J5X3dvcmtpbmdfc2V0X2J5dGVzGAkgASgDEhQKDGNvbGxlY3RlZF9hdBgKIAEoCSJmChhHZXRSdW50aW1lTWV0cmljc1JlcXVlc3QSFAoMd29ya3NwYWNlX2lkGAEgASgJEhYKDmFwcGxpY2F0aW9uX2lkGAIgASgJEg0KBXNpbmNlGAMgASgJEg0KBXVudGlsGAQgASgJIk4KGUdldFJ1bnRpbWVNZXRyaWNzUmVzcG9uc2USMQoHc2FtcGxlcxgBIAMoCzIgLnBsYXRmb3JtLnYxLlJ1bnRpbWVNZXRyaWNTYW1wbGUyiQYKEURlcGxveW1lbnRTZXJ2aWNlEl8KEENyZWF0ZURlcGxveW1lbnQSJC5wbGF0Zm9ybS52MS5DcmVhdGVEZXBsb3ltZW50UmVxdWVzdBolLnBsYXRmb3JtLnYxLkNyZWF0ZURlcGxveW1lbnRSZXNwb25zZRJWCg1HZXREZXBsb3ltZW50EiEucGxhdGZvcm0udjEuR2V0RGVwbG95bWVudFJlcXVlc3QaIi5wbGF0Zm9ybS52MS5HZXREZXBsb3ltZW50UmVzcG9uc2USXAoPTGlzdERlcGxveW1lbnRzEiMucGxhdGZvcm0udjEuTGlzdERlcGxveW1lbnRzUmVxdWVzdBokLnBsYXRmb3JtLnYxLkxpc3REZXBsb3ltZW50c1Jlc3BvbnNlEl8KEEdldFJ1bnRpbWVTdGF0dXMSJC5wbGF0Zm9ybS52MS5HZXRSdW50aW1lU3RhdHVzUmVxdWVzdBolLnBsYXRmb3JtLnYxLkdldFJ1bnRpbWVTdGF0dXNSZXNwb25zZRJlChJSb2xsYmFja0RlcGxveW1lbnQSJi5wbGF0Zm9ybS52MS5Sb2xsYmFja0RlcGxveW1lbnRSZXF1ZXN0GicucGxhdGZvcm0udjEuUm9sbGJhY2tEZXBsb3ltZW50UmVzcG9uc2USVgoNQ2hhbmdlUnVudGltZRIhLnBsYXRmb3JtLnYxLkNoYW5nZVJ1bnRpbWVSZXF1ZXN0GiIucGxhdGZvcm0udjEuQ2hhbmdlUnVudGltZVJlc3BvbnNlElkKDkdldFJ1bnRpbWVMb2dzEiIucGxhdGZvcm0udjEuR2V0UnVudGltZUxvZ3NSZXF1ZXN0GiMucGxhdGZvcm0udjEuR2V0UnVudGltZUxvZ3NSZXNwb25zZRJiChFHZXRSdW50aW1lTWV0cmljcxIlLnBsYXRmb3JtLnYxLkdldFJ1bnRpbWVNZXRyaWNzUmVxdWVzdBomLnBsYXRmb3JtLnYxLkdldFJ1bnRpbWVNZXRyaWNzUmVzcG9uc2VCPFo6Z2l0aHViLmNvbS9zdW5zaGFucGVuZy95dW1teS9nZW4vZ28vcGxhdGZvcm0vdjE7cGxhdGZvcm12MWIGcHJvdG8z");
+  fileDesc("ChxwbGF0Zm9ybS92MS9kZXBsb3ltZW50LnByb3RvEgtwbGF0Zm9ybS52MSJaCg9FeHBlY3RlZFJ1bnRpbWUSEgoKZ2VuZXJhdGlvbhgBIAEoAxIaChJzZXJ2aW5nX3JlbGVhc2VfaWQYAiABKAkSFwoPY29uZmlnX3JldmlzaW9uGAMgASgDIncKCVBsYWNlbWVudBIPCgdub2RlX2lkGAEgASgJEhcKD3BvbGljeV9yZXZpc2lvbhgCIAEoAxIUCgxydW50aW1lX3R5cGUYAyABKAkSFgoOZGVmYXVsdF9kb21haW4YBCABKAkSEgoKY3JlYXRlZF9hdBgFIAEoCSKEAQoPUmVsZWFzZUFydGlmYWN0EgoKAmlkGAEgASgJEhMKC3JlZ2lzdHJ5X2lkGAIgASgJEhoKEmNyZWRlbnRpYWxfdmVyc2lvbhgDIAEoAxISCgpyZXBvc2l0b3J5GAQgASgJEg4KBmRpZ2VzdBgFIAEoCRIQCghwbGF0Zm9ybRgGIAEoCSK4AgoHUmVsZWFzZRIKCgJpZBgBIAEoCRIUCgx3b3Jrc3BhY2VfaWQYAiABKAkSFgoOYXBwbGljYXRpb25faWQYAyABKAkSLgoIYXJ0aWZhY3QYBCABKAsyHC5wbGF0Zm9ybS52MS5SZWxlYXNlQXJ0aWZhY3QSHwoXcnVudGltZV9jb25maWdfcmV2aXNpb24YBSABKAMSKQoJcGxhY2VtZW50GAYgASgLMhYucGxhdGZvcm0udjEuUGxhY2VtZW50Eg8KB2RvbWFpbnMYByADKAkSGwoTcHJldmlvdXNfc2VydmluZ19pZBgIIAEoCRITCgtyb2xsYmFja19vZhgJIAEoCRIOCgZzb3VyY2UYCiABKAkSEAoIYWN0b3JfaWQYCyABKAkSEgoKY3JlYXRlZF9hdBgMIAEoCSKKAgoTRGVwbG95bWVudE9wZXJhdGlvbhIKCgJpZBgBIAEoCRIUCgx3b3Jrc3BhY2VfaWQYAiABKAkSFgoOYXBwbGljYXRpb25faWQYAyABKAkSEgoKcmVsZWFzZV9pZBgEIAEoCRISCgpnZW5lcmF0aW9uGAUgASgDEg4KBmFjdGlvbhgGIAEoCRINCgVzdGF0ZRgHIAEoCRIOCgZhY3RpdmUYCCABKAgSEAoIYWN0b3JfaWQYCSABKAkSEgoKZXJyb3JfY29kZRgKIAEoCRITCgtyZWNvdmVyeV9vZhgLIAEoCRISCgpjcmVhdGVkX2F0GAwgASgJEhMKC2ZpbmlzaGVkX2F0GA0gASgJImgKCkRlcGxveW1lbnQSJQoHcmVsZWFzZRgBIAEoCzIULnBsYXRmb3JtLnYxLlJlbGVhc2USMwoJb3BlcmF0aW9uGAIgASgLMiAucGxhdGZvcm0udjEuRGVwbG95bWVudE9wZXJhdGlvbiLJAgoNUnVudGltZVN0YXR1cxIUCgx3b3Jrc3BhY2VfaWQYASABKAkSFgoOYXBwbGljYXRpb25faWQYAiABKAkSEgoKZ2VuZXJhdGlvbhgDIAEoAxIVCg1kZXNpcmVkX3N0YXRlGAQgASgJEhoKEmRlc2lyZWRfcmVsZWFzZV9pZBgFIAEoCRIaChJzZXJ2aW5nX3JlbGVhc2VfaWQYBiABKAkSGgoSc2VydmluZ19nZW5lcmF0aW9uGAcgASgDEhsKE29ic2VydmVkX2dlbmVyYXRpb24YCCABKAMSFgoOb2JzZXJ2ZWRfc3RhdGUYCSABKAkSGwoTYWN0aXZlX29wZXJhdGlvbl9pZBgKIAEoCRIYChBsYXN0X29ic2VydmVkX2F0GAsgASgJEh8KF3NlcnZpbmdfY29uZmlnX3JldmlzaW9uGAwgASgDIusBChhQcmV2aWV3RGVwbG95bWVudFJlcXVlc3QSFAoMd29ya3NwYWNlX2lkGAEgASgJEhYKDmFwcGxpY2F0aW9uX2lkGAIgASgJEhMKC2FydGlmYWN0X2lkGAMgASgJEh8KF3J1bnRpbWVfY29uZmlnX3JldmlzaW9uGAQgASgDEiAKGGV4cGVjdGVkX3BvbGljeV9yZXZpc2lvbhgFIAEoAxIuCghleHBlY3RlZBgGIAEoCzIcLnBsYXRmb3JtLnYxLkV4cGVjdGVkUnVudGltZRIZChF0YXJnZXRfcmVsZWFzZV9pZBgHIAEoCSKMAQoZUHJldmlld0RlcGxveW1lbnRSZXNwb25zZRIXCg9hcnRpZmFjdF9kaWdlc3QYASABKAkSEAoIcGxhdGZvcm0YAiABKAkSHwoXcnVudGltZV9jb25maWdfcmV2aXNpb24YAyABKAMSDwoHZG9tYWlucxgEIAMoCRISCgp0bHNfc3RhdHVzGAUgASgJIugBChdDcmVhdGVEZXBsb3ltZW50UmVxdWVzdBIUCgx3b3Jrc3BhY2VfaWQYASABKAkSFgoOYXBwbGljYXRpb25faWQYAiABKAkSEwoLYXJ0aWZhY3RfaWQYAyABKAkSHwoXcnVudGltZV9jb25maWdfcmV2aXNpb24YBCABKAMSIAoYZXhwZWN0ZWRfcG9saWN5X3JldmlzaW9uGAUgASgDEi4KCGV4cGVjdGVkGAYgASgLMhwucGxhdGZvcm0udjEuRXhwZWN0ZWRSdW50aW1lEhcKD2lkZW1wb3RlbmN5X2tleRgHIAEoCSJHChhDcmVhdGVEZXBsb3ltZW50UmVzcG9uc2USKwoKZGVwbG95bWVudBgBIAEoCzIXLnBsYXRmb3JtLnYxLkRlcGxveW1lbnQiWgoUR2V0RGVwbG95bWVudFJlcXVlc3QSFAoMd29ya3NwYWNlX2lkGAEgASgJEhYKDmFwcGxpY2F0aW9uX2lkGAIgASgJEhQKDG9wZXJhdGlvbl9pZBgDIAEoCSJEChVHZXREZXBsb3ltZW50UmVzcG9uc2USKwoKZGVwbG95bWVudBgBIAEoCzIXLnBsYXRmb3JtLnYxLkRlcGxveW1lbnQiZQoWTGlzdERlcGxveW1lbnRzUmVxdWVzdBIUCgx3b3Jrc3BhY2VfaWQYASABKAkSFgoOYXBwbGljYXRpb25faWQYAiABKAkSDQoFbGltaXQYAyABKAUSDgoGY3Vyc29yGAQgASgJIlwKF0xpc3REZXBsb3ltZW50c1Jlc3BvbnNlEiwKC2RlcGxveW1lbnRzGAEgAygLMhcucGxhdGZvcm0udjEuRGVwbG95bWVudBITCgtuZXh0X2N1cnNvchgCIAEoCSJHChdHZXRSdW50aW1lU3RhdHVzUmVxdWVzdBIUCgx3b3Jrc3BhY2VfaWQYASABKAkSFgoOYXBwbGljYXRpb25faWQYAiABKAkiRgoYR2V0UnVudGltZVN0YXR1c1Jlc3BvbnNlEioKBnN0YXR1cxgBIAEoCzIaLnBsYXRmb3JtLnYxLlJ1bnRpbWVTdGF0dXMizwEKGVJvbGxiYWNrRGVwbG95bWVudFJlcXVlc3QSFAoMd29ya3NwYWNlX2lkGAEgASgJEhYKDmFwcGxpY2F0aW9uX2lkGAIgASgJEhkKEXRhcmdldF9yZWxlYXNlX2lkGAMgASgJEiAKGGV4cGVjdGVkX3BvbGljeV9yZXZpc2lvbhgEIAEoAxIuCghleHBlY3RlZBgFIAEoCzIcLnBsYXRmb3JtLnYxLkV4cGVjdGVkUnVudGltZRIXCg9pZGVtcG90ZW5jeV9rZXkYBiABKAkiSQoaUm9sbGJhY2tEZXBsb3ltZW50UmVzcG9uc2USKwoKZGVwbG95bWVudBgBIAEoCzIXLnBsYXRmb3JtLnYxLkRlcGxveW1lbnQinQEKFENoYW5nZVJ1bnRpbWVSZXF1ZXN0EhQKDHdvcmtzcGFjZV9pZBgBIAEoCRIWCg5hcHBsaWNhdGlvbl9pZBgCIAEoCRIOCgZhY3Rpb24YAyABKAkSLgoIZXhwZWN0ZWQYBCABKAsyHC5wbGF0Zm9ybS52MS5FeHBlY3RlZFJ1bnRpbWUSFwoPaWRlbXBvdGVuY3lfa2V5GAUgASgJIkQKFUNoYW5nZVJ1bnRpbWVSZXNwb25zZRIrCgpkZXBsb3ltZW50GAEgASgLMhcucGxhdGZvcm0udjEuRGVwbG95bWVudCLLAQoPUnVudGltZUxvZ0NodW5rEgoKAmlkGAEgASgJEhQKDHdvcmtzcGFjZV9pZBgCIAEoCRIWCg5hcHBsaWNhdGlvbl9pZBgDIAEoCRIPCgdwb2RfdWlkGAQgASgJEhEKCWNvbnRhaW5lchgFIAEoCRIVCg1yZXN0YXJ0X2NvdW50GAYgASgFEgsKA3NlcRgHIAEoAxIPCgdjb250ZW50GAggASgMEhEKCXRydW5jYXRlZBgJIAEoCBISCgpjcmVhdGVkX2F0GAogASgJIqYBChVHZXRSdW50aW1lTG9nc1JlcXVlc3QSFAoMd29ya3NwYWNlX2lkGAEgASgJEhYKDmFwcGxpY2F0aW9uX2lkGAIgASgJEg0KBWxpbWl0GAMgASgFEg4KBmN1cnNvchgEIAEoCRIPCgdwb2RfdWlkGAUgASgJEhEKCWNvbnRhaW5lchgGIAEoCRINCgVzaW5jZRgHIAEoCRINCgV1bnRpbBgIIAEoCSJyChZHZXRSdW50aW1lTG9nc1Jlc3BvbnNlEiwKBmNodW5rcxgBIAMoCzIcLnBsYXRmb3JtLnYxLlJ1bnRpbWVMb2dDaHVuaxITCgtuZXh0X2N1cnNvchgCIAEoCRIVCg1yZXN1bWVfY3Vyc29yGAMgASgJIvMBChNSdW50aW1lTWV0cmljU2FtcGxlEgoKAmlkGAEgASgJEhQKDHdvcmtzcGFjZV9pZBgCIAEoCRIWCg5hcHBsaWNhdGlvbl9pZBgDIAEoCRISCgpyZWxlYXNlX2lkGAQgASgJEhIKCmdlbmVyYXRpb24YBSABKAMSDwoHcG9kX3VpZBgGIAEoCRIWCg5jcHVfbmFub19jb3JlcxgHIAEoAxIZChFjcHVfd2luZG93X21pbGxpcxgIIAEoAxIgChhtZW1vcnlfd29ya2luZ19zZXRfYnl0ZXMYCSABKAMSFAoMY29sbGVjdGVkX2F0GAogASgJImYKGEdldFJ1bnRpbWVNZXRyaWNzUmVxdWVzdBIUCgx3b3Jrc3BhY2VfaWQYASABKAkSFgoOYXBwbGljYXRpb25faWQYAiABKAkSDQoFc2luY2UYAyABKAkSDQoFdW50aWwYBCABKAkiTgoZR2V0UnVudGltZU1ldHJpY3NSZXNwb25zZRIxCgdzYW1wbGVzGAEgAygLMiAucGxhdGZvcm0udjEuUnVudGltZU1ldHJpY1NhbXBsZTLtBgoRRGVwbG95bWVudFNlcnZpY2USYgoRUHJldmlld0RlcGxveW1lbnQSJS5wbGF0Zm9ybS52MS5QcmV2aWV3RGVwbG95bWVudFJlcXVlc3QaJi5wbGF0Zm9ybS52MS5QcmV2aWV3RGVwbG95bWVudFJlc3BvbnNlEl8KEENyZWF0ZURlcGxveW1lbnQSJC5wbGF0Zm9ybS52MS5DcmVhdGVEZXBsb3ltZW50UmVxdWVzdBolLnBsYXRmb3JtLnYxLkNyZWF0ZURlcGxveW1lbnRSZXNwb25zZRJWCg1HZXREZXBsb3ltZW50EiEucGxhdGZvcm0udjEuR2V0RGVwbG95bWVudFJlcXVlc3QaIi5wbGF0Zm9ybS52MS5HZXREZXBsb3ltZW50UmVzcG9uc2USXAoPTGlzdERlcGxveW1lbnRzEiMucGxhdGZvcm0udjEuTGlzdERlcGxveW1lbnRzUmVxdWVzdBokLnBsYXRmb3JtLnYxLkxpc3REZXBsb3ltZW50c1Jlc3BvbnNlEl8KEEdldFJ1bnRpbWVTdGF0dXMSJC5wbGF0Zm9ybS52MS5HZXRSdW50aW1lU3RhdHVzUmVxdWVzdBolLnBsYXRmb3JtLnYxLkdldFJ1bnRpbWVTdGF0dXNSZXNwb25zZRJlChJSb2xsYmFja0RlcGxveW1lbnQSJi5wbGF0Zm9ybS52MS5Sb2xsYmFja0RlcGxveW1lbnRSZXF1ZXN0GicucGxhdGZvcm0udjEuUm9sbGJhY2tEZXBsb3ltZW50UmVzcG9uc2USVgoNQ2hhbmdlUnVudGltZRIhLnBsYXRmb3JtLnYxLkNoYW5nZVJ1bnRpbWVSZXF1ZXN0GiIucGxhdGZvcm0udjEuQ2hhbmdlUnVudGltZVJlc3BvbnNlElkKDkdldFJ1bnRpbWVMb2dzEiIucGxhdGZvcm0udjEuR2V0UnVudGltZUxvZ3NSZXF1ZXN0GiMucGxhdGZvcm0udjEuR2V0UnVudGltZUxvZ3NSZXNwb25zZRJiChFHZXRSdW50aW1lTWV0cmljcxIlLnBsYXRmb3JtLnYxLkdldFJ1bnRpbWVNZXRyaWNzUmVxdWVzdBomLnBsYXRmb3JtLnYxLkdldFJ1bnRpbWVNZXRyaWNzUmVzcG9uc2VCPFo6Z2l0aHViLmNvbS9zdW5zaGFucGVuZy95dW1teS9nZW4vZ28vcGxhdGZvcm0vdjE7cGxhdGZvcm12MWIGcHJvdG8z");
 
 /**
  * @generated from message platform.v1.ExpectedRuntime
@@ -347,6 +347,11 @@ export type RuntimeStatus = Message<"platform.v1.RuntimeStatus"> & {
    * @generated from field: string last_observed_at = 11;
    */
   lastObservedAt: string;
+
+  /**
+   * @generated from field: int64 serving_config_revision = 12;
+   */
+  servingConfigRevision: bigint;
 };
 
 /**
@@ -355,6 +360,90 @@ export type RuntimeStatus = Message<"platform.v1.RuntimeStatus"> & {
  */
 export const RuntimeStatusSchema: GenMessage<RuntimeStatus> = /*@__PURE__*/
   messageDesc(file_platform_v1_deployment, 6);
+
+/**
+ * @generated from message platform.v1.PreviewDeploymentRequest
+ */
+export type PreviewDeploymentRequest = Message<"platform.v1.PreviewDeploymentRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: string application_id = 2;
+   */
+  applicationId: string;
+
+  /**
+   * @generated from field: string artifact_id = 3;
+   */
+  artifactId: string;
+
+  /**
+   * @generated from field: int64 runtime_config_revision = 4;
+   */
+  runtimeConfigRevision: bigint;
+
+  /**
+   * @generated from field: int64 expected_policy_revision = 5;
+   */
+  expectedPolicyRevision: bigint;
+
+  /**
+   * @generated from field: platform.v1.ExpectedRuntime expected = 6;
+   */
+  expected?: ExpectedRuntime | undefined;
+
+  /**
+   * @generated from field: string target_release_id = 7;
+   */
+  targetReleaseId: string;
+};
+
+/**
+ * Describes the message platform.v1.PreviewDeploymentRequest.
+ * Use `create(PreviewDeploymentRequestSchema)` to create a new message.
+ */
+export const PreviewDeploymentRequestSchema: GenMessage<PreviewDeploymentRequest> = /*@__PURE__*/
+  messageDesc(file_platform_v1_deployment, 7);
+
+/**
+ * @generated from message platform.v1.PreviewDeploymentResponse
+ */
+export type PreviewDeploymentResponse = Message<"platform.v1.PreviewDeploymentResponse"> & {
+  /**
+   * @generated from field: string artifact_digest = 1;
+   */
+  artifactDigest: string;
+
+  /**
+   * @generated from field: string platform = 2;
+   */
+  platform: string;
+
+  /**
+   * @generated from field: int64 runtime_config_revision = 3;
+   */
+  runtimeConfigRevision: bigint;
+
+  /**
+   * @generated from field: repeated string domains = 4;
+   */
+  domains: string[];
+
+  /**
+   * @generated from field: string tls_status = 5;
+   */
+  tlsStatus: string;
+};
+
+/**
+ * Describes the message platform.v1.PreviewDeploymentResponse.
+ * Use `create(PreviewDeploymentResponseSchema)` to create a new message.
+ */
+export const PreviewDeploymentResponseSchema: GenMessage<PreviewDeploymentResponse> = /*@__PURE__*/
+  messageDesc(file_platform_v1_deployment, 8);
 
 /**
  * @generated from message platform.v1.CreateDeploymentRequest
@@ -401,7 +490,7 @@ export type CreateDeploymentRequest = Message<"platform.v1.CreateDeploymentReque
  * Use `create(CreateDeploymentRequestSchema)` to create a new message.
  */
 export const CreateDeploymentRequestSchema: GenMessage<CreateDeploymentRequest> = /*@__PURE__*/
-  messageDesc(file_platform_v1_deployment, 7);
+  messageDesc(file_platform_v1_deployment, 9);
 
 /**
  * @generated from message platform.v1.CreateDeploymentResponse
@@ -418,7 +507,7 @@ export type CreateDeploymentResponse = Message<"platform.v1.CreateDeploymentResp
  * Use `create(CreateDeploymentResponseSchema)` to create a new message.
  */
 export const CreateDeploymentResponseSchema: GenMessage<CreateDeploymentResponse> = /*@__PURE__*/
-  messageDesc(file_platform_v1_deployment, 8);
+  messageDesc(file_platform_v1_deployment, 10);
 
 /**
  * @generated from message platform.v1.GetDeploymentRequest
@@ -445,7 +534,7 @@ export type GetDeploymentRequest = Message<"platform.v1.GetDeploymentRequest"> &
  * Use `create(GetDeploymentRequestSchema)` to create a new message.
  */
 export const GetDeploymentRequestSchema: GenMessage<GetDeploymentRequest> = /*@__PURE__*/
-  messageDesc(file_platform_v1_deployment, 9);
+  messageDesc(file_platform_v1_deployment, 11);
 
 /**
  * @generated from message platform.v1.GetDeploymentResponse
@@ -462,7 +551,7 @@ export type GetDeploymentResponse = Message<"platform.v1.GetDeploymentResponse">
  * Use `create(GetDeploymentResponseSchema)` to create a new message.
  */
 export const GetDeploymentResponseSchema: GenMessage<GetDeploymentResponse> = /*@__PURE__*/
-  messageDesc(file_platform_v1_deployment, 10);
+  messageDesc(file_platform_v1_deployment, 12);
 
 /**
  * @generated from message platform.v1.ListDeploymentsRequest
@@ -494,7 +583,7 @@ export type ListDeploymentsRequest = Message<"platform.v1.ListDeploymentsRequest
  * Use `create(ListDeploymentsRequestSchema)` to create a new message.
  */
 export const ListDeploymentsRequestSchema: GenMessage<ListDeploymentsRequest> = /*@__PURE__*/
-  messageDesc(file_platform_v1_deployment, 11);
+  messageDesc(file_platform_v1_deployment, 13);
 
 /**
  * @generated from message platform.v1.ListDeploymentsResponse
@@ -516,7 +605,7 @@ export type ListDeploymentsResponse = Message<"platform.v1.ListDeploymentsRespon
  * Use `create(ListDeploymentsResponseSchema)` to create a new message.
  */
 export const ListDeploymentsResponseSchema: GenMessage<ListDeploymentsResponse> = /*@__PURE__*/
-  messageDesc(file_platform_v1_deployment, 12);
+  messageDesc(file_platform_v1_deployment, 14);
 
 /**
  * @generated from message platform.v1.GetRuntimeStatusRequest
@@ -538,7 +627,7 @@ export type GetRuntimeStatusRequest = Message<"platform.v1.GetRuntimeStatusReque
  * Use `create(GetRuntimeStatusRequestSchema)` to create a new message.
  */
 export const GetRuntimeStatusRequestSchema: GenMessage<GetRuntimeStatusRequest> = /*@__PURE__*/
-  messageDesc(file_platform_v1_deployment, 13);
+  messageDesc(file_platform_v1_deployment, 15);
 
 /**
  * @generated from message platform.v1.GetRuntimeStatusResponse
@@ -555,7 +644,7 @@ export type GetRuntimeStatusResponse = Message<"platform.v1.GetRuntimeStatusResp
  * Use `create(GetRuntimeStatusResponseSchema)` to create a new message.
  */
 export const GetRuntimeStatusResponseSchema: GenMessage<GetRuntimeStatusResponse> = /*@__PURE__*/
-  messageDesc(file_platform_v1_deployment, 14);
+  messageDesc(file_platform_v1_deployment, 16);
 
 /**
  * @generated from message platform.v1.RollbackDeploymentRequest
@@ -597,7 +686,7 @@ export type RollbackDeploymentRequest = Message<"platform.v1.RollbackDeploymentR
  * Use `create(RollbackDeploymentRequestSchema)` to create a new message.
  */
 export const RollbackDeploymentRequestSchema: GenMessage<RollbackDeploymentRequest> = /*@__PURE__*/
-  messageDesc(file_platform_v1_deployment, 15);
+  messageDesc(file_platform_v1_deployment, 17);
 
 /**
  * @generated from message platform.v1.RollbackDeploymentResponse
@@ -614,7 +703,7 @@ export type RollbackDeploymentResponse = Message<"platform.v1.RollbackDeployment
  * Use `create(RollbackDeploymentResponseSchema)` to create a new message.
  */
 export const RollbackDeploymentResponseSchema: GenMessage<RollbackDeploymentResponse> = /*@__PURE__*/
-  messageDesc(file_platform_v1_deployment, 16);
+  messageDesc(file_platform_v1_deployment, 18);
 
 /**
  * @generated from message platform.v1.ChangeRuntimeRequest
@@ -651,7 +740,7 @@ export type ChangeRuntimeRequest = Message<"platform.v1.ChangeRuntimeRequest"> &
  * Use `create(ChangeRuntimeRequestSchema)` to create a new message.
  */
 export const ChangeRuntimeRequestSchema: GenMessage<ChangeRuntimeRequest> = /*@__PURE__*/
-  messageDesc(file_platform_v1_deployment, 17);
+  messageDesc(file_platform_v1_deployment, 19);
 
 /**
  * @generated from message platform.v1.ChangeRuntimeResponse
@@ -668,7 +757,7 @@ export type ChangeRuntimeResponse = Message<"platform.v1.ChangeRuntimeResponse">
  * Use `create(ChangeRuntimeResponseSchema)` to create a new message.
  */
 export const ChangeRuntimeResponseSchema: GenMessage<ChangeRuntimeResponse> = /*@__PURE__*/
-  messageDesc(file_platform_v1_deployment, 18);
+  messageDesc(file_platform_v1_deployment, 20);
 
 /**
  * 运行日志块：内容是 worker 上报的字节分块，时间为控制面数据库落库时间。
@@ -732,7 +821,7 @@ export type RuntimeLogChunk = Message<"platform.v1.RuntimeLogChunk"> & {
  * Use `create(RuntimeLogChunkSchema)` to create a new message.
  */
 export const RuntimeLogChunkSchema: GenMessage<RuntimeLogChunk> = /*@__PURE__*/
-  messageDesc(file_platform_v1_deployment, 19);
+  messageDesc(file_platform_v1_deployment, 21);
 
 /**
  * @generated from message platform.v1.GetRuntimeLogsRequest
@@ -767,6 +856,18 @@ export type GetRuntimeLogsRequest = Message<"platform.v1.GetRuntimeLogsRequest">
    * @generated from field: string container = 6;
    */
   container: string;
+
+  /**
+   * 可选的 RFC3339 落库时间边界，包含边界时刻。
+   *
+   * @generated from field: string since = 7;
+   */
+  since: string;
+
+  /**
+   * @generated from field: string until = 8;
+   */
+  until: string;
 };
 
 /**
@@ -774,7 +875,7 @@ export type GetRuntimeLogsRequest = Message<"platform.v1.GetRuntimeLogsRequest">
  * Use `create(GetRuntimeLogsRequestSchema)` to create a new message.
  */
 export const GetRuntimeLogsRequestSchema: GenMessage<GetRuntimeLogsRequest> = /*@__PURE__*/
-  messageDesc(file_platform_v1_deployment, 20);
+  messageDesc(file_platform_v1_deployment, 22);
 
 /**
  * @generated from message platform.v1.GetRuntimeLogsResponse
@@ -789,6 +890,13 @@ export type GetRuntimeLogsResponse = Message<"platform.v1.GetRuntimeLogsResponse
    * @generated from field: string next_cursor = 2;
    */
   nextCursor: string;
+
+  /**
+   * 已读到的最后位置，尾页或当前没有新日志时仍可用来继续追踪。
+   *
+   * @generated from field: string resume_cursor = 3;
+   */
+  resumeCursor: string;
 };
 
 /**
@@ -796,7 +904,7 @@ export type GetRuntimeLogsResponse = Message<"platform.v1.GetRuntimeLogsResponse
  * Use `create(GetRuntimeLogsResponseSchema)` to create a new message.
  */
 export const GetRuntimeLogsResponseSchema: GenMessage<GetRuntimeLogsResponse> = /*@__PURE__*/
-  messageDesc(file_platform_v1_deployment, 21);
+  messageDesc(file_platform_v1_deployment, 23);
 
 /**
  * 基础监控采样点；since/until 为可选 RFC3339 时间，缺省覆盖全部保留窗口（24 小时）。
@@ -860,7 +968,7 @@ export type RuntimeMetricSample = Message<"platform.v1.RuntimeMetricSample"> & {
  * Use `create(RuntimeMetricSampleSchema)` to create a new message.
  */
 export const RuntimeMetricSampleSchema: GenMessage<RuntimeMetricSample> = /*@__PURE__*/
-  messageDesc(file_platform_v1_deployment, 22);
+  messageDesc(file_platform_v1_deployment, 24);
 
 /**
  * @generated from message platform.v1.GetRuntimeMetricsRequest
@@ -892,7 +1000,7 @@ export type GetRuntimeMetricsRequest = Message<"platform.v1.GetRuntimeMetricsReq
  * Use `create(GetRuntimeMetricsRequestSchema)` to create a new message.
  */
 export const GetRuntimeMetricsRequestSchema: GenMessage<GetRuntimeMetricsRequest> = /*@__PURE__*/
-  messageDesc(file_platform_v1_deployment, 23);
+  messageDesc(file_platform_v1_deployment, 25);
 
 /**
  * @generated from message platform.v1.GetRuntimeMetricsResponse
@@ -909,12 +1017,20 @@ export type GetRuntimeMetricsResponse = Message<"platform.v1.GetRuntimeMetricsRe
  * Use `create(GetRuntimeMetricsResponseSchema)` to create a new message.
  */
 export const GetRuntimeMetricsResponseSchema: GenMessage<GetRuntimeMetricsResponse> = /*@__PURE__*/
-  messageDesc(file_platform_v1_deployment, 24);
+  messageDesc(file_platform_v1_deployment, 26);
 
 /**
  * @generated from service platform.v1.DeploymentService
  */
 export const DeploymentService: GenService<{
+  /**
+   * @generated from rpc platform.v1.DeploymentService.PreviewDeployment
+   */
+  previewDeployment: {
+    methodKind: "unary";
+    input: typeof PreviewDeploymentRequestSchema;
+    output: typeof PreviewDeploymentResponseSchema;
+  },
   /**
    * @generated from rpc platform.v1.DeploymentService.CreateDeployment
    */

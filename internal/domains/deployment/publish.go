@@ -114,6 +114,9 @@ func (s *Service) autoPublishBuild(ctx context.Context, candidate build.AutoDepl
 	if err != nil {
 		return false, err
 	}
+	if candidate.ExpectedRuntimeGeneration != nil && state.Generation != *candidate.ExpectedRuntimeGeneration {
+		return false, s.auditAutoDeploySkip(ctx, candidate, "stale_generation")
+	}
 	// 构建提交时锁定的 serving 期望与当前不一致说明期间发生过其他发布/回滚，跳过而不是误回滚。
 	if text(state.ServingReleaseID) != candidate.ExpectedServingRelease {
 		return false, s.auditAutoDeploySkip(ctx, candidate, "serving_mismatch")
@@ -176,6 +179,7 @@ func autoDeploySkipReason(err error) (string, bool) {
 var permanentSkipReasons = map[string]bool{
 	"missing_runtime_config": true,
 	"stale_config":           true,
+	"stale_generation":       true,
 	"artifact_invalid":       true,
 	"actor_forbidden":        true,
 	"missing":                true,

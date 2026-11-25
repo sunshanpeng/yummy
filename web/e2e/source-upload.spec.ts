@@ -56,6 +56,11 @@ const legal = makeTarGz([
   { name: "Dockerfile", body: `FROM alpine:3.20\nCOPY main.py /app/main.py\n` },
   { name: "main.py", body: `print("e2e source ${run}")\n` },
 ]);
+// 纯源码包：没有 Dockerfile，构建时由 Railpack 识别。上传阶段不要求 Dockerfile。
+const sourceOnly = makeTarGz([
+  { name: "package.json", body: `{"name":"e2e-${run}"}\n` },
+  { name: "index.js", body: `console.log("e2e source only ${run}")\n` },
+]);
 // 恶意包 1：tar 成员名路径逃逸（../），服务端 Inspect 必须在 complete 阶段拒绝。
 const evilPath = makeTarGz([{ name: "../evil.txt", body: "e2e path escape probe" }]);
 // 恶意包 2：平台排除的敏感路径 .env，验证敏感文件拒绝规则真实生效。
@@ -117,8 +122,10 @@ function metaValue(page: Page, label: string) {
   return page.locator("dl.metadata > div").filter({ hasText: label }).locator("dd");
 }
 
-async function upload(page: Page, archive: { buffer: Buffer }, fileName: string) {
+async function upload(page: Page, archive: { buffer: Buffer }, fileName: string, dockerfile = "") {
   await page.setInputFiles("#source-file", { name: fileName, mimeType: "application/gzip", buffer: archive.buffer });
+  // Dockerfile 路径是可选项：留空表示不指定，构建时自动选择；显式填写则要求归档中存在该文件。
+  await page.getByLabel("Dockerfile 相对路径").fill(dockerfile);
   await page.getByRole("button", { name: "上传并校验源码" }).click();
 }
 
@@ -157,7 +164,7 @@ test("源码安全上传、快照核对与恶意包真实拒绝", async ({ page 
   await expect(page.getByText("上传完成只表示源码快照已准备好，不代表镜像产出或应用上线。请到应用构建页预览输入后明确创建构建。")).toBeVisible();
 
   // 合法包真实上传：浏览器计算 SHA-256，服务端 Inspect 校验归档后返回 READY 快照。
-  await upload(page, legal, `e2e-src-${run}.tar.gz`);
+  await upload(page, legal, `e2e-src-${run}.tar.gz`, "Dockerfile");
   await expect(page.getByText("源码快照状态：READY")).toBeVisible({ timeout: 15000 });
   const snapshotId = (await metaValue(page, "快照 ID").locator("code").textContent())!.trim();
   expect(snapshotId).toMatch(/^src_[0-9a-f]{32}$/);
@@ -202,4 +209,12 @@ test("源码安全上传、快照核对与恶意包真实拒绝", async ({ page 
   await page.getByLabel("快照 ID").fill(snapshotId);
   await page.getByRole("button", { name: "查询快照" }).click();
   await expect(page.getByText("状态：READY · Dockerfile：Dockerfile")).toBeVisible({ timeout: 10000 });
+
+  // 纯源码包（不指定 Dockerfile）：同样得到 READY 快照，页面说明构建时自动选择构建方式。
+  await page.getByRole("link", { name: "源码", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "源码上传与校验" })).toBeVisible();
+  await upload(page, sourceOnly, `e2e-source-only-${run}.tar.gz`);
+  await expect(page.getByText("源码快照状态：READY")).toBeVisible({ timeout: 15000 });
+  await expect(metaValue(page, "Dockerfile")).toContainText("未指定，创建构建时自动选择");
+  await expect(page.getByRole("row", { name: /package\.json/ })).toBeVisible();
 });

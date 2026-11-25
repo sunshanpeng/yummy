@@ -191,6 +191,33 @@ func TestAutoPublishExpectedServingMismatchSkipsWithoutRollback(t *testing.T) {
 	}
 }
 
+func TestAutoPublishDoesNotRestartApplicationStoppedDuringBuild(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	serving := create(t, e, "serving")
+	finishHTTP(t, e, serving)
+	insertAutoDeployBuild(t, e, "app_one", serving.Release.ID)
+	mustExec(t, e.db, "UPDATE builds SET expected_runtime_generation = ? WHERE id = ?", serving.Operation.Generation, "bld_extra_app_one")
+	stopped, err := e.service.Stop(ctx, e.root, "space", "app_one", ChangeInput{Expected: expected(status(t, e), 1), IdempotencyKey: "stop-during-build"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	event := readyEvent(stopped, 1)
+	event.Kind, event.Replicas, event.ReadyReplicas = "STOPPED", 0, 0
+	if _, err := e.service.ApplyObservation(ctx, e.worker, event); err != nil {
+		t.Fatal(err)
+	}
+	if published, err := e.service.AutoPublish(ctx, 10); err != nil || published != 0 {
+		t.Fatalf("构建期间停止应用后仍受理自动发布：%d %v", published, err)
+	}
+	if got := status(t, e); got.ObservedState != Stopped || got.Generation != stopped.Operation.Generation {
+		t.Fatalf("自动发布改变了停止状态：%+v", got)
+	}
+	if countRows(t, e, &model.AuditEvent{}, "action = ?", "application.deployment.autodeploy.skip.stale_generation") != 1 {
+		t.Fatal("缺少运行代际前移的自动发布跳过审计")
+	}
+}
+
 func TestAutoPublishSkipsWhenFrozenConfigSuperseded(t *testing.T) {
 	e := setup(t)
 	ctx := context.Background()

@@ -81,6 +81,31 @@ func registerDeploymentTools(server *sdk.Server, s scope) {
 	}
 	typedTool(server, "app_status", "读取应用当前期望状态、实际观察与正在服务的 release；缺测不会当作正常。", annotations(true, false, true, false), status)
 	typedTool(server, "runtime_status", "读取应用运行状态及已生效版本。", annotations(true, false, true, false), status)
+	typedTool(server, "runtime_logs", "按游标读取当前应用的运行日志，返回续读位置。", annotations(true, false, true, false), func(ctx context.Context, in pageInput) (any, *sdk.CallToolResult) {
+		if err := s.check(authorization.LogsRead); err != nil {
+			return nil, err
+		}
+		if !validPage(in) {
+			return nil, toolError("INVALID_ARGUMENT", "分页参数无效")
+		}
+		v, err := s.services.Deployments.ListRuntimeLogs(ctx, s.principal, s.workspaceID, s.applicationID, deployment.RuntimeLogQuery{Limit: in.Limit, Cursor: in.Cursor})
+		if err != nil {
+			return nil, failure(err)
+		}
+		return v, nil
+	})
+	typedTool(server, "runtime_metrics", "读取当前应用保留窗口内的 CPU 与内存采样。", annotations(true, false, true, false), func(ctx context.Context, _ emptyInput) (any, *sdk.CallToolResult) {
+		if err := s.check(authorization.RuntimeRead); err != nil {
+			return nil, err
+		}
+		v, err := s.services.Deployments.ListRuntimeMetrics(ctx, s.principal, s.workspaceID, s.applicationID, time.Time{}, time.Time{})
+		if err != nil {
+			return nil, failure(err)
+		}
+		return struct {
+			Samples []deployment.RuntimeMetricSample `json:"samples"`
+		}{v}, nil
+	})
 	typedTool(server, "deployment_create", "使用已验证产物和固定配置版本创建发布；返回操作状态而非提前宣告上线。", annotations(false, true, true, true), func(ctx context.Context, in deployInput) (any, *sdk.CallToolResult) {
 		if err := s.check(authorization.DeploymentWrite); err != nil {
 			return nil, err

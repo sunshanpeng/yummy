@@ -145,36 +145,7 @@ func (s *Service) create(ctx context.Context, p authorization.Principal, ws, app
 		if err != nil || duplicate {
 			return err
 		}
-		state, err := readState(tx, ws, app)
-		if err != nil {
-			return err
-		}
-		if err = s.checkExpected(tx, ws, app, state, in.Expected); err != nil {
-			return err
-		}
-		if state.ActiveOperationID != nil {
-			return authorization.ErrConflict
-		}
-		if action == Rollback {
-			selected, err = readRelease(tx, ws, app, target)
-			if err != nil {
-				return err
-			}
-			var successful int64
-			if err = tx.Model(&operationRecord{}).Where("workspace_id = ? AND application_id = ? AND release_id = ? AND state = ?", ws, app, target, Succeeded).Count(&successful).Error; err != nil {
-				return err
-			}
-			if successful == 0 {
-				return invalid("只能回滚到已成功的历史发布")
-			}
-			in.ArtifactID = selected.ArtifactID
-			in.RuntimeConfigRevision = selected.RuntimeConfigRevision
-		}
-		snapshot, err = s.builds.VerifiedArtifact(tx, ws, app, in.ArtifactID)
-		if err != nil {
-			return err
-		}
-		_, err = s.materialize(tx, ws, app, in.RuntimeConfigRevision)
+		selected, snapshot, _, err = s.prepareRelease(tx, ws, app, &in, target)
 		return err
 	}
 	if err := s.access.Do(ctx, p, false, read); err != nil {
@@ -183,15 +154,8 @@ func (s *Service) create(ctx context.Context, p authorization.Principal, ws, app
 	if duplicate {
 		return result, nil
 	}
-	if s.verifier == nil {
-		return Result{}, ErrVerification
-	}
-	if err := s.verifier.Verify(ctx, verifiedArtifactSnapshot(snapshot)); err != nil {
-		if errors.Is(err, ErrArtifactInvalid) {
-			// 保留终态分类供自动发布判定；手动路径经 transport 与 ErrVerification 同映射。
-			return Result{}, err
-		}
-		return Result{}, ErrVerification
+	if err := s.verifyArtifact(ctx, snapshot); err != nil {
+		return Result{}, err
 	}
 	err := s.access.Do(ctx, p, false, func(tx *gorm.DB, current authorization.Principal) error {
 		if _, _, err := s.access.Application(tx, current, ws, app, authorization.DeploymentWrite); err != nil {
@@ -233,17 +197,12 @@ func (s *Service) create(ctx context.Context, p authorization.Principal, ws, app
 		if action == Rollback && selected.PlacementSnapshot != placement {
 			return invalid("历史发布运行位置与已固定位置不一致")
 		}
-		// WORKER 应用无域名；slices.Clone 空切片返回 nil 会被 JSONB 序列化为 SQL NULL，
-		// 违反 application_releases.domains NOT NULL 约束，必须显式落为空数组。
-		domains := slices.Clone(material.View.Domains)
-		if domains == nil {
-			domains = []string{}
+		if placement.ID == "" {
+			if err := tx.Create(&placement).Error; err != nil {
+				return err
+			}
 		}
-		if material.View.Type == runtimeconfig.TypeHTTP {
-			domains = append(domains, placement.DefaultDomain)
-		}
-		slices.Sort(domains)
-		domains = slices.Compact(domains)
+		domains := releaseDomains(material.View, placement)
 		if err = claimDomains(tx, ws, app, placement.DefaultDomain, domains); err != nil {
 			return err
 		}
@@ -327,9 +286,6 @@ func (s *Service) placement(tx *gorm.DB, ws, app string, expectedPolicy int64, c
 			}
 			out.DefaultDomain = domain
 		}
-		if err = tx.Create(&out).Error; err != nil {
-			return fail(err)
-		}
 	} else if out.InstanceID != settings.ID || out.WorkerID != node.WorkerID || out.ClusterNodeUID != node.ClusterNodeUID || out.RuntimeType != config.Type {
 		return fail(invalid("运行位置和类型已固定，不能隐式迁移"))
 	}
@@ -339,6 +295,16 @@ func runtimeNodeReady(v nodeRecord, http bool) bool {
 	now := time.Now()
 	return v.Status == "ACTIVE" && v.OS == "linux" && v.Arch == "amd64" && v.ClusterNodeUID != "" && v.RuntimeReady && v.MetricsReady && (!http || v.IngressReady) && v.LastSeen != nil && now.Sub(*v.LastSeen) <= 90*time.Second && !v.LastSeen.After(now.Add(30*time.Second))
 }
+func releaseDomains(config runtimeconfig.View, placement Placement) []string {
+	// 空域名必须序列化为 JSON 数组，后台进程无域名。
+	domains := append([]string{}, config.Domains...)
+	if config.Type == runtimeconfig.TypeHTTP {
+		domains = append(domains, placement.DefaultDomain)
+	}
+	slices.Sort(domains)
+	return slices.Compact(domains)
+}
+
 func claimDomains(tx *gorm.DB, ws, app, defaultDomain string, domains []string) error {
 	for _, domain := range domains {
 		canonical, err := runtimeconfig.CanonicalDomain(domain)

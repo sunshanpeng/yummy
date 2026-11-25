@@ -80,3 +80,33 @@ func (h *RuntimeConfigHandler) SaveRuntimeConfig(ctx context.Context, req *conne
 	}
 	return connect.NewResponse(&platformv1.SaveRuntimeConfigResponse{Config: runtimeMessage(value)}), nil
 }
+
+func (h *RuntimeConfigHandler) RestoreRuntimeConfig(ctx context.Context, req *connect.Request[platformv1.RestoreRuntimeConfigRequest]) (*connect.Response[platformv1.RestoreRuntimeConfigResponse], error) {
+	p, err := authorization.FromContext(ctx)
+	if err != nil {
+		return nil, RPCError(h.Log, err)
+	}
+	msg := req.Msg
+	value, err := h.Service.RestoreRevision(ctx, p, msg.WorkspaceId, msg.ApplicationId, msg.SourceRevision, msg.ExpectedRevision, msg.IdempotencyKey)
+	if err != nil {
+		return nil, RPCError(h.Log, err)
+	}
+	return connect.NewResponse(&platformv1.RestoreRuntimeConfigResponse{Config: runtimeMessage(value)}), nil
+}
+
+func (h *RuntimeConfigHandler) CompareRuntimeConfigs(ctx context.Context, req *connect.Request[platformv1.CompareRuntimeConfigsRequest]) (*connect.Response[platformv1.CompareRuntimeConfigsResponse], error) {
+	p, err := authorization.FromContext(ctx)
+	if err != nil {
+		return nil, RPCError(h.Log, err)
+	}
+	msg := req.Msg
+	changes, err := h.Service.Compare(ctx, p, msg.WorkspaceId, msg.ApplicationId, msg.BaseRevision, msg.TargetRevision)
+	if err != nil {
+		return nil, RPCError(h.Log, err)
+	}
+	response := &platformv1.CompareRuntimeConfigsResponse{}
+	for _, change := range changes {
+		response.Changes = append(response.Changes, &platformv1.RuntimeConfigChange{Field: change.Field, Name: change.Name, Operation: change.Operation})
+	}
+	return connect.NewResponse(response), nil
+}

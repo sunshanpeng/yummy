@@ -94,6 +94,7 @@ type apiClient struct {
 	source      platformv1connect.SourceServiceClient
 	build       platformv1connect.BuildServiceClient
 	deployment  platformv1connect.DeploymentServiceClient
+	inventory   platformv1connect.InventoryServiceClient
 }
 
 func newHTTPClient() *http.Client {
@@ -120,6 +121,7 @@ func (a *clientApp) config() (string, profile, error) {
 			p.TokenExpiry = time.Time{}
 			p.Workspace = ""
 			p.Application = ""
+			p.Projects = nil
 		}
 		p.Server = server
 	}
@@ -170,7 +172,19 @@ func (a *clientApp) client() (*apiClient, profile, error) {
 	c.source = platformv1connect.NewSourceServiceClient(httpClient, base)
 	c.build = platformv1connect.NewBuildServiceClient(httpClient, base)
 	c.deployment = platformv1connect.NewDeploymentServiceClient(httpClient, base)
+	c.inventory = platformv1connect.NewInventoryServiceClient(httpClient, base)
 	return c, p, nil
+}
+
+func (a *clientApp) clientForServer(base string) (*apiClient, error) {
+	c, _, err := a.client()
+	if err != nil {
+		return nil, err
+	}
+	if c.base != base {
+		return nil, fail("CONFLICT", 6, false, "本地配置的实例地址已变更，请核对原实例的操作结果")
+	}
+	return c, nil
 }
 func auth[T any](token string, msg *T) *connect.Request[T] {
 	req := connect.NewRequest(msg)
@@ -208,11 +222,16 @@ func Command() *cobra.Command {
 	root.PersistentFlags().String("server", "", "实例根 URL")
 	root.PersistentFlags().String("workspace", "", "工作空间 ID")
 	root.PersistentFlags().String("application", "", "应用 ID")
+	root.PersistentFlags().String("output", "json", "输出格式")
 	root.PersistentFlags().Bool("allow-local-http", false, "仅开发时允许回环地址 HTTP")
 	for _, key := range []string{"profile", "config-dir", "server", "workspace", "application", "allow-local-http"} {
 		_ = v.BindPFlag(key, root.PersistentFlags().Lookup(key))
 	}
 	root.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {
+		format, err := cmd.Flags().GetString("output")
+		if err != nil || format != "json" {
+			return fail("INVALID_ARGUMENT", 2, false, "输出格式使用 json")
+		}
 		a.ctx = cmd.Context()
 		a.store.dir = v.GetString("config-dir")
 		if a.store.dir == "" {
@@ -220,7 +239,7 @@ func Command() *cobra.Command {
 		}
 		return nil
 	}
-	root.AddCommand(a.versionCommand(), a.authCommand(), a.configCommand(), a.workspaceCommand(), a.applicationCommand(), a.runtimeConfigCommand(), a.sourceCommand(), a.buildCommand(), a.deploymentCommand())
+	root.AddCommand(a.versionCommand(), a.authCommand(), a.configCommand(), a.workspaceCommand(), a.applicationCommand(), a.useProjectCommand(), a.runtimeConfigCommand(), a.sourceCommand(), a.buildCommand(), a.deploymentCommand(), a.statusCommand(), a.logsCommand(), a.metricsCommand())
 	return root
 }
 func (a *clientApp) versionCommand() *cobra.Command {

@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file platform/v1/runtime_config.proto.
  */
 export const file_platform_v1_runtime_config: GenFile = /*@__PURE__*/
-  fileDesc("CiBwbGF0Zm9ybS92MS9ydW50aW1lX2NvbmZpZy5wcm90bxILcGxhdGZvcm0udjEifAoQUnVudGltZVJlc291cmNlcxIZChFjcHVfcmVxdWVzdF9taWxsaRgBIAEoAxIXCg9jcHVfbGltaXRfbWlsbGkYAiABKAMSGgoSbWVtb3J5X3JlcXVlc3RfbWliGAMgASgDEhgKEG1lbW9yeV9saW1pdF9taWIYBCABKAMihwEKDFJ1bnRpbWVQcm9iZRIMCgRwYXRoGAEgASgJEh0KFWluaXRpYWxfZGVsYXlfc2Vjb25kcxgCIAEoBRIWCg5wZXJpb2Rfc2Vjb25kcxgDIAEoBRIXCg90aW1lb3V0X3NlY29uZHMYBCABKAUSGQoRZmFpbHVyZV90aHJlc2hvbGQYBSABKAUiVQoPUnVudGltZVZhcmlhYmxlEgwKBG5hbWUYASABKAkSDQoFdmFsdWUYAiABKAkSEQoJc2Vuc2l0aXZlGAMgASgIEhIKCmNvbmZpZ3VyZWQYBCABKAgiXQoUUnVudGltZVZhcmlhYmxlSW5wdXQSDAoEbmFtZRgBIAEoCRINCgV2YWx1ZRgCIAEoCRIRCglzZW5zaXRpdmUYAyABKAgSFQoNa2VlcF9leGlzdGluZxgEIAEoCCJTCgtSdW50aW1lRmlsZRIMCgRwYXRoGAEgASgJEg8KB2NvbnRlbnQYAiABKAkSEQoJc2Vuc2l0aXZlGAMgASgIEhIKCmNvbmZpZ3VyZWQYBCABKAgiWwoQUnVudGltZUZpbGVJbnB1dBIMCgRwYXRoGAEgASgJEg8KB2NvbnRlbnQYAiABKAkSEQoJc2Vuc2l0aXZlGAMgASgIEhUKDWtlZXBfZXhpc3RpbmcYBCABKAgiQwoNUnVudGltZVZvbHVtZRIMCgRuYW1lGAEgASgJEhIKCm1vdW50X3BhdGgYAiABKAkSEAoIc2l6ZV9naWIYAyABKAMipQMKDVJ1bnRpbWVDb25maWcSFAoMd29ya3NwYWNlX2lkGAEgASgJEhYKDmFwcGxpY2F0aW9uX2lkGAIgASgJEhAKCHJldmlzaW9uGAMgASgDEhEKCWNvbmZpcm1lZBgEIAEoCBIMCgR0eXBlGAUgASgJEgwKBHBvcnQYBiABKAUSKAoFcHJvYmUYByABKAsyGS5wbGF0Zm9ybS52MS5SdW50aW1lUHJvYmUSDwoHY29tbWFuZBgIIAMoCRIMCgRhcmdzGAkgAygJEi8KCXZhcmlhYmxlcxgKIAMoCzIcLnBsYXRmb3JtLnYxLlJ1bnRpbWVWYXJpYWJsZRInCgVmaWxlcxgLIAMoCzIYLnBsYXRmb3JtLnYxLlJ1bnRpbWVGaWxlEisKB3ZvbHVtZXMYDCADKAsyGi5wbGF0Zm9ybS52MS5SdW50aW1lVm9sdW1lEg8KB2RvbWFpbnMYDSADKAkSMAoJcmVzb3VyY2VzGA4gASgLMh0ucGxhdGZvcm0udjEuUnVudGltZVJlc291cmNlcxISCgpjcmVhdGVkX2F0GA8gASgJIlkKF0dldFJ1bnRpbWVDb25maWdSZXF1ZXN0EhQKDHdvcmtzcGFjZV9pZBgBIAEoCRIWCg5hcHBsaWNhdGlvbl9pZBgCIAEoCRIQCghyZXZpc2lvbhgDIAEoAyJGChhHZXRSdW50aW1lQ29uZmlnUmVzcG9uc2USKgoGY29uZmlnGAEgASgLMhoucGxhdGZvcm0udjEuUnVudGltZUNvbmZpZyLIAwoYU2F2ZVJ1bnRpbWVDb25maWdSZXF1ZXN0EhQKDHdvcmtzcGFjZV9pZBgBIAEoCRIWCg5hcHBsaWNhdGlvbl9pZBgCIAEoCRIZChFleHBlY3RlZF9yZXZpc2lvbhgDIAEoAxIRCgljb25maXJtZWQYBCABKAgSDAoEdHlwZRgFIAEoCRIMCgRwb3J0GAYgASgFEigKBXByb2JlGAcgASgLMhkucGxhdGZvcm0udjEuUnVudGltZVByb2JlEg8KB2NvbW1hbmQYCCADKAkSDAoEYXJncxgJIAMoCRI0Cgl2YXJpYWJsZXMYCiADKAsyIS5wbGF0Zm9ybS52MS5SdW50aW1lVmFyaWFibGVJbnB1dBIsCgVmaWxlcxgLIAMoCzIdLnBsYXRmb3JtLnYxLlJ1bnRpbWVGaWxlSW5wdXQSKwoHdm9sdW1lcxgMIAMoCzIaLnBsYXRmb3JtLnYxLlJ1bnRpbWVWb2x1bWUSDwoHZG9tYWlucxgNIAMoCRIwCglyZXNvdXJjZXMYDiABKAsyHS5wbGF0Zm9ybS52MS5SdW50aW1lUmVzb3VyY2VzEhcKD2lkZW1wb3RlbmN5X2tleRgPIAEoCSJHChlTYXZlUnVudGltZUNvbmZpZ1Jlc3BvbnNlEioKBmNvbmZpZxgBIAEoCzIaLnBsYXRmb3JtLnYxLlJ1bnRpbWVDb25maWcy2wEKFFJ1bnRpbWVDb25maWdTZXJ2aWNlEl8KEEdldFJ1bnRpbWVDb25maWcSJC5wbGF0Zm9ybS52MS5HZXRSdW50aW1lQ29uZmlnUmVxdWVzdBolLnBsYXRmb3JtLnYxLkdldFJ1bnRpbWVDb25maWdSZXNwb25zZRJiChFTYXZlUnVudGltZUNvbmZpZxIlLnBsYXRmb3JtLnYxLlNhdmVSdW50aW1lQ29uZmlnUmVxdWVzdBomLnBsYXRmb3JtLnYxLlNhdmVSdW50aW1lQ29uZmlnUmVzcG9uc2VCPFo6Z2l0aHViLmNvbS9zdW5zaGFucGVuZy95dW1teS9nZW4vZ28vcGxhdGZvcm0vdjE7cGxhdGZvcm12MWIGcHJvdG8z");
+  fileDesc("CiBwbGF0Zm9ybS92MS9ydW50aW1lX2NvbmZpZy5wcm90bxILcGxhdGZvcm0udjEifAoQUnVudGltZVJlc291cmNlcxIZChFjcHVfcmVxdWVzdF9taWxsaRgBIAEoAxIXCg9jcHVfbGltaXRfbWlsbGkYAiABKAMSGgoSbWVtb3J5X3JlcXVlc3RfbWliGAMgASgDEhgKEG1lbW9yeV9saW1pdF9taWIYBCABKAMihwEKDFJ1bnRpbWVQcm9iZRIMCgRwYXRoGAEgASgJEh0KFWluaXRpYWxfZGVsYXlfc2Vjb25kcxgCIAEoBRIWCg5wZXJpb2Rfc2Vjb25kcxgDIAEoBRIXCg90aW1lb3V0X3NlY29uZHMYBCABKAUSGQoRZmFpbHVyZV90aHJlc2hvbGQYBSABKAUiVQoPUnVudGltZVZhcmlhYmxlEgwKBG5hbWUYASABKAkSDQoFdmFsdWUYAiABKAkSEQoJc2Vuc2l0aXZlGAMgASgIEhIKCmNvbmZpZ3VyZWQYBCABKAgiXQoUUnVudGltZVZhcmlhYmxlSW5wdXQSDAoEbmFtZRgBIAEoCRINCgV2YWx1ZRgCIAEoCRIRCglzZW5zaXRpdmUYAyABKAgSFQoNa2VlcF9leGlzdGluZxgEIAEoCCJTCgtSdW50aW1lRmlsZRIMCgRwYXRoGAEgASgJEg8KB2NvbnRlbnQYAiABKAkSEQoJc2Vuc2l0aXZlGAMgASgIEhIKCmNvbmZpZ3VyZWQYBCABKAgiWwoQUnVudGltZUZpbGVJbnB1dBIMCgRwYXRoGAEgASgJEg8KB2NvbnRlbnQYAiABKAkSEQoJc2Vuc2l0aXZlGAMgASgIEhUKDWtlZXBfZXhpc3RpbmcYBCABKAgiQwoNUnVudGltZVZvbHVtZRIMCgRuYW1lGAEgASgJEhIKCm1vdW50X3BhdGgYAiABKAkSEAoIc2l6ZV9naWIYAyABKAMipQMKDVJ1bnRpbWVDb25maWcSFAoMd29ya3NwYWNlX2lkGAEgASgJEhYKDmFwcGxpY2F0aW9uX2lkGAIgASgJEhAKCHJldmlzaW9uGAMgASgDEhEKCWNvbmZpcm1lZBgEIAEoCBIMCgR0eXBlGAUgASgJEgwKBHBvcnQYBiABKAUSKAoFcHJvYmUYByABKAsyGS5wbGF0Zm9ybS52MS5SdW50aW1lUHJvYmUSDwoHY29tbWFuZBgIIAMoCRIMCgRhcmdzGAkgAygJEi8KCXZhcmlhYmxlcxgKIAMoCzIcLnBsYXRmb3JtLnYxLlJ1bnRpbWVWYXJpYWJsZRInCgVmaWxlcxgLIAMoCzIYLnBsYXRmb3JtLnYxLlJ1bnRpbWVGaWxlEisKB3ZvbHVtZXMYDCADKAsyGi5wbGF0Zm9ybS52MS5SdW50aW1lVm9sdW1lEg8KB2RvbWFpbnMYDSADKAkSMAoJcmVzb3VyY2VzGA4gASgLMh0ucGxhdGZvcm0udjEuUnVudGltZVJlc291cmNlcxISCgpjcmVhdGVkX2F0GA8gASgJIlkKF0dldFJ1bnRpbWVDb25maWdSZXF1ZXN0EhQKDHdvcmtzcGFjZV9pZBgBIAEoCRIWCg5hcHBsaWNhdGlvbl9pZBgCIAEoCRIQCghyZXZpc2lvbhgDIAEoAyJGChhHZXRSdW50aW1lQ29uZmlnUmVzcG9uc2USKgoGY29uZmlnGAEgASgLMhoucGxhdGZvcm0udjEuUnVudGltZUNvbmZpZyLIAwoYU2F2ZVJ1bnRpbWVDb25maWdSZXF1ZXN0EhQKDHdvcmtzcGFjZV9pZBgBIAEoCRIWCg5hcHBsaWNhdGlvbl9pZBgCIAEoCRIZChFleHBlY3RlZF9yZXZpc2lvbhgDIAEoAxIRCgljb25maXJtZWQYBCABKAgSDAoEdHlwZRgFIAEoCRIMCgRwb3J0GAYgASgFEigKBXByb2JlGAcgASgLMhkucGxhdGZvcm0udjEuUnVudGltZVByb2JlEg8KB2NvbW1hbmQYCCADKAkSDAoEYXJncxgJIAMoCRI0Cgl2YXJpYWJsZXMYCiADKAsyIS5wbGF0Zm9ybS52MS5SdW50aW1lVmFyaWFibGVJbnB1dBIsCgVmaWxlcxgLIAMoCzIdLnBsYXRmb3JtLnYxLlJ1bnRpbWVGaWxlSW5wdXQSKwoHdm9sdW1lcxgMIAMoCzIaLnBsYXRmb3JtLnYxLlJ1bnRpbWVWb2x1bWUSDwoHZG9tYWlucxgNIAMoCRIwCglyZXNvdXJjZXMYDiABKAsyHS5wbGF0Zm9ybS52MS5SdW50aW1lUmVzb3VyY2VzEhcKD2lkZW1wb3RlbmN5X2tleRgPIAEoCSJHChlTYXZlUnVudGltZUNvbmZpZ1Jlc3BvbnNlEioKBmNvbmZpZxgBIAEoCzIaLnBsYXRmb3JtLnYxLlJ1bnRpbWVDb25maWcimAEKG1Jlc3RvcmVSdW50aW1lQ29uZmlnUmVxdWVzdBIUCgx3b3Jrc3BhY2VfaWQYASABKAkSFgoOYXBwbGljYXRpb25faWQYAiABKAkSFwoPc291cmNlX3JldmlzaW9uGAMgASgDEhkKEWV4cGVjdGVkX3JldmlzaW9uGAQgASgDEhcKD2lkZW1wb3RlbmN5X2tleRgFIAEoCSJKChxSZXN0b3JlUnVudGltZUNvbmZpZ1Jlc3BvbnNlEioKBmNvbmZpZxgBIAEoCzIaLnBsYXRmb3JtLnYxLlJ1bnRpbWVDb25maWcifAocQ29tcGFyZVJ1bnRpbWVDb25maWdzUmVxdWVzdBIUCgx3b3Jrc3BhY2VfaWQYASABKAkSFgoOYXBwbGljYXRpb25faWQYAiABKAkSFQoNYmFzZV9yZXZpc2lvbhgDIAEoAxIXCg90YXJnZXRfcmV2aXNpb24YBCABKAMiRQoTUnVudGltZUNvbmZpZ0NoYW5nZRINCgVmaWVsZBgBIAEoCRIMCgRuYW1lGAIgASgJEhEKCW9wZXJhdGlvbhgDIAEoCSJSCh1Db21wYXJlUnVudGltZUNvbmZpZ3NSZXNwb25zZRIxCgdjaGFuZ2VzGAEgAygLMiAucGxhdGZvcm0udjEuUnVudGltZUNvbmZpZ0NoYW5nZTK4AwoUUnVudGltZUNvbmZpZ1NlcnZpY2USXwoQR2V0UnVudGltZUNvbmZpZxIkLnBsYXRmb3JtLnYxLkdldFJ1bnRpbWVDb25maWdSZXF1ZXN0GiUucGxhdGZvcm0udjEuR2V0UnVudGltZUNvbmZpZ1Jlc3BvbnNlEmIKEVNhdmVSdW50aW1lQ29uZmlnEiUucGxhdGZvcm0udjEuU2F2ZVJ1bnRpbWVDb25maWdSZXF1ZXN0GiYucGxhdGZvcm0udjEuU2F2ZVJ1bnRpbWVDb25maWdSZXNwb25zZRJuChVDb21wYXJlUnVudGltZUNvbmZpZ3MSKS5wbGF0Zm9ybS52MS5Db21wYXJlUnVudGltZUNvbmZpZ3NSZXF1ZXN0GioucGxhdGZvcm0udjEuQ29tcGFyZVJ1bnRpbWVDb25maWdzUmVzcG9uc2USawoUUmVzdG9yZVJ1bnRpbWVDb25maWcSKC5wbGF0Zm9ybS52MS5SZXN0b3JlUnVudGltZUNvbmZpZ1JlcXVlc3QaKS5wbGF0Zm9ybS52MS5SZXN0b3JlUnVudGltZUNvbmZpZ1Jlc3BvbnNlQjxaOmdpdGh1Yi5jb20vc3Vuc2hhbnBlbmcveXVtbXkvZ2VuL2dvL3BsYXRmb3JtL3YxO3BsYXRmb3JtdjFiBnByb3RvMw");
 
 /**
  * @generated from message platform.v1.RuntimeResources
@@ -474,6 +474,140 @@ export const SaveRuntimeConfigResponseSchema: GenMessage<SaveRuntimeConfigRespon
   messageDesc(file_platform_v1_runtime_config, 11);
 
 /**
+ * 复制指定历史版本为新草稿，已发布版本与历史配置仍保留。
+ *
+ * @generated from message platform.v1.RestoreRuntimeConfigRequest
+ */
+export type RestoreRuntimeConfigRequest = Message<"platform.v1.RestoreRuntimeConfigRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: string application_id = 2;
+   */
+  applicationId: string;
+
+  /**
+   * @generated from field: int64 source_revision = 3;
+   */
+  sourceRevision: bigint;
+
+  /**
+   * @generated from field: int64 expected_revision = 4;
+   */
+  expectedRevision: bigint;
+
+  /**
+   * @generated from field: string idempotency_key = 5;
+   */
+  idempotencyKey: string;
+};
+
+/**
+ * Describes the message platform.v1.RestoreRuntimeConfigRequest.
+ * Use `create(RestoreRuntimeConfigRequestSchema)` to create a new message.
+ */
+export const RestoreRuntimeConfigRequestSchema: GenMessage<RestoreRuntimeConfigRequest> = /*@__PURE__*/
+  messageDesc(file_platform_v1_runtime_config, 12);
+
+/**
+ * @generated from message platform.v1.RestoreRuntimeConfigResponse
+ */
+export type RestoreRuntimeConfigResponse = Message<"platform.v1.RestoreRuntimeConfigResponse"> & {
+  /**
+   * @generated from field: platform.v1.RuntimeConfig config = 1;
+   */
+  config?: RuntimeConfig | undefined;
+};
+
+/**
+ * Describes the message platform.v1.RestoreRuntimeConfigResponse.
+ * Use `create(RestoreRuntimeConfigResponseSchema)` to create a new message.
+ */
+export const RestoreRuntimeConfigResponseSchema: GenMessage<RestoreRuntimeConfigResponse> = /*@__PURE__*/
+  messageDesc(file_platform_v1_runtime_config, 13);
+
+/**
+ * @generated from message platform.v1.CompareRuntimeConfigsRequest
+ */
+export type CompareRuntimeConfigsRequest = Message<"platform.v1.CompareRuntimeConfigsRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: string application_id = 2;
+   */
+  applicationId: string;
+
+  /**
+   * @generated from field: int64 base_revision = 3;
+   */
+  baseRevision: bigint;
+
+  /**
+   * @generated from field: int64 target_revision = 4;
+   */
+  targetRevision: bigint;
+};
+
+/**
+ * Describes the message platform.v1.CompareRuntimeConfigsRequest.
+ * Use `create(CompareRuntimeConfigsRequestSchema)` to create a new message.
+ */
+export const CompareRuntimeConfigsRequestSchema: GenMessage<CompareRuntimeConfigsRequest> = /*@__PURE__*/
+  messageDesc(file_platform_v1_runtime_config, 14);
+
+/**
+ * 只返回字段和键名，不返回变量值、文件内容或密文。
+ *
+ * @generated from message platform.v1.RuntimeConfigChange
+ */
+export type RuntimeConfigChange = Message<"platform.v1.RuntimeConfigChange"> & {
+  /**
+   * @generated from field: string field = 1;
+   */
+  field: string;
+
+  /**
+   * @generated from field: string name = 2;
+   */
+  name: string;
+
+  /**
+   * @generated from field: string operation = 3;
+   */
+  operation: string;
+};
+
+/**
+ * Describes the message platform.v1.RuntimeConfigChange.
+ * Use `create(RuntimeConfigChangeSchema)` to create a new message.
+ */
+export const RuntimeConfigChangeSchema: GenMessage<RuntimeConfigChange> = /*@__PURE__*/
+  messageDesc(file_platform_v1_runtime_config, 15);
+
+/**
+ * @generated from message platform.v1.CompareRuntimeConfigsResponse
+ */
+export type CompareRuntimeConfigsResponse = Message<"platform.v1.CompareRuntimeConfigsResponse"> & {
+  /**
+   * @generated from field: repeated platform.v1.RuntimeConfigChange changes = 1;
+   */
+  changes: RuntimeConfigChange[];
+};
+
+/**
+ * Describes the message platform.v1.CompareRuntimeConfigsResponse.
+ * Use `create(CompareRuntimeConfigsResponseSchema)` to create a new message.
+ */
+export const CompareRuntimeConfigsResponseSchema: GenMessage<CompareRuntimeConfigsResponse> = /*@__PURE__*/
+  messageDesc(file_platform_v1_runtime_config, 16);
+
+/**
  * @generated from service platform.v1.RuntimeConfigService
  */
 export const RuntimeConfigService: GenService<{
@@ -492,6 +626,22 @@ export const RuntimeConfigService: GenService<{
     methodKind: "unary";
     input: typeof SaveRuntimeConfigRequestSchema;
     output: typeof SaveRuntimeConfigResponseSchema;
+  },
+  /**
+   * @generated from rpc platform.v1.RuntimeConfigService.CompareRuntimeConfigs
+   */
+  compareRuntimeConfigs: {
+    methodKind: "unary";
+    input: typeof CompareRuntimeConfigsRequestSchema;
+    output: typeof CompareRuntimeConfigsResponseSchema;
+  },
+  /**
+   * @generated from rpc platform.v1.RuntimeConfigService.RestoreRuntimeConfig
+   */
+  restoreRuntimeConfig: {
+    methodKind: "unary";
+    input: typeof RestoreRuntimeConfigRequestSchema;
+    output: typeof RestoreRuntimeConfigResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_platform_v1_runtime_config, 0);

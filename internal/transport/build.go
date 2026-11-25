@@ -49,7 +49,7 @@ func buildInput(v *platformv1.BuildInput) (build.CreateInput, error) {
 	if v == nil {
 		return build.CreateInput{}, authorization.ErrInvalid
 	}
-	result := build.CreateInput{SourceSnapshotID: v.SourceSnapshotId, ConfigRevision: v.ConfigRevision, ExpectedPolicyRevision: v.ExpectedPolicyRevision, IdempotencyKey: v.IdempotencyKey, AutoDeploy: v.AutoDeploy, RuntimeConfigRevision: v.RuntimeConfigRevision, ExpectedServingRelease: v.ExpectedServingRelease}
+	result := build.CreateInput{SourceSnapshotID: v.SourceSnapshotId, ConfigRevision: v.ConfigRevision, ExpectedPolicyRevision: v.ExpectedPolicyRevision, IdempotencyKey: v.IdempotencyKey, AutoDeploy: v.AutoDeploy, RuntimeConfigRevision: v.RuntimeConfigRevision, ExpectedServingRelease: v.ExpectedServingRelease, ExpectedRuntimeGeneration: v.ExpectedRuntimeGeneration}
 	if o := v.Overrides; o != nil {
 		result.Overrides = build.Overrides{Dockerfile: o.Dockerfile, Context: o.Context, Target: o.Target, Args: o.Args}
 		if o.SecretRefs != nil {

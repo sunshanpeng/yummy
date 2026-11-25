@@ -55,6 +55,8 @@ type Builds interface {
 
 type Deployments interface {
 	GetStatus(context.Context, authorization.Principal, string, string) (deployment.Status, error)
+	ListRuntimeLogs(context.Context, authorization.Principal, string, string, deployment.RuntimeLogQuery) (deployment.RuntimeLogPage, error)
+	ListRuntimeMetrics(context.Context, authorization.Principal, string, string, time.Time, time.Time) ([]deployment.RuntimeMetricSample, error)
 	CreateDeployment(context.Context, authorization.Principal, string, string, deployment.CreateInput) (deployment.Result, error)
 	Get(context.Context, authorization.Principal, string, string, string) (deployment.Result, error)
 	List(context.Context, authorization.Principal, string, string, int, string) (deployment.Page, error)

@@ -53,6 +53,28 @@ func expectedRuntime(v *platformv1.ExpectedRuntime) (deployment.Expected, error)
 	return deployment.Expected{Generation: v.Generation, ServingReleaseID: v.ServingReleaseId, ConfigRevision: v.ConfigRevision}, nil
 }
 
+func (h *DeploymentHandler) PreviewDeployment(ctx context.Context, r *connect.Request[platformv1.PreviewDeploymentRequest]) (*connect.Response[platformv1.PreviewDeploymentResponse], error) {
+	principal, err := authorization.FromContext(ctx)
+	if err != nil {
+		return nil, deploymentError(h.Log, err)
+	}
+	msg := r.Msg
+	expected, err := expectedRuntime(msg.Expected)
+	if err != nil {
+		return nil, deploymentError(h.Log, err)
+	}
+	preview, err := h.Service.Preview(ctx, principal, msg.WorkspaceId, msg.ApplicationId, deployment.CreateInput{
+		ArtifactID: msg.ArtifactId, RuntimeConfigRevision: msg.RuntimeConfigRevision, ExpectedPolicyRevision: msg.ExpectedPolicyRevision, Expected: expected,
+	}, msg.TargetReleaseId)
+	if err != nil {
+		return nil, deploymentError(h.Log, err)
+	}
+	return connect.NewResponse(&platformv1.PreviewDeploymentResponse{
+		ArtifactDigest: preview.Artifact.Digest, Platform: preview.Artifact.Platform, RuntimeConfigRevision: preview.RuntimeConfigRevision,
+		Domains: preview.Domains, TlsStatus: preview.TLSStatus,
+	}), nil
+}
+
 func (h *DeploymentHandler) CreateDeployment(ctx context.Context, r *connect.Request[platformv1.CreateDeploymentRequest]) (*connect.Response[platformv1.CreateDeploymentResponse], error) {
 	p, err := authorization.FromContext(ctx)
 	if err != nil {
@@ -106,7 +128,7 @@ func (h *DeploymentHandler) GetRuntimeStatus(ctx context.Context, r *connect.Req
 	if err != nil {
 		return nil, deploymentError(h.Log, err)
 	}
-	return connect.NewResponse(&platformv1.GetRuntimeStatusResponse{Status: &platformv1.RuntimeStatus{WorkspaceId: v.WorkspaceID, ApplicationId: v.ApplicationID, Generation: v.Generation, DesiredState: v.DesiredState, DesiredReleaseId: v.DesiredReleaseID, ServingReleaseId: v.ServingReleaseID, ServingGeneration: v.ServingGeneration, ObservedGeneration: v.ObservedGeneration, ObservedState: v.ObservedState, ActiveOperationId: v.ActiveOperationID, LastObservedAt: optionalTimestamp(v.LastObservedAt)}}), nil
+	return connect.NewResponse(&platformv1.GetRuntimeStatusResponse{Status: &platformv1.RuntimeStatus{WorkspaceId: v.WorkspaceID, ApplicationId: v.ApplicationID, Generation: v.Generation, DesiredState: v.DesiredState, DesiredReleaseId: v.DesiredReleaseID, ServingReleaseId: v.ServingReleaseID, ServingGeneration: v.ServingGeneration, ServingConfigRevision: v.ServingConfigRevision, ObservedGeneration: v.ObservedGeneration, ObservedState: v.ObservedState, ActiveOperationId: v.ActiveOperationID, LastObservedAt: optionalTimestamp(v.LastObservedAt)}}), nil
 }
 
 func (h *DeploymentHandler) RollbackDeployment(ctx context.Context, r *connect.Request[platformv1.RollbackDeploymentRequest]) (*connect.Response[platformv1.RollbackDeploymentResponse], error) {
@@ -169,11 +191,20 @@ func (h *DeploymentHandler) GetRuntimeLogs(ctx context.Context, r *connect.Reque
 	if err != nil {
 		return nil, deploymentError(h.Log, err)
 	}
-	v, err := h.Service.ListRuntimeLogs(ctx, p, r.Msg.WorkspaceId, r.Msg.ApplicationId, int(r.Msg.Limit), r.Msg.Cursor, r.Msg.PodUid, r.Msg.Container)
+	since, err := runtimeObservationTime(r.Msg.Since)
 	if err != nil {
 		return nil, deploymentError(h.Log, err)
 	}
-	response := &platformv1.GetRuntimeLogsResponse{NextCursor: v.NextCursor}
+	until, err := runtimeObservationTime(r.Msg.Until)
+	if err != nil {
+		return nil, deploymentError(h.Log, err)
+	}
+	filter := deployment.RuntimeLogQuery{Limit: int(r.Msg.Limit), Cursor: r.Msg.Cursor, PodUID: r.Msg.PodUid, Container: r.Msg.Container, Since: since, Until: until}
+	v, err := h.Service.ListRuntimeLogs(ctx, p, r.Msg.WorkspaceId, r.Msg.ApplicationId, filter)
+	if err != nil {
+		return nil, deploymentError(h.Log, err)
+	}
+	response := &platformv1.GetRuntimeLogsResponse{NextCursor: v.NextCursor, ResumeCursor: v.ResumeCursor}
 	for _, item := range v.Items {
 		response.Chunks = append(response.Chunks, &platformv1.RuntimeLogChunk{Id: item.ID, WorkspaceId: item.WorkspaceID, ApplicationId: item.ApplicationID, PodUid: item.PodUID, Container: item.Container, RestartCount: item.RestartCount, Seq: item.Seq, Content: item.Content, Truncated: item.Truncated, CreatedAt: timestamp(item.CreatedAt)})
 	}

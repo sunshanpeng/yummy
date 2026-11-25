@@ -5,6 +5,7 @@ import { errorMessage, formatTime } from "../lib/platform";
 import { decodeLogChunks, formatLogClock, usePrefersReducedMotion, useRuntimeLogs } from "../lib/runtime";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
+import { Input } from "./ui/input";
 import { Empty, Loading, Notice } from "./console-kit";
 
 // 应用运行日志：服务端按 (created_at, id) 时间正序键集分页，
@@ -14,9 +15,14 @@ export function RuntimeLogsCard() {
   const [podUid, setPodUid] = useState("");
   const [container, setContainer] = useState("");
   const [showTime, setShowTime] = useState(true);
-  const query = useRuntimeLogs({ workspaceId: app.workspaceId, applicationId: app.id, podUid, container });
+  const [range, setRange] = useState({ since: "", until: "" });
+  const [rangeError, setRangeError] = useState("");
+  const [search, setSearch] = useState("");
+  const query = useRuntimeLogs({ workspaceId: app.workspaceId, applicationId: app.id, podUid, container, ...range });
   const chunks = useMemo(() => query.data?.pages.flatMap((page) => page.chunks) ?? [], [query.data]);
   const blocks = useMemo(() => decodeLogChunks(chunks), [chunks]);
+  const searchTerm = search.trim().toLocaleLowerCase();
+  const visibleBlocks = searchTerm ? blocks.filter((block) => block.text.toLocaleLowerCase().includes(searchTerm)) : blocks;
   const podOptions = useMemo(() => [...new Set(chunks.map((chunk) => chunk.podUid).filter(Boolean))], [chunks]);
   const containerOptions = useMemo(() => [...new Set(chunks.map((chunk) => chunk.container).filter(Boolean))], [chunks]);
   const viewport = useRef<HTMLDivElement>(null);
@@ -56,6 +62,23 @@ export function RuntimeLogsCard() {
           )}
         </div>
       )}
+      <form className="mt-4 flex flex-wrap items-end gap-3" onSubmit={(event) => {
+        event.preventDefault();
+        const values = new FormData(event.currentTarget);
+        const sinceValue = String(values.get("since") ?? "");
+        const untilValue = String(values.get("until") ?? "");
+        if (sinceValue && untilValue && sinceValue > untilValue) {
+          setRangeError("结束时间须晚于或等于开始时间。");
+          return;
+        }
+        setRangeError("");
+        setRange({ since: sinceValue ? new Date(sinceValue).toISOString() : "", until: untilValue ? new Date(untilValue).toISOString() : "" });
+      }}>
+        <label className="space-y-1 text-xs">开始时间<Input type="datetime-local" name="since" /></label>
+        <label className="space-y-1 text-xs">结束时间<Input type="datetime-local" name="until" /></label>
+        <Button variant="outline" size="sm" type="submit">应用时间范围</Button>
+      </form>
+      {rangeError && <div className="mt-2"><Notice tone="error">{rangeError}</Notice></div>}
       <div className="mt-4">
         {query.isPending ? (
           <Loading label="正在加载运行日志…" />
@@ -65,11 +88,13 @@ export function RuntimeLogsCard() {
             <Button variant="outline" onClick={() => void query.refetch()}>重新加载</Button>
           </div>
         ) : blocks.length === 0 ? (
-          <Empty title="暂无运行日志" description="应用在运行中，但控制面还没有收到任何日志块；worker 上报后这里显示真实日志，不会补历史数据。" />
+          <Empty title="暂无运行日志" description={range.since || range.until ? "所选时间范围内没有已上报的日志。" : "应用在运行中，等待 worker 上报日志。"} />
         ) : (
           <>
+            <label className="mb-3 block max-w-sm space-y-1 text-xs">查找已加载日志<Input type="search" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
+            {searchTerm && visibleBlocks.length === 0 && <p className="mb-3 text-sm text-muted-foreground">已加载日志中没有匹配内容。</p>}
             <div ref={viewport} role="log" aria-label="应用运行日志" className="max-h-[420px] overflow-y-auto rounded-md border bg-muted/40 p-4 font-mono text-xs leading-relaxed">
-              {blocks.map((block) => (
+              {visibleBlocks.map((block) => (
                 <div key={block.id} className="flex gap-3 border-b border-border/40 py-1.5 last:border-b-0 last:pb-0">
                   {showTime && (
                     <time dateTime={block.createdAt} title={formatTime(block.createdAt)} className="w-[4.5rem] shrink-0 tabular-nums text-muted-foreground">
@@ -89,7 +114,7 @@ export function RuntimeLogsCard() {
               ))}
             </div>
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-              <span>已显示 {blocks.length} 个日志块（按时间正序）{query.hasNextPage ? "，服务端还有更多。" : "，已到保留窗口最新。"}</span>
+              <span>已显示 {visibleBlocks.length} 个日志块{searchTerm ? `（已加载 ${blocks.length} 个）` : "（按时间正序）"}{query.hasNextPage ? "，服务端还有更多。" : "，已到保留窗口最新。"}</span>
               <div className="flex flex-wrap gap-2">
                 <Button variant="outline" size="sm" aria-label="滚动到日志底部" onClick={scrollToBottom}>
                   <ArrowDownToLine />滚动到底部

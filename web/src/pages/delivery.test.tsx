@@ -8,7 +8,7 @@ import { router } from "../router";
 import { platform } from "../lib/platform";
 import { sessionOptions } from "../session";
 import { GetSessionResponseSchema } from "../gen/platform/v1/identity_pb";
-import { PreviewBuildResponseSchema, ReadBuildLogsResponseSchema } from "../gen/platform/v1/build_pb";
+import { PreviewBuildResponseSchema, ReadBuildLogsResponseSchema, SaveBuildConfigResponseSchema } from "../gen/platform/v1/build_pb";
 import { GetRuntimeStatusResponseSchema } from "../gen/platform/v1/deployment_pb";
 import { GetRuntimeConfigResponseSchema } from "../gen/platform/v1/runtime_config_pb";
 import { ResolveExecutionResponseSchema } from "../gen/platform/v1/inventory_pb";
@@ -22,19 +22,20 @@ function mount(path: string) {
   render(<QueryClientProvider client={client}><RouterProvider router={instance} /></QueryClientProvider>);
   return client;
 }
-function transport() {
+function transport(overrides: Record<string, Record<string, unknown>> = {}) {
   vi.spyOn(platform.runtime, "getRuntimeConfig").mockResolvedValue(create(GetRuntimeConfigResponseSchema, { config: { revision: 5n, confirmed: true } }));
   vi.spyOn(platform.deployments, "getRuntimeStatus").mockResolvedValue(create(GetRuntimeStatusResponseSchema, { status: { generation: 3n, servingReleaseId: "release-old" } }));
   return vi.spyOn(platform.transport, "unary").mockImplementation(async (method) => {
-    const values = method.name === "GetWorkspace" ? { workspace: { id: "w1", slug: "w1", name: "空间", capabilities: ["workspace:read"] } }
+    const values = overrides[method.name] ?? (method.name === "GetWorkspace" ? { workspace: { id: "w1", slug: "w1", name: "空间", capabilities: ["workspace:read"] } }
       : method.name === "ListWorkspaces" ? { workspaces: [] }
       : method.name === "GetApplication" ? { application: { id: "a1", workspaceId: "w1", name: "my-app", capabilities } }
       : method.name === "GetBuildConfig" ? { config: { dockerfile: "Dockerfile", context: "." }, revision: 2n }
       : method.name === "GetRuntimeConfig" ? { config: { revision: 5n, confirmed: true, type: "HTTP", port: 8080 } }
       : method.name === "GetRuntimeStatus" ? { status: { workspaceId: "w1", applicationId: "a1", generation: 3n, servingReleaseId: "release-old", observedGeneration: 3n, observedState: "RUNNING" } }
       : method.name === "ResolveExecution" ? { summary: { policyRevision: 7n, ready: true, platform: "linux/amd64", imageRepository: "registry.example.com/a1" } }
+      : method.name === "PreviewDeployment" ? { artifactDigest: "sha256:verified", platform: "linux/amd64", runtimeConfigRevision: 5n, domains: ["my-app.apps.example.com"], tlsStatus: "PENDING" }
       : method.name === "GetBuild" ? { build: { id: "b1", workspaceId: "w1", applicationId: "a1", state: "FAILED", sourceSnapshotId: "src1", configRevision: 2n, policyRevision: 7n } }
-      : {};
+      : {});
     return { stream: false, service: method.parent, method, header: new Headers(), trailer: new Headers(), message: create(method.output, values) };
   });
 }
@@ -101,6 +102,8 @@ describe("构建与发布冻结交互", () => {
     mount("/w/w1/apps/a1/deployments?artifactId=artifact1"); const user = userEvent.setup();
     await waitFor(() => expect((screen.getByLabelText("运行配置版本（只读）") as HTMLInputElement).value).toBe("5"));
     await user.click(screen.getByRole("button", { name: "检查部署更改" }));
+    expect(await screen.findByText("sha256:verified")).toBeTruthy();
+    expect(screen.getByText("入口证书绑定待处理。域名和 HTTPS 连通性将在发布后检查。")).toBeTruthy();
     await user.click(await screen.findByRole("button", { name: "确认部署此版本" }));
     expect(deploy).not.toHaveBeenCalled();
     const dialog = await screen.findByRole("dialog");
@@ -119,5 +122,50 @@ describe("构建与发布冻结交互", () => {
     await screen.findByRole("heading", { name: "构建设置" });
     expect(screen.queryByRole("button", { name: "创建构建密钥" })).toBeNull();
     expect(secrets).not.toHaveBeenCalled();
+  });
+  it("预览展示自动选定的构建方式：没有 Dockerfile 时说明由 Railpack 识别，目标阶段不适用", async () => {
+    transport();
+    vi.spyOn(platform.builds, "previewBuild").mockResolvedValue(create(PreviewBuildResponseSchema, { preview: { sourceSnapshotId: "src1", execution: { policyRevision: 7n, ready: true }, config: { method: "RAILPACK", dockerfile: "", context: "." } } }));
+    mount("/w/w1/apps/a1/builds/new?snapshotId=src1"); const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "预览构建输入" }));
+    await screen.findByRole("heading", { name: "确认冻结输入" });
+    const method = screen.getByText("构建方式").nextElementSibling as HTMLElement;
+    expect(method.textContent).toContain("Railpack");
+    expect(method.textContent).toContain("源码没有 Dockerfile");
+    expect(screen.getByText("Dockerfile / 上下文 / 阶段").nextElementSibling?.textContent).toBe("无 · . · 不适用");
+  });
+  it("预览展示使用源码 Dockerfile 的构建方式与实际文件路径", async () => {
+    transport();
+    vi.spyOn(platform.builds, "previewBuild").mockResolvedValue(create(PreviewBuildResponseSchema, { preview: { sourceSnapshotId: "src1", execution: { policyRevision: 7n, ready: true }, config: { method: "DOCKERFILE", dockerfile: "svc/Dockerfile", context: "svc", target: "prod" } } }));
+    mount("/w/w1/apps/a1/builds/new?snapshotId=src1"); const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "预览构建输入" }));
+    await screen.findByRole("heading", { name: "确认冻结输入" });
+    expect(screen.getByText("构建方式").nextElementSibling?.textContent).toContain("使用源码中的 Dockerfile");
+    expect(screen.getByText("Dockerfile / 上下文 / 阶段").nextElementSibling?.textContent).toBe("svc/Dockerfile · svc · prod");
+  });
+  it("构建详情按实际阶段显示识别结果，并给出 Railpack 失败的可操作说明", async () => {
+    transport({ GetBuild: { build: { id: "b1", workspaceId: "w1", applicationId: "a1", state: "FAILED", stage: "PLANNING", errorCode: "RAILPACK_PLAN_FAILED", sourceSnapshotId: "src1", configRevision: 2n, policyRevision: 7n, config: { method: "RAILPACK", dockerfile: "", context: "." } } } });
+    mount("/w/w1/apps/a1/builds/b1");
+    expect((await screen.findByText(/Railpack 无法识别源码/)).textContent).toContain("RAILPACK_PLAN_FAILED");
+    expect(screen.getByText("构建方式").nextElementSibling?.textContent).toBe("Railpack");
+    expect(screen.getByText("Dockerfile / 上下文").nextElementSibling?.textContent).toBe("无 / .");
+  });
+  it("构建配置的 Dockerfile 路径可以留空并原样保存，由受理时自动选择", async () => {
+    transport({ GetBuildConfig: { config: { dockerfile: "", context: "." }, revision: 2n } });
+    const save = vi.spyOn(platform.builds, "saveBuildConfig").mockResolvedValue(create(SaveBuildConfigResponseSchema, { revision: 3n }));
+    mount("/w/w1/apps/a1/settings/build"); const user = userEvent.setup();
+    const dockerfile = (await screen.findByLabelText("Dockerfile 路径（可选）")) as HTMLInputElement;
+    expect(dockerfile.value).toBe("");
+    expect(screen.getByText(/没有则由 Railpack 识别源码构建/)).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "保存构建配置" }));
+    await waitFor(() => expect(save).toHaveBeenCalled());
+    expect(save.mock.calls[0][0]).toEqual(expect.objectContaining({ expectedRevision: 2n, config: expect.objectContaining({ dockerfile: "", context: "." }) }));
+  });
+  it("源码上传页的 Dockerfile 路径是可选项，默认留空", async () => {
+    transport();
+    mount("/w/w1/apps/a1/builds/source");
+    const dockerfile = (await screen.findByLabelText("Dockerfile 相对路径（可选）")) as HTMLInputElement;
+    expect(dockerfile.value).toBe("");
+    expect(screen.getByText(/留空表示不指定/)).toBeTruthy();
   });
 });

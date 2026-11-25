@@ -33,6 +33,9 @@ const (
 // reflection-formatted method names, remove the leading slash and convert the remaining slash to a
 // period.
 const (
+	// DeploymentServicePreviewDeploymentProcedure is the fully-qualified name of the
+	// DeploymentService's PreviewDeployment RPC.
+	DeploymentServicePreviewDeploymentProcedure = "/platform.v1.DeploymentService/PreviewDeployment"
 	// DeploymentServiceCreateDeploymentProcedure is the fully-qualified name of the DeploymentService's
 	// CreateDeployment RPC.
 	DeploymentServiceCreateDeploymentProcedure = "/platform.v1.DeploymentService/CreateDeployment"
@@ -61,6 +64,7 @@ const (
 
 // DeploymentServiceClient is a client for the platform.v1.DeploymentService service.
 type DeploymentServiceClient interface {
+	PreviewDeployment(context.Context, *connect.Request[v1.PreviewDeploymentRequest]) (*connect.Response[v1.PreviewDeploymentResponse], error)
 	CreateDeployment(context.Context, *connect.Request[v1.CreateDeploymentRequest]) (*connect.Response[v1.CreateDeploymentResponse], error)
 	GetDeployment(context.Context, *connect.Request[v1.GetDeploymentRequest]) (*connect.Response[v1.GetDeploymentResponse], error)
 	ListDeployments(context.Context, *connect.Request[v1.ListDeploymentsRequest]) (*connect.Response[v1.ListDeploymentsResponse], error)
@@ -82,6 +86,12 @@ func NewDeploymentServiceClient(httpClient connect.HTTPClient, baseURL string, o
 	baseURL = strings.TrimRight(baseURL, "/")
 	deploymentServiceMethods := v1.File_platform_v1_deployment_proto.Services().ByName("DeploymentService").Methods()
 	return &deploymentServiceClient{
+		previewDeployment: connect.NewClient[v1.PreviewDeploymentRequest, v1.PreviewDeploymentResponse](
+			httpClient,
+			baseURL+DeploymentServicePreviewDeploymentProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("PreviewDeployment")),
+			connect.WithClientOptions(opts...),
+		),
 		createDeployment: connect.NewClient[v1.CreateDeploymentRequest, v1.CreateDeploymentResponse](
 			httpClient,
 			baseURL+DeploymentServiceCreateDeploymentProcedure,
@@ -135,6 +145,7 @@ func NewDeploymentServiceClient(httpClient connect.HTTPClient, baseURL string, o
 
 // deploymentServiceClient implements DeploymentServiceClient.
 type deploymentServiceClient struct {
+	previewDeployment  *connect.Client[v1.PreviewDeploymentRequest, v1.PreviewDeploymentResponse]
 	createDeployment   *connect.Client[v1.CreateDeploymentRequest, v1.CreateDeploymentResponse]
 	getDeployment      *connect.Client[v1.GetDeploymentRequest, v1.GetDeploymentResponse]
 	listDeployments    *connect.Client[v1.ListDeploymentsRequest, v1.ListDeploymentsResponse]
@@ -143,6 +154,11 @@ type deploymentServiceClient struct {
 	changeRuntime      *connect.Client[v1.ChangeRuntimeRequest, v1.ChangeRuntimeResponse]
 	getRuntimeLogs     *connect.Client[v1.GetRuntimeLogsRequest, v1.GetRuntimeLogsResponse]
 	getRuntimeMetrics  *connect.Client[v1.GetRuntimeMetricsRequest, v1.GetRuntimeMetricsResponse]
+}
+
+// PreviewDeployment calls platform.v1.DeploymentService.PreviewDeployment.
+func (c *deploymentServiceClient) PreviewDeployment(ctx context.Context, req *connect.Request[v1.PreviewDeploymentRequest]) (*connect.Response[v1.PreviewDeploymentResponse], error) {
+	return c.previewDeployment.CallUnary(ctx, req)
 }
 
 // CreateDeployment calls platform.v1.DeploymentService.CreateDeployment.
@@ -187,6 +203,7 @@ func (c *deploymentServiceClient) GetRuntimeMetrics(ctx context.Context, req *co
 
 // DeploymentServiceHandler is an implementation of the platform.v1.DeploymentService service.
 type DeploymentServiceHandler interface {
+	PreviewDeployment(context.Context, *connect.Request[v1.PreviewDeploymentRequest]) (*connect.Response[v1.PreviewDeploymentResponse], error)
 	CreateDeployment(context.Context, *connect.Request[v1.CreateDeploymentRequest]) (*connect.Response[v1.CreateDeploymentResponse], error)
 	GetDeployment(context.Context, *connect.Request[v1.GetDeploymentRequest]) (*connect.Response[v1.GetDeploymentResponse], error)
 	ListDeployments(context.Context, *connect.Request[v1.ListDeploymentsRequest]) (*connect.Response[v1.ListDeploymentsResponse], error)
@@ -204,6 +221,12 @@ type DeploymentServiceHandler interface {
 // and JSON codecs. They also support gzip compression.
 func NewDeploymentServiceHandler(svc DeploymentServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
 	deploymentServiceMethods := v1.File_platform_v1_deployment_proto.Services().ByName("DeploymentService").Methods()
+	deploymentServicePreviewDeploymentHandler := connect.NewUnaryHandler(
+		DeploymentServicePreviewDeploymentProcedure,
+		svc.PreviewDeployment,
+		connect.WithSchema(deploymentServiceMethods.ByName("PreviewDeployment")),
+		connect.WithHandlerOptions(opts...),
+	)
 	deploymentServiceCreateDeploymentHandler := connect.NewUnaryHandler(
 		DeploymentServiceCreateDeploymentProcedure,
 		svc.CreateDeployment,
@@ -254,6 +277,8 @@ func NewDeploymentServiceHandler(svc DeploymentServiceHandler, opts ...connect.H
 	)
 	return "/platform.v1.DeploymentService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
+		case DeploymentServicePreviewDeploymentProcedure:
+			deploymentServicePreviewDeploymentHandler.ServeHTTP(w, r)
 		case DeploymentServiceCreateDeploymentProcedure:
 			deploymentServiceCreateDeploymentHandler.ServeHTTP(w, r)
 		case DeploymentServiceGetDeploymentProcedure:
@@ -278,6 +303,10 @@ func NewDeploymentServiceHandler(svc DeploymentServiceHandler, opts ...connect.H
 
 // UnimplementedDeploymentServiceHandler returns CodeUnimplemented from all methods.
 type UnimplementedDeploymentServiceHandler struct{}
+
+func (UnimplementedDeploymentServiceHandler) PreviewDeployment(context.Context, *connect.Request[v1.PreviewDeploymentRequest]) (*connect.Response[v1.PreviewDeploymentResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("platform.v1.DeploymentService.PreviewDeployment is not implemented"))
+}
 
 func (UnimplementedDeploymentServiceHandler) CreateDeployment(context.Context, *connect.Request[v1.CreateDeploymentRequest]) (*connect.Response[v1.CreateDeploymentResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("platform.v1.DeploymentService.CreateDeployment is not implemented"))

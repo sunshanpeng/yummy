@@ -2,7 +2,7 @@ import { create } from "@bufbuild/protobuf";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { router } from "../router";
@@ -58,7 +58,7 @@ function baseHandlers(observedState: string): Record<string, Handler> {
   return {
     ListWorkspaces: () => create(ListWorkspacesResponseSchema, { workspaces: [] }),
     GetWorkspace: () => create(GetWorkspaceResponseSchema, { workspace: { id: "w1", slug: "w1", name: "空间", capabilities: ["workspace:read"] } }),
-    GetApplication: () => create(GetApplicationResponseSchema, { application: { id: "a1", workspaceId: "w1", name: "应用", status: "ACTIVE", revision: 3n, capabilities: ["application:read", "deployment:read", "runtime:read"] } }),
+    GetApplication: () => create(GetApplicationResponseSchema, { application: { id: "a1", workspaceId: "w1", name: "应用", status: "ACTIVE", revision: 3n, capabilities: ["application:read", "deployment:read", "runtime:read", "logs:read"] } }),
     ListDeployments: () => create(ListDeploymentsResponseSchema, { deployments: [] }),
     GetRuntimeStatus: () => create(GetRuntimeStatusResponseSchema, { status: { workspaceId: "w1", applicationId: "a1", generation: 2n, desiredState: "RUN", observedState, servingReleaseId: "rel-1", observedGeneration: 2n, lastObservedAt: "2026-11-10T10:00:00Z" } }),
   };
@@ -141,6 +141,12 @@ describe("应用运行日志与基础监控", () => {
     expect(calls.GetRuntimeLogs.some((message) => message.cursor === "cursor-1" && message.limit === 50)).toBe(true);
     // 滚动到底部按钮可点击且不抛错（jsdom 无 Element.scrollTo，实现需有回退）。
     await user.click(screen.getByRole("button", { name: "滚动到日志底部" }));
+    await user.type(screen.getByRole("searchbox", { name: "查找已加载日志" }), "更新");
+    expect(screen.getByText("更新的日志块")).toBeTruthy();
+    expect(screen.queryByText("好 第二块")).toBeNull();
+    fireEvent.change(screen.getByLabelText("开始时间"), { target: { value: "2026-11-10T10:00" } });
+    await user.click(screen.getByRole("button", { name: "应用时间范围" }));
+    await waitFor(() => expect(calls.GetRuntimeLogs.some((message) => message.cursor === "" && message.since === new Date("2026-11-10T10:00").toISOString())).toBe(true));
   });
 
   it("多采样点渲染 CPU/内存图表，窗口切换重新请求对应 since", async () => {

@@ -39,12 +39,20 @@ const (
 	// RuntimeConfigServiceSaveRuntimeConfigProcedure is the fully-qualified name of the
 	// RuntimeConfigService's SaveRuntimeConfig RPC.
 	RuntimeConfigServiceSaveRuntimeConfigProcedure = "/platform.v1.RuntimeConfigService/SaveRuntimeConfig"
+	// RuntimeConfigServiceCompareRuntimeConfigsProcedure is the fully-qualified name of the
+	// RuntimeConfigService's CompareRuntimeConfigs RPC.
+	RuntimeConfigServiceCompareRuntimeConfigsProcedure = "/platform.v1.RuntimeConfigService/CompareRuntimeConfigs"
+	// RuntimeConfigServiceRestoreRuntimeConfigProcedure is the fully-qualified name of the
+	// RuntimeConfigService's RestoreRuntimeConfig RPC.
+	RuntimeConfigServiceRestoreRuntimeConfigProcedure = "/platform.v1.RuntimeConfigService/RestoreRuntimeConfig"
 )
 
 // RuntimeConfigServiceClient is a client for the platform.v1.RuntimeConfigService service.
 type RuntimeConfigServiceClient interface {
 	GetRuntimeConfig(context.Context, *connect.Request[v1.GetRuntimeConfigRequest]) (*connect.Response[v1.GetRuntimeConfigResponse], error)
 	SaveRuntimeConfig(context.Context, *connect.Request[v1.SaveRuntimeConfigRequest]) (*connect.Response[v1.SaveRuntimeConfigResponse], error)
+	CompareRuntimeConfigs(context.Context, *connect.Request[v1.CompareRuntimeConfigsRequest]) (*connect.Response[v1.CompareRuntimeConfigsResponse], error)
+	RestoreRuntimeConfig(context.Context, *connect.Request[v1.RestoreRuntimeConfigRequest]) (*connect.Response[v1.RestoreRuntimeConfigResponse], error)
 }
 
 // NewRuntimeConfigServiceClient constructs a client for the platform.v1.RuntimeConfigService
@@ -70,13 +78,27 @@ func NewRuntimeConfigServiceClient(httpClient connect.HTTPClient, baseURL string
 			connect.WithSchema(runtimeConfigServiceMethods.ByName("SaveRuntimeConfig")),
 			connect.WithClientOptions(opts...),
 		),
+		compareRuntimeConfigs: connect.NewClient[v1.CompareRuntimeConfigsRequest, v1.CompareRuntimeConfigsResponse](
+			httpClient,
+			baseURL+RuntimeConfigServiceCompareRuntimeConfigsProcedure,
+			connect.WithSchema(runtimeConfigServiceMethods.ByName("CompareRuntimeConfigs")),
+			connect.WithClientOptions(opts...),
+		),
+		restoreRuntimeConfig: connect.NewClient[v1.RestoreRuntimeConfigRequest, v1.RestoreRuntimeConfigResponse](
+			httpClient,
+			baseURL+RuntimeConfigServiceRestoreRuntimeConfigProcedure,
+			connect.WithSchema(runtimeConfigServiceMethods.ByName("RestoreRuntimeConfig")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // runtimeConfigServiceClient implements RuntimeConfigServiceClient.
 type runtimeConfigServiceClient struct {
-	getRuntimeConfig  *connect.Client[v1.GetRuntimeConfigRequest, v1.GetRuntimeConfigResponse]
-	saveRuntimeConfig *connect.Client[v1.SaveRuntimeConfigRequest, v1.SaveRuntimeConfigResponse]
+	getRuntimeConfig      *connect.Client[v1.GetRuntimeConfigRequest, v1.GetRuntimeConfigResponse]
+	saveRuntimeConfig     *connect.Client[v1.SaveRuntimeConfigRequest, v1.SaveRuntimeConfigResponse]
+	compareRuntimeConfigs *connect.Client[v1.CompareRuntimeConfigsRequest, v1.CompareRuntimeConfigsResponse]
+	restoreRuntimeConfig  *connect.Client[v1.RestoreRuntimeConfigRequest, v1.RestoreRuntimeConfigResponse]
 }
 
 // GetRuntimeConfig calls platform.v1.RuntimeConfigService.GetRuntimeConfig.
@@ -89,10 +111,22 @@ func (c *runtimeConfigServiceClient) SaveRuntimeConfig(ctx context.Context, req 
 	return c.saveRuntimeConfig.CallUnary(ctx, req)
 }
 
+// CompareRuntimeConfigs calls platform.v1.RuntimeConfigService.CompareRuntimeConfigs.
+func (c *runtimeConfigServiceClient) CompareRuntimeConfigs(ctx context.Context, req *connect.Request[v1.CompareRuntimeConfigsRequest]) (*connect.Response[v1.CompareRuntimeConfigsResponse], error) {
+	return c.compareRuntimeConfigs.CallUnary(ctx, req)
+}
+
+// RestoreRuntimeConfig calls platform.v1.RuntimeConfigService.RestoreRuntimeConfig.
+func (c *runtimeConfigServiceClient) RestoreRuntimeConfig(ctx context.Context, req *connect.Request[v1.RestoreRuntimeConfigRequest]) (*connect.Response[v1.RestoreRuntimeConfigResponse], error) {
+	return c.restoreRuntimeConfig.CallUnary(ctx, req)
+}
+
 // RuntimeConfigServiceHandler is an implementation of the platform.v1.RuntimeConfigService service.
 type RuntimeConfigServiceHandler interface {
 	GetRuntimeConfig(context.Context, *connect.Request[v1.GetRuntimeConfigRequest]) (*connect.Response[v1.GetRuntimeConfigResponse], error)
 	SaveRuntimeConfig(context.Context, *connect.Request[v1.SaveRuntimeConfigRequest]) (*connect.Response[v1.SaveRuntimeConfigResponse], error)
+	CompareRuntimeConfigs(context.Context, *connect.Request[v1.CompareRuntimeConfigsRequest]) (*connect.Response[v1.CompareRuntimeConfigsResponse], error)
+	RestoreRuntimeConfig(context.Context, *connect.Request[v1.RestoreRuntimeConfigRequest]) (*connect.Response[v1.RestoreRuntimeConfigResponse], error)
 }
 
 // NewRuntimeConfigServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -114,12 +148,28 @@ func NewRuntimeConfigServiceHandler(svc RuntimeConfigServiceHandler, opts ...con
 		connect.WithSchema(runtimeConfigServiceMethods.ByName("SaveRuntimeConfig")),
 		connect.WithHandlerOptions(opts...),
 	)
+	runtimeConfigServiceCompareRuntimeConfigsHandler := connect.NewUnaryHandler(
+		RuntimeConfigServiceCompareRuntimeConfigsProcedure,
+		svc.CompareRuntimeConfigs,
+		connect.WithSchema(runtimeConfigServiceMethods.ByName("CompareRuntimeConfigs")),
+		connect.WithHandlerOptions(opts...),
+	)
+	runtimeConfigServiceRestoreRuntimeConfigHandler := connect.NewUnaryHandler(
+		RuntimeConfigServiceRestoreRuntimeConfigProcedure,
+		svc.RestoreRuntimeConfig,
+		connect.WithSchema(runtimeConfigServiceMethods.ByName("RestoreRuntimeConfig")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/platform.v1.RuntimeConfigService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case RuntimeConfigServiceGetRuntimeConfigProcedure:
 			runtimeConfigServiceGetRuntimeConfigHandler.ServeHTTP(w, r)
 		case RuntimeConfigServiceSaveRuntimeConfigProcedure:
 			runtimeConfigServiceSaveRuntimeConfigHandler.ServeHTTP(w, r)
+		case RuntimeConfigServiceCompareRuntimeConfigsProcedure:
+			runtimeConfigServiceCompareRuntimeConfigsHandler.ServeHTTP(w, r)
+		case RuntimeConfigServiceRestoreRuntimeConfigProcedure:
+			runtimeConfigServiceRestoreRuntimeConfigHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -135,4 +185,12 @@ func (UnimplementedRuntimeConfigServiceHandler) GetRuntimeConfig(context.Context
 
 func (UnimplementedRuntimeConfigServiceHandler) SaveRuntimeConfig(context.Context, *connect.Request[v1.SaveRuntimeConfigRequest]) (*connect.Response[v1.SaveRuntimeConfigResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("platform.v1.RuntimeConfigService.SaveRuntimeConfig is not implemented"))
+}
+
+func (UnimplementedRuntimeConfigServiceHandler) CompareRuntimeConfigs(context.Context, *connect.Request[v1.CompareRuntimeConfigsRequest]) (*connect.Response[v1.CompareRuntimeConfigsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("platform.v1.RuntimeConfigService.CompareRuntimeConfigs is not implemented"))
+}
+
+func (UnimplementedRuntimeConfigServiceHandler) RestoreRuntimeConfig(context.Context, *connect.Request[v1.RestoreRuntimeConfigRequest]) (*connect.Response[v1.RestoreRuntimeConfigResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("platform.v1.RuntimeConfigService.RestoreRuntimeConfig is not implemented"))
 }

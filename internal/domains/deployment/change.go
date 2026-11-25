@@ -216,11 +216,19 @@ func (s *Service) GetStatus(ctx context.Context, p authorization.Principal, ws, 
 		if err != nil {
 			return err
 		}
+		var servingConfigRevision int64
+		if v.ServingReleaseID != nil {
+			release, err := readRelease(tx, ws, app, *v.ServingReleaseID)
+			if err != nil {
+				return err
+			}
+			servingConfigRevision = release.RuntimeConfigRevision
+		}
 		observed := v.ObservedState
 		if v.LastObservedAt != nil && time.Since(*v.LastObservedAt) > 90*time.Second && observed != Stopped {
 			observed = Unknown
 		}
-		result = Status{WorkspaceID: ws, ApplicationID: app, Generation: v.Generation, DesiredState: v.DesiredState, DesiredReleaseID: text(v.DesiredReleaseID), ServingReleaseID: text(v.ServingReleaseID), ServingGeneration: v.ServingGeneration, ObservedGeneration: v.ObservedGeneration, ObservedState: observed, ActiveOperationID: text(v.ActiveOperationID), LastObservedAt: v.LastObservedAt}
+		result = Status{WorkspaceID: ws, ApplicationID: app, Generation: v.Generation, DesiredState: v.DesiredState, DesiredReleaseID: text(v.DesiredReleaseID), ServingReleaseID: text(v.ServingReleaseID), ServingGeneration: v.ServingGeneration, ServingConfigRevision: servingConfigRevision, ObservedGeneration: v.ObservedGeneration, ObservedState: observed, ActiveOperationID: text(v.ActiveOperationID), LastObservedAt: v.LastObservedAt}
 		return nil
 	})
 	return result, err

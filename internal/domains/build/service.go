@@ -180,6 +180,9 @@ func (s *Service) prepare(tx *gorm.DB, ws, app string, in CreateInput) (Preview,
 	if in.ExpectedPolicyRevision < 1 || in.ConfigRevision < 0 || (!in.AutoDeploy && (in.RuntimeConfigRevision != 0 || in.ExpectedServingRelease != "")) || len(in.SourceSnapshotID) > 128 || strings.ContainsRune(in.SourceSnapshotID, 0) || len(in.ExpectedServingRelease) > 128 || strings.ContainsRune(in.ExpectedServingRelease, 0) || !utf8.ValidString(in.SourceSnapshotID) || !utf8.ValidString(in.ExpectedServingRelease) {
 		return fail(authorization.ErrInvalid)
 	}
+	if in.ExpectedRuntimeGeneration != nil && (!in.AutoDeploy || *in.ExpectedRuntimeGeneration < 0) {
+		return fail(authorization.ErrInvalid)
+	}
 	config, err := configAt(tx, ws, app, in.ConfigRevision)
 	if err != nil {
 		return fail(err)
@@ -350,6 +353,7 @@ func (s *Service) create(ctx context.Context, p authorization.Principal, ws, app
 		}
 		now := time.Now().UTC()
 		record := buildRecord{ID: id, WorkspaceID: ws, ApplicationID: app, ActorID: current.UserID, ActorAuthVersion: current.AuthVersion, IdempotencyKey: in.IdempotencyKey, Fingerprint: fingerprint, SourceSnapshotID: preview.SourceSnapshotID, SourceSHA256: preview.SourceSHA256, ConfigRevision: in.ConfigRevision, ConfigSnapshot: preview.Config, InstanceID: settings.ID, PolicyRevision: policy.Revision, NodeID: policy.BuildNodeID, RegistryID: registry.ID, CredentialVersion: registry.CredentialVersion, Repository: preview.Execution.ImageRepository, Tag: id, Platform: Platform, ExecutionSnapshot: preview.Execution, AutoDeploy: in.AutoDeploy, RuntimeConfigRevision: preview.RuntimeConfigRevision, ExpectedServingRelease: in.ExpectedServingRelease, RetryOf: retry, State: Queued, DesiredState: "RUN", Version: 1, CreatedAt: now, UpdatedAt: now, DeadlineAt: now.Add(time.Hour)}
+		record.ExpectedRuntimeGeneration = in.ExpectedRuntimeGeneration
 		if current.TokenID != "" {
 			token := current.TokenID
 			record.TokenID = &token

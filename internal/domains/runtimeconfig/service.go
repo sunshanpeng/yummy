@@ -172,14 +172,30 @@ func (s *Service) Save(ctx context.Context, p authorization.Principal, workspace
 	if err != nil {
 		return runtimeconfig.View{}, invalid(err.Error())
 	}
+	return s.save(ctx, p, workspaceID, applicationID, input, 0)
+}
+
+func (s *Service) RestoreRevision(ctx context.Context, p authorization.Principal, workspaceID, applicationID string, sourceRevision, expectedRevision int64, idempotencyKey string) (runtimeconfig.View, error) {
+	if sourceRevision < 1 || sourceRevision >= expectedRevision || idempotencyKey == "" {
+		return runtimeconfig.View{}, authorization.ErrInvalid
+	}
+	return s.save(ctx, p, workspaceID, applicationID, runtimeconfig.Input{ExpectedRevision: expectedRevision, IdempotencyKey: idempotencyKey}, sourceRevision)
+}
+
+func (s *Service) save(ctx context.Context, p authorization.Principal, workspaceID, applicationID string, input runtimeconfig.Input, sourceRevision int64) (runtimeconfig.View, error) {
 	if input.IdempotencyKey != "" && (len(input.IdempotencyKey) > 128 || input.IdempotencyKey != strings.TrimSpace(input.IdempotencyKey) || !utf8.ValidString(input.IdempotencyKey) || strings.ContainsAny(input.IdempotencyKey, "\x00\r\n")) {
 		return runtimeconfig.View{}, invalid("幂等键无效")
 	}
 	payload, _ := json.Marshal(input)
+	auditAction := "application.config.save"
+	if sourceRevision != 0 {
+		payload, _ = json.Marshal([]int64{sourceRevision, input.ExpectedRevision})
+		auditAction = "application.config.restore"
+	}
 	sum := sha256.Sum256(payload)
 	fingerprint := hex.EncodeToString(sum[:])
 	var result runtimeconfig.View
-	err = s.access.Do(ctx, p, false, func(tx *gorm.DB, current authorization.Principal) error {
+	err := s.access.Do(ctx, p, false, func(tx *gorm.DB, current authorization.Principal) error {
 		if _, _, err := s.access.Application(tx, current, workspaceID, applicationID, authorization.ConfigWrite); err != nil {
 			return err
 		}
@@ -188,6 +204,9 @@ func (s *Service) Save(ctx context.Context, p authorization.Principal, workspace
 			return err
 		}
 		action := "runtime.config.save:" + applicationID
+		if sourceRevision != 0 {
+			action = "runtime.config.restore:" + applicationID
+		}
 		if input.IdempotencyKey != "" {
 			var key model.IdempotencyKey
 			err := tx.First(&key, "workspace_id = ? AND actor_id = ? AND action = ? AND key = ?", workspaceID, current.UserID, action, input.IdempotencyKey).Error
@@ -234,6 +253,20 @@ func (s *Service) Save(ctx context.Context, p authorization.Principal, workspace
 			}
 			spec.Files = append(spec.Files, value)
 		}
+		if sourceRevision != 0 {
+			base, baseSpec, err := readRevision(tx, workspaceID, applicationID, sourceRevision)
+			if err != nil {
+				return err
+			}
+			spec = baseSpec
+			input.Confirmed = base.Confirmed
+			if err := s.reencrypt(workspaceID, applicationID, "variable", sourceRevision, revision, spec.Variables); err != nil {
+				return err
+			}
+			if err := s.reencrypt(workspaceID, applicationID, "file", sourceRevision, revision, spec.Files); err != nil {
+				return err
+			}
+		}
 		// KeepExisting 展开后按最终明文计算总量，不能用小请求累积绕过配额。
 		if err := s.validateFinalSize(workspaceID, applicationID, revision, spec); err != nil {
 			return err
@@ -256,13 +289,32 @@ func (s *Service) Save(ctx context.Context, p authorization.Principal, workspace
 				return err
 			}
 		}
-		if err := audit.Record(tx, current.UserID, "application.config.save", "runtime_config", id, &workspaceID, &applicationID); err != nil {
+		if err := audit.Record(tx, current.UserID, auditAction, "runtime_config", id, &workspaceID, &applicationID); err != nil {
 			return err
 		}
 		result = asView(value, spec)
 		return nil
 	})
 	return result, err
+}
+
+// reencrypt 保持敏感值只在控制面内流转，并为新版本重新绑定密文身份。
+func (s *Service) reencrypt(workspaceID, applicationID, kind string, sourceRevision, revision int64, values []secretValue) error {
+	for i, value := range values {
+		if !value.Sensitive {
+			continue
+		}
+		plain, err := s.box.Decrypt(value.Ciphertext, secretIdentity(workspaceID, applicationID, kind, value.Name, sourceRevision))
+		if err != nil {
+			return err
+		}
+		values[i].Ciphertext, err = s.box.Encrypt(plain, secretIdentity(workspaceID, applicationID, kind, value.Name, revision))
+		clear(plain)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func secretIdentity(workspaceID, applicationID, kind, name string, revision int64) string {

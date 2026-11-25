@@ -27,7 +27,7 @@ func (f expectedFlags) expected() *platformv1.ExpectedRuntime {
 	return &platformv1.ExpectedRuntime{Generation: f.generation, ServingReleaseId: f.serving, ConfigRevision: f.config}
 }
 func (a *clientApp) deploymentCommand() *cobra.Command {
-	root := &cobra.Command{Use: "deploy", Short: "发布、回滚与运行操作"}
+	root := a.deploySourceCommand()
 	status := &cobra.Command{Use: "status", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
 		c, p, e := a.client()
 		if e != nil {
@@ -37,11 +37,7 @@ func (a *clientApp) deploymentCommand() *cobra.Command {
 		if e != nil {
 			return e
 		}
-		r, e := c.deployment.GetRuntimeStatus(cmd.Context(), auth(c.token, &platformv1.GetRuntimeStatusRequest{WorkspaceId: w, ApplicationId: id}))
-		if e != nil {
-			return rpcError(e)
-		}
-		return output(cmd, r.Msg)
+		return c.runtimeStatus(cmd, w, id)
 	}}
 	get := &cobra.Command{Use: "get OPERATION_ID", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		c, p, e := a.client()

@@ -681,17 +681,18 @@ func (x *BuildPreview) GetRuntimeConfigRevision() int64 {
 }
 
 type BuildInput struct {
-	state                  protoimpl.MessageState `protogen:"open.v1"`
-	SourceSnapshotId       string                 `protobuf:"bytes,1,opt,name=source_snapshot_id,json=sourceSnapshotId,proto3" json:"source_snapshot_id,omitempty"`
-	ConfigRevision         int64                  `protobuf:"varint,2,opt,name=config_revision,json=configRevision,proto3" json:"config_revision,omitempty"`
-	ExpectedPolicyRevision int64                  `protobuf:"varint,3,opt,name=expected_policy_revision,json=expectedPolicyRevision,proto3" json:"expected_policy_revision,omitempty"`
-	Overrides              *BuildOverrides        `protobuf:"bytes,4,opt,name=overrides,proto3" json:"overrides,omitempty"`
-	IdempotencyKey         string                 `protobuf:"bytes,5,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
-	AutoDeploy             bool                   `protobuf:"varint,6,opt,name=auto_deploy,json=autoDeploy,proto3" json:"auto_deploy,omitempty"`
-	RuntimeConfigRevision  int64                  `protobuf:"varint,7,opt,name=runtime_config_revision,json=runtimeConfigRevision,proto3" json:"runtime_config_revision,omitempty"`
-	ExpectedServingRelease string                 `protobuf:"bytes,8,opt,name=expected_serving_release,json=expectedServingRelease,proto3" json:"expected_serving_release,omitempty"`
-	unknownFields          protoimpl.UnknownFields
-	sizeCache              protoimpl.SizeCache
+	state                     protoimpl.MessageState `protogen:"open.v1"`
+	SourceSnapshotId          string                 `protobuf:"bytes,1,opt,name=source_snapshot_id,json=sourceSnapshotId,proto3" json:"source_snapshot_id,omitempty"`
+	ConfigRevision            int64                  `protobuf:"varint,2,opt,name=config_revision,json=configRevision,proto3" json:"config_revision,omitempty"`
+	ExpectedPolicyRevision    int64                  `protobuf:"varint,3,opt,name=expected_policy_revision,json=expectedPolicyRevision,proto3" json:"expected_policy_revision,omitempty"`
+	Overrides                 *BuildOverrides        `protobuf:"bytes,4,opt,name=overrides,proto3" json:"overrides,omitempty"`
+	IdempotencyKey            string                 `protobuf:"bytes,5,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	AutoDeploy                bool                   `protobuf:"varint,6,opt,name=auto_deploy,json=autoDeploy,proto3" json:"auto_deploy,omitempty"`
+	RuntimeConfigRevision     int64                  `protobuf:"varint,7,opt,name=runtime_config_revision,json=runtimeConfigRevision,proto3" json:"runtime_config_revision,omitempty"`
+	ExpectedServingRelease    string                 `protobuf:"bytes,8,opt,name=expected_serving_release,json=expectedServingRelease,proto3" json:"expected_serving_release,omitempty"`
+	ExpectedRuntimeGeneration *int64                 `protobuf:"varint,9,opt,name=expected_runtime_generation,json=expectedRuntimeGeneration,proto3,oneof" json:"expected_runtime_generation,omitempty"`
+	unknownFields             protoimpl.UnknownFields
+	sizeCache                 protoimpl.SizeCache
 }
 
 func (x *BuildInput) Reset() {
@@ -778,6 +779,13 @@ func (x *BuildInput) GetExpectedServingRelease() string {
 		return x.ExpectedServingRelease
 	}
 	return ""
+}
+
+func (x *BuildInput) GetExpectedRuntimeGeneration() int64 {
+	if x != nil && x.ExpectedRuntimeGeneration != nil {
+		return *x.ExpectedRuntimeGeneration
+	}
+	return 0
 }
 
 type GetBuildConfigRequest struct {
@@ -1959,7 +1967,7 @@ const file_platform_v1_build_proto_rawDesc = "" +
 	"\vauto_deploy\x18\x06 \x01(\bR\n" +
 	"autoDeploy\x12;\n" +
 	"\x17runtime_config_revision\x18\a \x01(\x03H\x00R\x15runtimeConfigRevision\x88\x01\x01B\x1a\n" +
-	"\x18_runtime_config_revision\"\x94\x03\n" +
+	"\x18_runtime_config_revision\"\xf9\x03\n" +
 	"\n" +
 	"BuildInput\x12,\n" +
 	"\x12source_snapshot_id\x18\x01 \x01(\tR\x10sourceSnapshotId\x12'\n" +
@@ -1970,7 +1978,9 @@ const file_platform_v1_build_proto_rawDesc = "" +
 	"\vauto_deploy\x18\x06 \x01(\bR\n" +
 	"autoDeploy\x126\n" +
 	"\x17runtime_config_revision\x18\a \x01(\x03R\x15runtimeConfigRevision\x128\n" +
-	"\x18expected_serving_release\x18\b \x01(\tR\x16expectedServingRelease\"a\n" +
+	"\x18expected_serving_release\x18\b \x01(\tR\x16expectedServingRelease\x12C\n" +
+	"\x1bexpected_runtime_generation\x18\t \x01(\x03H\x00R\x19expectedRuntimeGeneration\x88\x01\x01B\x1e\n" +
+	"\x1c_expected_runtime_generation\"a\n" +
 	"\x15GetBuildConfigRequest\x12!\n" +
 	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x12%\n" +
 	"\x0eapplication_id\x18\x02 \x01(\tR\rapplicationId\"f\n" +
@@ -2156,6 +2166,7 @@ func file_platform_v1_build_proto_init() {
 	file_platform_v1_build_proto_msgTypes[2].OneofWrappers = []any{}
 	file_platform_v1_build_proto_msgTypes[4].OneofWrappers = []any{}
 	file_platform_v1_build_proto_msgTypes[5].OneofWrappers = []any{}
+	file_platform_v1_build_proto_msgTypes[6].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

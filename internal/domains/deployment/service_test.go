@@ -568,3 +568,28 @@ func TestWorkerFirstDeploymentPersistsEmptyDomains(t *testing.T) {
 		t.Fatalf("WORKER发布不应有域名: %+v", result.Release.Domains)
 	}
 }
+
+func TestDeploymentPreviewChecksArtifactWithoutCreatingRuntimeResources(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	input := CreateInput{ArtifactID: e.artifact, RuntimeConfigRevision: 1, ExpectedPolicyRevision: 1, Expected: Expected{ConfigRevision: 1}}
+	checked := false
+	e.service.verifier = verifierFunc(func(_ context.Context, artifact ArtifactSnapshot) error {
+		checked = artifact.ID == e.artifact
+		return nil
+	})
+	preview, err := e.service.Preview(ctx, e.root, "space", "app_one", input, "")
+	if err != nil || !checked || preview.Artifact.Digest == "" || preview.RuntimeConfigRevision != 1 || preview.TLSStatus != "PENDING" {
+		t.Fatalf("预检结果 = %#v, %v", preview, err)
+	}
+	for _, table := range []string{(Placement{}).TableName(), (releaseRecord{}).TableName(), (operationRecord{}).TableName(), (domainRecord{}).TableName()} {
+		var count int64
+		if err := e.db.Table(table).Count(&count).Error; err != nil || count != 0 {
+			t.Fatalf("预检写入 %s：%d, %v", table, count, err)
+		}
+	}
+	e.service.verifier = verifierFunc(func(context.Context, ArtifactSnapshot) error { return ErrArtifactInvalid })
+	if _, err := e.service.Preview(ctx, e.root, "space", "app_one", input, ""); !errors.Is(err, ErrArtifactInvalid) {
+		t.Fatalf("镜像丢失应拒绝预检：%v", err)
+	}
+}

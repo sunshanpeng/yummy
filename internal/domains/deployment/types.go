@@ -169,17 +169,18 @@ type Result struct {
 }
 
 type Status struct {
-	WorkspaceID        string     `json:"workspaceId"`
-	ApplicationID      string     `json:"applicationId"`
-	Generation         int64      `json:"generation"`
-	DesiredState       string     `json:"desiredState"`
-	DesiredReleaseID   string     `json:"desiredReleaseId"`
-	ServingReleaseID   string     `json:"servingReleaseId"`
-	ServingGeneration  int64      `json:"servingGeneration"`
-	ObservedGeneration int64      `json:"observedGeneration"`
-	ObservedState      string     `json:"observedState"`
-	ActiveOperationID  string     `json:"activeOperationId"`
-	LastObservedAt     *time.Time `json:"lastObservedAt,omitempty"`
+	WorkspaceID           string     `json:"workspaceId"`
+	ApplicationID         string     `json:"applicationId"`
+	Generation            int64      `json:"generation"`
+	DesiredState          string     `json:"desiredState"`
+	DesiredReleaseID      string     `json:"desiredReleaseId"`
+	ServingReleaseID      string     `json:"servingReleaseId"`
+	ServingGeneration     int64      `json:"servingGeneration"`
+	ServingConfigRevision int64      `json:"servingConfigRevision"`
+	ObservedGeneration    int64      `json:"observedGeneration"`
+	ObservedState         string     `json:"observedState"`
+	ActiveOperationID     string     `json:"activeOperationId"`
+	LastObservedAt        *time.Time `json:"lastObservedAt,omitempty"`
 }
 
 type Page struct {
@@ -306,6 +307,13 @@ type RuntimeMetricSample struct {
 
 // RuntimeLogPage 按 (created_at, id) 时间正序分页返回运行日志块。
 type RuntimeLogPage struct {
-	Items      []RuntimeLog `json:"items"`
-	NextCursor string       `json:"nextCursor"`
+	Items        []RuntimeLog `json:"items"`
+	NextCursor   string       `json:"nextCursor"`
+	ResumeCursor string       `json:"resumeCursor"`
+}
+
+type RuntimeLogQuery struct {
+	Limit                     int
+	Cursor, PodUID, Container string
+	Since, Until              time.Time
 }
