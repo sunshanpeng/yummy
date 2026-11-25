@@ -29,7 +29,8 @@ type Config struct {
 type CreateInput struct {
 	Size   int64
 	SHA256 string
-	// Dockerfile 相对上传归档的根，不接受宿主路径。
+	// Dockerfile 相对上传归档的根，不接受宿主路径；空值表示不显式指定，不要求归档含
+	// Dockerfile（纯源码由构建受理时交给 Railpack）。显式路径必须在归档中存在。
 	Dockerfile string
 }
 

@@ -18,6 +18,7 @@ import (
 	"time"
 
 	platformv1 "github.com/sunshanpeng/yummy/gen/go/platform/v1"
+	"github.com/sunshanpeng/yummy/internal/infra/buildrunner"
 	"github.com/sunshanpeng/yummy/internal/infra/kube"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -74,6 +75,10 @@ type Options struct {
 	BuildKitAddr string
 	// HostBuildCtl 宿主构建模式下的 buildctl 固定二进制路径；同为必填。
 	HostBuildCtl string
+	// RailpackPath 宿主构建模式下的 Railpack 固定二进制路径。与资格配置里 digest 钉住的
+	// RailpackFrontendImage 同时具备，节点才接受没有 Dockerfile 的构建（失败关闭）；
+	// Pod 构建模式的 Railpack 随 runner 镜像提供，不使用此项。
+	RailpackPath string
 	// ObserveInterval 部署观察间隔（默认5秒）。
 	ObserveInterval time.Duration
 	// SourceMaxBytes 源码归档大小上限；wire 协议未携带，须由节点配置显式给出
@@ -162,6 +167,10 @@ func (e *Executor) Build(ctx context.Context, command *platformv1.WorkerBuildCom
 		if e.options.Installed.HostBuild {
 			return e.runHostBuild(ctx, command, task, emitter)
 		}
+		// Pod 模式的 Railpack 随 runner 镜像提供，只需配置 digest 钉住的前端镜像；缺失时失败关闭，不创建 Job。
+		if task.Method == kube.MethodRailpack && !buildrunner.ValidRailpackFrontendImage(e.options.Installed.RailpackFrontendImage) {
+			return e.railpackUnavailable(command, "railpack-unavailable-"+command.StableJobName, emitter)
+		}
 		if err := e.options.Adapter.BootstrapBuildNamespace(ctx, task.SpaceSlug, task.WorkspaceID); err != nil {
 			return err
 		}
@@ -184,6 +193,16 @@ func (e *Executor) Build(ctx context.Context, command *platformv1.WorkerBuildCom
 	}
 }
 
+// railpackUnavailable 在本节点没有配置 Railpack 时失败关闭：用构建日志说明原因，并以明确的错误码结束构建。
+// 不创建 Job、不下载源码，也不让这个必然失败的构建在重投中空转。
+func (e *Executor) railpackUnavailable(command *platformv1.WorkerBuildCommand, jobUID string, emitter Emitter) error {
+	message := "本节点没有配置 Railpack，无法构建没有 Dockerfile 的源码。请在源码中加入 Dockerfile，或请全局管理员为 worker 配置 Railpack（--railpack-frontend-image，宿主构建另需 --railpack-path）。\n"
+	if err := emitter.BuildLog(&platformv1.WorkerBuildLog{AttemptId: command.AttemptId, Content: []byte(message)}); err != nil {
+		return err
+	}
+	return emitter.BuildEvent(&platformv1.WorkerBuildEvent{AttemptId: command.AttemptId, Kind: "FAILED", JobUid: jobUID, ErrorCode: "RAILPACK_UNAVAILABLE", LogsComplete: true})
+}
+
 // secretWireVersion 是构建密钥的固定版本标记：wire 协议未携带每个密钥的版本号，
 // 固定值保证同一 attempt 的 Job 快照指纹稳定（密钥明文不参与 kube 快照指纹）。
 // maxLogChunk 是分块日志的协议上限，与控制面 build 域的 MaxLogChunk 保持一致。
@@ -194,6 +213,15 @@ const secretWireVersion = "wire-v1"
 // buildTask 只做字段翻译与本地一致性检查；Kubernetes 安全校验留给 kube 适配器。
 // JobName/StableJobName 一律取 command.StableJobName：控制面持久名是事实来源。
 func (e *Executor) buildTask(command *platformv1.WorkerBuildCommand) (kube.BuildTask, error) {
+	// 构建方式由控制面在受理时冻结；空值与 DOCKERFILE 都是 Dockerfile 构建（kube.BuildTask.Method 为空）。
+	method := ""
+	switch command.BuildMethod {
+	case "", "DOCKERFILE":
+	case "RAILPACK":
+		method = kube.MethodRailpack
+	default:
+		return kube.BuildTask{}, fmt.Errorf("workerexec: 未知构建方式 %q", command.BuildMethod)
+	}
 	task := kube.BuildTask{
 		AttemptID:     command.AttemptId,
 		JobName:       command.StableJobName,
@@ -206,6 +234,7 @@ func (e *Executor) buildTask(command *platformv1.WorkerBuildCommand) (kube.Build
 		Dockerfile:    command.Dockerfile,
 		Context:       command.ContextPath,
 		Target:        command.Target,
+		Method:        method,
 		BuildArgs:     command.BuildArgs,
 		ImageTag:      command.Repository + ":" + command.Tag,
 		JobUID:        types.UID(command.JobUid),

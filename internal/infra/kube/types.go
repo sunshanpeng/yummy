@@ -61,6 +61,10 @@ type InstalledCapabilities struct {
 	// 默认 seccomp 双重封锁，privileged 方案违背安全不变量）。仅作为构建
 	// 执行路径开关；部署仍走 Kubernetes pod 且不随此开关放宽。
 	HostBuild bool
+	// RailpackFrontendImage 是 Railpack 的 BuildKit 前端镜像，必须以 digest 钉住并与固定的
+	// Railpack 版本配套。空值表示本节点不接受没有 Dockerfile 的构建（失败关闭）。
+	// 只来自安装配置，控制面与构建请求都不能下发：前端镜像等同于在 BuildKit 内执行的代码。
+	RailpackFrontendImage string
 }
 
 type Config struct {

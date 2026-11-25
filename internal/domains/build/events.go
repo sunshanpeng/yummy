@@ -18,7 +18,8 @@ import (
 )
 
 var digestRE = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
-var stages = map[string]int{"PREPARING_SOURCE": 1, "BUILDING": 2, "PUSHING": 3, "VERIFYING_ARTIFACT": 4}
+// PLANNING 只出现在 Railpack 构建：识别源码并生成构建计划，位于准备源码与构建镜像之间。
+var stages = map[string]int{"PREPARING_SOURCE": 1, "PLANNING": 2, "BUILDING": 3, "PUSHING": 4, "VERIFYING_ARTIFACT": 5}
 
 func validateEvent(e Event) error {
 	if e.AttemptID == "" || e.Seq < 1 || len(e.JobUID) > 200 || len(e.ErrorCode) > 128 || !utf8.ValidString(e.JobUID) || !utf8.ValidString(e.ErrorCode) || strings.ContainsAny(e.JobUID, "\x00\r\n") || strings.ContainsRune(e.ErrorCode, 0) {

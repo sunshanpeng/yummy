@@ -29,7 +29,7 @@ func buildError(log *zap.Logger, err error) error {
 	return RPCError(log, err)
 }
 func buildConfigMessage(v build.Config) *platformv1.BuildConfig {
-	result := &platformv1.BuildConfig{Dockerfile: v.Dockerfile, Context: v.Context, Target: v.Target, Args: v.Args}
+	result := &platformv1.BuildConfig{Dockerfile: v.Dockerfile, Context: v.Context, Method: v.Method, Target: v.Target, Args: v.Args}
 	for _, ref := range v.SecretRefs {
 		result.SecretRefs = append(result.SecretRefs, &platformv1.BuildSecretRef{SecretId: ref.SecretID, Name: ref.Name, Version: ref.Version})
 	}

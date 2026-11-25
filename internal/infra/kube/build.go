@@ -6,12 +6,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/url"
 	"path"
 	"regexp"
 	"slices"
 	"strings"
 
+	"github.com/sunshanpeng/yummy/internal/infra/buildrunner"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -34,6 +36,10 @@ type BuildSecret struct {
 	ID, Version string
 	Value       []byte `json:"-"`
 }
+// MethodRailpack 标记源码没有 Dockerfile 的构建：由 runner 内固定版本的 Railpack 生成计划，
+// 再交给 BuildKit 的 Railpack 前端执行。BuildTask.Method 为空表示 Dockerfile 构建。
+const MethodRailpack = "RAILPACK"
+
 type BuildTask struct {
 	AttemptID, JobName, StableJobName, WorkspaceID, ApplicationID string
 	// SpaceSlug 空间标识：构建命名空间 build-<space_slug> 按此派生（统一命名规范）。
@@ -42,9 +48,12 @@ type BuildTask struct {
 	Platform                              string
 	Source                                SourceGrant
 	ImageTag, Dockerfile, Context, Target string
-	BuildArgs                             map[string]string
-	Secrets                               []BuildSecret
-	RegistryDockerConfig                  []byte `json:"-"`
+	// Method 为空是 Dockerfile 构建，MethodRailpack 时 Dockerfile 与 Target 必须为空。
+	// 空值不进入快照指纹，使既有 Dockerfile Job 的指纹保持不变。
+	Method               string `json:",omitempty"`
+	BuildArgs            map[string]string
+	Secrets              []BuildSecret
+	RegistryDockerConfig []byte `json:"-"`
 	// JobUID与Acknowledged来自持久化attempt；重投必须保留，不得根据当前内存清空。
 	JobUID       types.UID `json:"-"`
 	Acknowledged bool      `json:"-"`
@@ -87,8 +96,32 @@ func (t BuildTask) validate() error {
 	if !digestPattern.MatchString(t.Source.ArchiveSHA256) || t.Source.MaxBytes <= 0 || t.Source.MaxBytes > 2<<30 || len(t.Source.Token) == 0 || len(t.Source.Token) > 65536 {
 		return fmt.Errorf("%w: 源码授权或归档边界", ErrInvalid)
 	}
-	if !safeRelative(t.Dockerfile) || !safeRelative(t.Context) || (t.Context != "." && !strings.HasPrefix(t.Dockerfile, t.Context+"/")) || strings.ContainsAny(t.ImageTag, " \t\n\r,@;") || strings.LastIndex(t.ImageTag, ":") <= strings.LastIndex(t.ImageTag, "/") || strings.HasSuffix(t.ImageTag, ":latest") {
-		return fmt.Errorf("%w: 构建路径或输出引用", ErrInvalid)
+	badImage := strings.ContainsAny(t.ImageTag, " \t\n\r,@;") || strings.LastIndex(t.ImageTag, ":") <= strings.LastIndex(t.ImageTag, "/") || strings.HasSuffix(t.ImageTag, ":latest")
+	switch t.Method {
+	case "":
+		if !safeRelative(t.Dockerfile) || !safeRelative(t.Context) || (t.Context != "." && !strings.HasPrefix(t.Dockerfile, t.Context+"/")) || badImage {
+			return fmt.Errorf("%w: 构建路径或输出引用", ErrInvalid)
+		}
+	case MethodRailpack:
+		// 没有 Dockerfile，目标阶段也无从谈起；参数与密钥名称必须能被 Railpack 解析且互不重名。
+		if t.Dockerfile != "" || t.Target != "" || !safeRelative(t.Context) || badImage {
+			return fmt.Errorf("%w: Railpack 构建路径或输出引用", ErrInvalid)
+		}
+		names := map[string]bool{}
+		for name := range t.BuildArgs {
+			if !buildrunner.ValidRailpackEnvName(name) || names[name] {
+				return fmt.Errorf("%w: Railpack 构建参数名称", ErrInvalid)
+			}
+			names[name] = true
+		}
+		for _, s := range t.Secrets {
+			if !buildrunner.ValidRailpackEnvName(s.ID) || names[s.ID] {
+				return fmt.Errorf("%w: Railpack 构建密钥名称", ErrInvalid)
+			}
+			names[s.ID] = true
+		}
+	default:
+		return fmt.Errorf("%w: 未知构建方式", ErrInvalid)
 	}
 	if len(t.RegistryDockerConfig) == 0 || len(t.RegistryDockerConfig) > 256<<10 || !json.Valid(t.RegistryDockerConfig) {
 		return fmt.Errorf("%w: registry credential格式", ErrInvalid)
@@ -131,29 +164,56 @@ func fingerprint(v any) string {
 func buildResources() corev1.ResourceRequirements {
 	return corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("1"), corev1.ResourceMemory: resource.MustParse("1Gi"), corev1.ResourceEphemeralStorage: resource.MustParse("1Gi")}, Limits: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("2"), corev1.ResourceMemory: resource.MustParse("4Gi"), corev1.ResourceEphemeralStorage: resource.MustParse("10Gi")}}
 }
-func (a *Adapter) buildObjects(t BuildTask) (*batchv1.Job, *corev1.Secret) {
+func (a *Adapter) buildObjects(t BuildTask) (*batchv1.Job, *corev1.Secret, error) {
 	l := buildLabels(t)
 	annotations := map[string]string{annotationSnapshot: fingerprint(t)}
 	name := t.JobName + "-auth"
 	secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: a.buildNamespace(t), Labels: copyLabels(l), Annotations: annotations}, Type: corev1.SecretTypeOpaque, Immutable: ptr(true), Data: map[string][]byte{"source-token": slices.Clone(t.Source.Token), "config.json": slices.Clone(t.RegistryDockerConfig)}}
 	authItems := []corev1.KeyToPath{{Key: "config.json", Path: "config.json"}}
-	args := []string{"build", "--metadata-output=/dev/termination-log", "--", "build", "--frontend=dockerfile.v0", "--metadata-file=/workspace/buildkit-metadata.json", "--local=context=/workspace/source/" + t.Context, "--local=dockerfile=/workspace/source/" + path.Dir(t.Dockerfile), "--opt=filename=" + path.Base(t.Dockerfile), "--opt=platform=" + Platform, "--output=type=image,name=" + t.ImageTag + ",push=true"}
-	if t.Target != "" {
-		args = append(args, "--opt=target="+t.Target)
-	}
-	keys := make([]string, 0, len(t.BuildArgs))
-	for k := range t.BuildArgs {
-		keys = append(keys, k)
-	}
-	slices.Sort(keys)
-	for _, k := range keys {
-		args = append(args, "--opt=build-arg:"+k+"="+t.BuildArgs[k])
-	}
-	for i, s := range t.Secrets {
-		key := fmt.Sprintf("secret-%d", i)
-		secret.Data[key] = slices.Clone(s.Value)
-		authItems = append(authItems, corev1.KeyToPath{Key: key, Path: key})
-		args = append(args, "--secret=id="+s.ID+",src=/run/build-auth/"+key)
+	var args []string
+	if t.Method == MethodRailpack {
+		// 计划由 build 容器内的 runner 在 buildctl 之前生成（--railpack-* 是 runner 自身参数，位于 -- 之前），
+		// 这样识别输出与构建输出同在 build 容器日志里。构建参数与密钥名称不是秘密；密钥值只放在 Secret 文件中。
+		secrets := make([]buildrunner.RailpackSecret, 0, len(t.Secrets))
+		for _, s := range t.Secrets {
+			secrets = append(secrets, buildrunner.RailpackSecret{ID: s.ID, Value: s.Value})
+		}
+		controlArgs, mounts, err := buildrunner.RailpackBuildArgs(buildrunner.RailpackBuildInput{FrontendImage: a.config.Installed.RailpackFrontendImage, Context: t.Context, ImageTag: t.ImageTag, ApplicationID: t.ApplicationID, Args: t.BuildArgs, Secrets: secrets})
+		if err != nil {
+			return nil, nil, fmt.Errorf("%w: Railpack 构建参数或前端镜像", ErrInvalid)
+		}
+		args = []string{"build", "--metadata-output=/dev/termination-log", "--railpack-context=" + t.Context}
+		for _, name := range slices.Sorted(maps.Keys(t.BuildArgs)) {
+			args = append(args, "--railpack-arg="+name+"="+t.BuildArgs[name])
+		}
+		for _, s := range t.Secrets {
+			args = append(args, "--railpack-secret="+s.ID)
+		}
+		args = append(args, "--")
+		args = append(args, controlArgs...)
+		for _, mount := range mounts {
+			secret.Data[mount.File] = slices.Clone(mount.Value)
+			authItems = append(authItems, corev1.KeyToPath{Key: mount.File, Path: mount.File})
+		}
+	} else {
+		args = []string{"build", "--metadata-output=/dev/termination-log", "--", "build", "--frontend=dockerfile.v0", "--metadata-file=/workspace/buildkit-metadata.json", "--local=context=/workspace/source/" + t.Context, "--local=dockerfile=/workspace/source/" + path.Dir(t.Dockerfile), "--opt=filename=" + path.Base(t.Dockerfile), "--opt=platform=" + Platform, "--output=type=image,name=" + t.ImageTag + ",push=true"}
+		if t.Target != "" {
+			args = append(args, "--opt=target="+t.Target)
+		}
+		keys := make([]string, 0, len(t.BuildArgs))
+		for k := range t.BuildArgs {
+			keys = append(keys, k)
+		}
+		slices.Sort(keys)
+		for _, k := range keys {
+			args = append(args, "--opt=build-arg:"+k+"="+t.BuildArgs[k])
+		}
+		for i, s := range t.Secrets {
+			key := fmt.Sprintf("secret-%d", i)
+			secret.Data[key] = slices.Clone(s.Value)
+			authItems = append(authItems, corev1.KeyToPath{Key: key, Path: key})
+			args = append(args, "--secret=id="+s.ID+",src=/run/build-auth/"+key)
+		}
 	}
 	sec := podSecurity()
 	security := containerSecurity(a.config.Installed)
@@ -174,13 +234,16 @@ func (a *Adapter) buildObjects(t BuildTask) (*batchv1.Job, *corev1.Secret) {
 	prepare := corev1.Container{Name: "prepare", Image: a.config.Installed.RunnerImage, ImagePullPolicy: corev1.PullIfNotPresent, Command: []string{"/usr/local/bin/yummy-runner"}, Args: []string{"prepare", "--source-uri=" + t.Source.URI, "--grant-file=/run/source-auth/source-token", "--archive-sha256=" + t.Source.ArchiveSHA256, fmt.Sprintf("--max-bytes=%d", t.Source.MaxBytes), "--destination=/workspace/source", "--dockerfile=" + t.Dockerfile}, SecurityContext: security.DeepCopy(), Resources: buildResources(), VolumeMounts: []corev1.VolumeMount{mounts[0], {Name: "source-auth", MountPath: "/run/source-auth", ReadOnly: true}}}
 	build := corev1.Container{Name: "build", Image: a.config.Installed.RunnerImage, ImagePullPolicy: corev1.PullIfNotPresent, Command: []string{"/usr/local/bin/yummy-runner"}, Args: args, SecurityContext: security, Resources: buildResources(), VolumeMounts: mounts, Env: []corev1.EnvVar{{Name: "DOCKER_CONFIG", Value: "/run/build-auth"}}, TerminationMessagePath: "/dev/termination-log", TerminationMessagePolicy: corev1.TerminationMessageReadFile}
 	job := &batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: t.JobName, Namespace: a.buildNamespace(t), Labels: l, Annotations: annotations}, Spec: batchv1.JobSpec{BackoffLimit: ptr(int32(0)), ActiveDeadlineSeconds: ptr(int64(a.config.BuildDeadline.Seconds())), Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: copyLabels(l)}, Spec: corev1.PodSpec{NodeName: t.Node.Name, AutomountServiceAccountToken: ptr(false), RestartPolicy: corev1.RestartPolicyNever, SecurityContext: sec, EnableServiceLinks: ptr(false), Volumes: []corev1.Volume{workspace, state, auth, runtime, {Name: "source-auth", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: name, DefaultMode: ptr(int32(0440)), Items: []corev1.KeyToPath{{Key: "source-token", Path: "source-token"}}}}}}, InitContainers: []corev1.Container{prepare}, Containers: []corev1.Container{build}}}}}
-	return job, secret
+	return job, secret, nil
 }
 func (a *Adapter) verifyJob(t BuildTask, job *batchv1.Job) error {
 	if err := owns(job, buildLabels(t), t.JobUID); err != nil {
 		return err
 	}
-	desired, _ := a.buildObjects(t)
+	desired, _, err := a.buildObjects(t)
+	if err != nil {
+		return err
+	}
 	p := job.Spec.Template.Spec
 	if p.HostNetwork || p.HostPID || p.HostIPC || len(p.Volumes) != len(desired.Spec.Template.Spec.Volumes) || len(p.Containers) != 1 || len(p.InitContainers) != 1 || len(p.EphemeralContainers) != 0 || p.AutomountServiceAccountToken == nil || *p.AutomountServiceAccountToken {
 		return ErrOwnership
@@ -270,7 +333,10 @@ func (a *Adapter) Run(ctx context.Context, t BuildTask) (BuildEvidence, error) {
 	if err := a.checkNode(ctx, t.Node); err != nil {
 		return BuildEvidence{}, err
 	}
-	want, secret := a.buildObjects(t)
+	want, secret, err := a.buildObjects(t)
+	if err != nil {
+		return BuildEvidence{}, err
+	}
 	if err := a.ensureBuildSecret(ctx, secret); err != nil {
 		return BuildEvidence{}, err
 	}

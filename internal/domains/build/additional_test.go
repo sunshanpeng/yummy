@@ -103,7 +103,7 @@ func TestConfigVersionResponseAndPaginationRemainScoped(t *testing.T) {
 	e := setup(t)
 	ctx := context.Background()
 	initial, err := e.service.GetConfig(ctx, e.admin, "space", "app_one")
-	if err != nil || initial.Revision != 0 || initial.Config.Dockerfile != "Dockerfile" {
+	if err != nil || initial.Revision != 0 || initial.Config.Dockerfile != "" || initial.Config.Context != "." {
 		t.Fatal(initial, err)
 	}
 	first, err := e.service.SaveConfig(ctx, e.admin, "space", "app_one", 0, Config{Target: "first"})

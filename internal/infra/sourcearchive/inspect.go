@@ -58,13 +58,14 @@ func inspect(ctx context.Context, reader io.Reader, destination *os.Root, option
 	if err != nil {
 		return result, err
 	}
+	// 空值表示未显式指定 Dockerfile：不要求归档含 Dockerfile，由构建受理时按
+	// 上下文根目录是否有 Dockerfile 自动选择 Dockerfile 或 Railpack。显式路径必须存在。
 	dockerfile := options.Dockerfile
-	if dockerfile == "" {
-		dockerfile = "Dockerfile"
-	}
-	dockerfile, err = cleanPath(dockerfile, false)
-	if err != nil {
-		return result, ErrDockerfile
+	if dockerfile != "" {
+		dockerfile, err = cleanPath(dockerfile, false)
+		if err != nil {
+			return result, ErrDockerfile
+		}
 	}
 	result.Dockerfile = dockerfile
 	expected := strings.ToLower(options.ExpectedSHA256)
@@ -188,7 +189,7 @@ func inspect(ctx context.Context, reader io.Reader, destination *os.Root, option
 			return result, &PathError{name, ErrSensitive}
 		}
 		result.FileBytes += count
-		if name == dockerfile && !directory {
+		if dockerfile != "" && name == dockerfile && !directory {
 			foundDockerfile = true
 		}
 		result.Entries = append(result.Entries, item)
@@ -214,7 +215,7 @@ func inspect(ctx context.Context, reader io.Reader, destination *os.Root, option
 	} else if !errors.Is(err, io.EOF) {
 		return result, invalidArchive(err)
 	}
-	if !foundDockerfile {
+	if dockerfile != "" && !foundDockerfile {
 		return result, ErrDockerfile
 	}
 	result.SHA256 = hex.EncodeToString(digest.Sum(nil))

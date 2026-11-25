@@ -59,7 +59,8 @@ func (l Limits) normalized() (Limits, error) {
 	return l, nil
 }
 
-// Options 中 Context、Dockerfile 均相对 Root；空值分别为 . 和 Context/Dockerfile。
+// Options 中 Context、Dockerfile 均相对 Root。Context 空值为 .；Dockerfile 空值表示
+// 未显式指定：上下文根目录有 Dockerfile 时使用它，缺失则为纯源码（Result.Dockerfile 为空）。
 // AllowRoots 必须显式设置；先解析真实根目录，再校验授权包含关系。
 type Options struct {
 	Root       string
@@ -69,7 +70,8 @@ type Options struct {
 	Limits     Limits
 }
 
-// ArchiveOptions 的 Dockerfile 相对归档根，ExpectedSHA256 是可选的 gzip 原始字节摘要。
+// ArchiveOptions 的 Dockerfile 相对归档根，空值表示不要求归档含 Dockerfile；
+// ExpectedSHA256 是可选的 gzip 原始字节摘要。
 type ArchiveOptions struct {
 	Dockerfile     string
 	ExpectedSHA256 string

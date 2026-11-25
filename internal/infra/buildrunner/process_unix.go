@@ -11,10 +11,20 @@ import (
 	"time"
 )
 
+// setCredential 让 cmd 以指定的非特权身份运行，并清空附加组。
+func setCredential(cmd *exec.Cmd, uid, gid uint32) {
+	cmd.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: uid, Gid: gid}}
+}
+
 // 固定入口及其子进程处于独立进程组，取消先SIGTERM，宽限后SIGKILL整个任务组。
 // 该进程组仅在任务容器中，不能借此访问/控制宿主进程。
 func runProcessGroup(ctx context.Context, cmd *exec.Cmd) error {
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	attr := &syscall.SysProcAttr{Setpgid: true}
+	if cmd.SysProcAttr != nil {
+		// 保留 setCredential 设置的降权身份。
+		attr.Credential = cmd.SysProcAttr.Credential
+	}
+	cmd.SysProcAttr = attr
 	cmd.Cancel = func() error {
 		if cmd.Process == nil {
 			return os.ErrProcessDone

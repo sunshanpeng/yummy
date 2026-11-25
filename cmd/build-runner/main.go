@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -56,13 +57,27 @@ func run(ctx context.Context, args []string) error {
 		flags := flag.NewFlagSet("build", flag.ContinueOnError)
 		sandbox := flags.Bool("no-process-sandbox", false, "")
 		metadata := flags.String("metadata-output", "/dev/termination-log", "")
+		// 非空表示没有 Dockerfile 的构建：先由镜像内固定的 Railpack 生成计划，再交给 BuildKit。
+		// 构建参数与密钥名称不是秘密；密钥值只在 /run/build-auth 的文件里，不经过这些参数。
+		planContext := flags.String("railpack-context", "", "")
+		var planArgs, planSecrets repeatedFlag
+		flags.Var(&planArgs, "railpack-arg", "")
+		flags.Var(&planSecrets, "railpack-secret", "")
 		if err := flags.Parse(args[1:]); err != nil {
 			return err
 		}
 		if *metadata != "/dev/termination-log" {
 			return fmt.Errorf("结果路径固定")
 		}
-		runErr = buildrunner.RunBuildKit(ctx, flags.Args(), *sandbox, os.Stdout, os.Stderr)
+		if *planContext != "" {
+			// 先校验 buildctl 参数，再做联网识别；非法参数不应触发任何外部访问。
+			if runErr = buildrunner.ValidateBuildArgs(flags.Args()); runErr == nil {
+				runErr = buildrunner.PlanForBuild(ctx, *planContext, planArgs, planSecrets, os.Stdout)
+			}
+		}
+		if runErr == nil {
+			runErr = buildrunner.RunBuildKit(ctx, flags.Args(), *sandbox, os.Stdout, os.Stderr)
+		}
 	default:
 		return fmt.Errorf("未知runner子命令")
 	}
@@ -71,6 +86,12 @@ func run(ctx context.Context, args []string) error {
 	}
 	return runErr
 }
+// repeatedFlag 收集可重复的命令行参数。
+type repeatedFlag []string
+
+func (r *repeatedFlag) String() string     { return strings.Join(*r, ",") }
+func (r *repeatedFlag) Set(v string) error { *r = append(*r, v); return nil }
+
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer cancel()

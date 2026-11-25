@@ -53,6 +53,10 @@ message WorkerBuildCommand {
   repeated WorkerBuildSecret secrets = 22;
   // 空间标识（统一命名规范）：worker 据此派生构建命名空间 build-<space_slug>。
   string space_slug = 23;
+  // 受理时冻结的构建方式：DOCKERFILE 或 RAILPACK。RAILPACK 时 dockerfile 为空，
+  // 由 worker 在构建任务内调用本机固定版本的 Railpack 生成计划；Railpack 的 BuildKit
+  // 前端镜像只取 worker 安装配置中 digest 钉住的值，控制面不能下发。
+  string build_method = 24;
 }
 message WorkerDeploymentCommand {
   string workspace_id = 1; string application_id = 2; string operation_id = 3; string release_id = 4;

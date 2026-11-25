@@ -147,7 +147,7 @@ func (g *Gateway) sendBuild(ctx context.Context, s *session, value build.Dispatc
 	if err := g.check(ctx, s); err != nil {
 		return err
 	}
-	message := &platformv1.WorkerBuildCommand{BuildId: value.BuildID, AttemptId: value.AttemptID, WorkspaceId: value.WorkspaceID, ApplicationId: value.ApplicationID, NodeId: value.NodeID, WorkerId: value.WorkerID, Action: value.Command, StableJobName: value.JobName, JobUid: value.JobUID, SourceSnapshotId: value.SourceSnapshotID, SourceSha256: value.SourceSHA256, Dockerfile: value.Config.Dockerfile, ContextPath: value.Config.Context, Target: value.Config.Target, BuildArgs: value.Config.Args, Repository: value.Repository, Tag: value.Tag, Platform: value.Platform, DeadlineUnix: value.DeadlineAt.Unix(), SpaceSlug: value.SpaceSlug}
+	message := &platformv1.WorkerBuildCommand{BuildId: value.BuildID, AttemptId: value.AttemptID, WorkspaceId: value.WorkspaceID, ApplicationId: value.ApplicationID, NodeId: value.NodeID, WorkerId: value.WorkerID, Action: value.Command, StableJobName: value.JobName, JobUid: value.JobUID, SourceSnapshotId: value.SourceSnapshotID, SourceSha256: value.SourceSHA256, Dockerfile: value.Config.Dockerfile, ContextPath: value.Config.Context, BuildMethod: value.Config.EffectiveMethod(), Target: value.Config.Target, BuildArgs: value.Config.Args, Repository: value.Repository, Tag: value.Tag, Platform: value.Platform, DeadlineUnix: value.DeadlineAt.Unix(), SpaceSlug: value.SpaceSlug}
 	if value.Command == "RUN" {
 		if g.config.BuildMaterial == nil {
 			return workerprotocol.ErrQualification

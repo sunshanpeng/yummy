@@ -17,6 +17,7 @@ import (
 )
 
 // PrepareOptions的路径必须与固定Pod spec相同；URI只承载位置，授权不放query/用户密码中。
+// Dockerfile 为空表示 Railpack 构建（源码没有 Dockerfile），此时不要求归档含 Dockerfile。
 type PrepareOptions struct {
 	URI, TokenFile, ArchiveSHA256, Destination, Dockerfile string
 	MaxBytes                                               int64
@@ -37,7 +38,7 @@ func PrepareSource(ctx context.Context, options PrepareOptions) error {
 }
 func prepareSource(ctx context.Context, o PrepareOptions, p paths, client *http.Client) error {
 	endpoint, err := url.Parse(o.URI)
-	if err != nil || endpoint.Scheme != "https" || endpoint.Hostname() == "" || endpoint.User != nil || endpoint.RawQuery != "" || endpoint.ForceQuery || endpoint.Fragment != "" || !digestPattern.MatchString(o.ArchiveSHA256) || o.MaxBytes < 1 || o.MaxBytes > 2<<30 || !safeRelative(o.Dockerfile) {
+	if err != nil || endpoint.Scheme != "https" || endpoint.Hostname() == "" || endpoint.User != nil || endpoint.RawQuery != "" || endpoint.ForceQuery || endpoint.Fragment != "" || !digestPattern.MatchString(o.ArchiveSHA256) || o.MaxBytes < 1 || o.MaxBytes > 2<<30 || (o.Dockerfile != "" && !safeRelative(o.Dockerfile)) {
 		return ErrInvalid
 	}
 	if o.TokenFile != p.sourceToken || o.Destination != filepath.Join(p.workspace, "source") {

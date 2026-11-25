@@ -28,6 +28,7 @@ import (
 
 	"crypto"
 
+	"github.com/sunshanpeng/yummy/internal/infra/buildrunner"
 	"github.com/sunshanpeng/yummy/internal/infra/kube"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -379,7 +380,10 @@ type qualificationFile struct {
 	Metrics            bool   `json:"metrics"`
 	RunnerImage        string `json:"runner_image"`
 	BuildKitImage      string `json:"buildkit_image"`
-	SeccompUnconfined  bool   `json:"seccomp_unconfined"`
+	// RailpackFrontendImage 是 Railpack 的 BuildKit 前端镜像（digest 钉住，可选）；
+	// 缺失时本节点不接受没有 Dockerfile 的构建。
+	RailpackFrontendImage string `json:"railpack_frontend_image"`
+	SeccompUnconfined     bool   `json:"seccomp_unconfined"`
 	AppArmorUnconfined bool   `json:"apparmor_unconfined"`
 	NoProcessSandbox   bool   `json:"no_process_sandbox"`
 	// AllowPrivilegeEscalation 解除构建容器 no_new_privs，供 setuid 的 newuidmap
@@ -403,7 +407,7 @@ func pinnedDigest(image string) bool {
 // 线下验收后手写资格文件；后续应改为 run 启动时经控制面 inventory 读取 ACTIVE
 // 资格记录并核对其下发 nonce，见 internal/domains/inventory/qualifications.go
 // 与 internal/domains/qualification/verifier.go 的发放-验证闭环。
-func LoadInstalledCapabilities(path, runnerImage, buildKitImage string) (kube.InstalledCapabilities, error) {
+func LoadInstalledCapabilities(path, runnerImage, buildKitImage, railpackFrontendImage string) (kube.InstalledCapabilities, error) {
 	capabilities := kube.InstalledCapabilities{}
 	if path != "" {
 		data, err := readBoundedFile(path, 64<<10)
@@ -424,6 +428,7 @@ func LoadInstalledCapabilities(path, runnerImage, buildKitImage string) (kube.In
 			QualificationID:          parsed.QualificationID,
 			RunnerImage:              parsed.RunnerImage,
 			BuildKitImage:            parsed.BuildKitImage,
+			RailpackFrontendImage:    parsed.RailpackFrontendImage,
 			SeccompUnconfined:        parsed.SeccompUnconfined,
 			AppArmorUnconfined:       parsed.AppArmorUnconfined,
 			NoProcessSandbox:         parsed.NoProcessSandbox,
@@ -438,8 +443,15 @@ func LoadInstalledCapabilities(path, runnerImage, buildKitImage string) (kube.In
 	if buildKitImage != "" {
 		capabilities.BuildKitImage = buildKitImage
 	}
+	if railpackFrontendImage != "" {
+		capabilities.RailpackFrontendImage = railpackFrontendImage
+	}
 	if capabilities.Build && (!pinnedDigest(capabilities.RunnerImage) || !pinnedDigest(capabilities.BuildKitImage)) {
 		return kube.InstalledCapabilities{}, errors.New("workerexec: 开启build能力必须提供digest钉住的--runner-image与--buildkit-image")
+	}
+	// 前端镜像等同于在 BuildKit 内执行的代码：配置了就必须 digest 钉住，不接受 tag；留空只是不开放 Railpack。
+	if capabilities.RailpackFrontendImage != "" && !buildrunner.ValidRailpackFrontendImage(capabilities.RailpackFrontendImage) {
+		return kube.InstalledCapabilities{}, errors.New("workerexec: --railpack-frontend-image 必须以 digest 钉住（镜像@sha256:…）")
 	}
 	return capabilities, nil
 }

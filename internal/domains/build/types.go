@@ -44,13 +44,35 @@ type SecretRef struct {
 	Name     string `json:"name"`
 	Version  int64  `json:"version"`
 }
+
+// 构建方式（2026-11-23 自动选择）：由受理时验证过的源码快照决定并随快照冻结。
+const (
+	// MethodDockerfile 使用源码中的 Dockerfile 交给 BuildKit。
+	MethodDockerfile = "DOCKERFILE"
+	// MethodRailpack 源码没有 Dockerfile 时由 Railpack 生成计划，再交给同一套 BuildKit 执行。
+	MethodRailpack = "RAILPACK"
+)
+
+// Config 的 Dockerfile 为空表示不显式指定：保存的应用配置与单次构建覆盖都允许为空，
+// 受理时按上下文根目录自动选择。Method 只在受理冻结后的配置快照中出现，保存配置时忽略。
+// 冻结后 Dockerfile 为实际使用的文件路径（相对源码归档根），Railpack 构建为空。
 type Config struct {
 	Dockerfile string            `json:"dockerfile"`
 	Context    string            `json:"context"`
+	Method     string            `json:"method,omitempty"`
 	Target     string            `json:"target,omitempty"`
 	Args       map[string]string `json:"args,omitempty"`
 	SecretRefs []SecretRef       `json:"secretRefs,omitempty"`
 }
+
+// EffectiveMethod 返回快照的构建方式；方式字段出现之前冻结的快照只支持 Dockerfile。
+func (c Config) EffectiveMethod() string {
+	if c.Method == "" {
+		return MethodDockerfile
+	}
+	return c.Method
+}
+
 type Overrides struct {
 	Dockerfile *string           `json:"dockerfile,omitempty"`
 	Context    *string           `json:"context,omitempty"`

@@ -162,7 +162,7 @@ func TestNodeRESTConfigValidatesInputs(t *testing.T) {
 }
 
 func TestLoadInstalledCapabilitiesDefaultsAndOverrides(t *testing.T) {
-	capabilities, err := LoadInstalledCapabilities("", "", "")
+	capabilities, err := LoadInstalledCapabilities("", "", "", "")
 	if err != nil || capabilities.Build || capabilities.Runtime || capabilities.Ingress || capabilities.Metrics || capabilities.QualificationID != "" {
 		t.Fatalf("无资格文件必须全部关闭: %+v %v", capabilities, err)
 	}
@@ -171,7 +171,7 @@ func TestLoadInstalledCapabilitiesDefaultsAndOverrides(t *testing.T) {
 	if err := os.WriteFile(loose, []byte(`{"build":true}`), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := LoadInstalledCapabilities(loose, "", ""); err == nil || !strings.Contains(err.Error(), "digest") {
+	if _, err := LoadInstalledCapabilities(loose, "", "", ""); err == nil || !strings.Contains(err.Error(), "digest") {
 		t.Fatalf("开启build但镜像未钉住digest必须拒绝: %v", err)
 	}
 	path := filepath.Join(directory, "qual.json")
@@ -179,11 +179,11 @@ func TestLoadInstalledCapabilitiesDefaultsAndOverrides(t *testing.T) {
 	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
 		t.Fatal(err)
 	}
-	capabilities, err = LoadInstalledCapabilities(path, "", "")
+	capabilities, err = LoadInstalledCapabilities(path, "", "", "")
 	if err != nil || !capabilities.Build || !capabilities.Runtime || !capabilities.Ingress || !capabilities.Metrics || capabilities.QualificationID != "qual-1" {
 		t.Fatalf("资格文件解析不正确: %+v %v", capabilities, err)
 	}
-	overridden, err := LoadInstalledCapabilities(path, "registry.example/r2@sha256:"+strings.Repeat("e", 64), "")
+	overridden, err := LoadInstalledCapabilities(path, "registry.example/r2@sha256:"+strings.Repeat("e", 64), "", "")
 	if err != nil || overridden.RunnerImage != "registry.example/r2@sha256:"+strings.Repeat("e", 64) {
 		t.Fatalf("CLI镜像参数应覆盖资格文件: %+v %v", overridden.RunnerImage, err)
 	}
@@ -191,7 +191,7 @@ func TestLoadInstalledCapabilitiesDefaultsAndOverrides(t *testing.T) {
 	if err := os.WriteFile(unknown, []byte(`{"bogus":true}`), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := LoadInstalledCapabilities(unknown, "", ""); err == nil {
+	if _, err := LoadInstalledCapabilities(unknown, "", "", ""); err == nil {
 		t.Fatal("未知字段必须被拒绝")
 	}
 }

@@ -63,7 +63,7 @@ func (s *Service) GetConfig(ctx context.Context, p authorization.Principal, ws, 
 		var r configRecord
 		err := tx.Where("workspace_id = ? AND application_id = ?", ws, app).Order("revision DESC").Take(&r).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			out = ConfigView{Config: Config{Dockerfile: "Dockerfile", Context: "."}}
+			out = ConfigView{Config: Config{Context: "."}}
 			return nil
 		}
 		if err != nil {

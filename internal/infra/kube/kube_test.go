@@ -147,7 +147,7 @@ func TestBuildOwnershipLostAndUnknown(t *testing.T) {
 	for _, mode := range []string{"foreign-app", "foreign-uid", "different-spec", "lost", "unknown", "query-token", "not-qualified"} {
 		t.Run(mode, func(t *testing.T) {
 			a, client, task := fixture(t)
-			want, _ := a.buildObjects(task)
+			want, _, _ := a.buildObjects(task)
 			want.UID = "original"
 			want.Spec.Template.Spec.Containers[0].Image = image
 			switch mode {
@@ -183,7 +183,7 @@ func TestBuildOwnershipLostAndUnknown(t *testing.T) {
 }
 func TestBuildAlreadyExistsAdoption(t *testing.T) {
 	a, client, task := fixture(t)
-	want, _ := a.buildObjects(task)
+	want, _, _ := a.buildObjects(task)
 	want.UID = "adopted"
 	client.PrependReactor("create", "jobs", func(ktesting.Action) (bool, kruntime.Object, error) {
 		if err := client.Tracker().Add(want); err != nil {
@@ -201,7 +201,7 @@ func buildPod(task BuildTask, uid types.UID) *corev1.Pod {
 }
 func TestBuildMetadataNotLogs(t *testing.T) {
 	a, client, task := fixture(t)
-	j, _ := a.buildObjects(task)
+	j, _, _ := a.buildObjects(task)
 	j.UID = "job-uid"
 	j.Status.Conditions = []batchv1.JobCondition{{Type: batchv1.JobComplete, Status: corev1.ConditionTrue}}
 	p := buildPod(task, j.UID)
@@ -253,7 +253,7 @@ func TestCancelConfirmsAbsenceNotAPIError(t *testing.T) {
 	for _, mode := range []string{"delete-complete", "still-deleting", "unknown-get", "unknown-pods", "foreign-pod", "node-not-ready"} {
 		t.Run(mode, func(t *testing.T) {
 			a, client, task := fixture(t)
-			j, _ := a.buildObjects(task)
+			j, _, _ := a.buildObjects(task)
 			j.UID = "job-uid"
 			task.JobUID = j.UID
 			_ = client.Tracker().Add(j)
@@ -508,7 +508,7 @@ func TestObserveRequiresGenerationDigestOldPodAndEndpoints(t *testing.T) {
 }
 func TestLogsRejectWrongUIDBeforeRequest(t *testing.T) {
 	a, client, task := fixture(t)
-	j, _ := a.buildObjects(task)
+	j, _, _ := a.buildObjects(task)
 	j.UID = "job"
 	p := buildPod(task, j.UID)
 	p.Status.ContainerStatuses = []corev1.ContainerStatus{{Name: "build", RestartCount: 1}}

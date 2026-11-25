@@ -14,7 +14,10 @@ service BuildService {
   rpc RetryBuild(RetryBuildRequest) returns (RetryBuildResponse);
 }
 message BuildSecretRef { string secret_id = 1; int64 version = 2; string name = 3; }
-message BuildConfig { string dockerfile = 1; string context = 2; string target = 3; map<string,string> args = 4; repeated BuildSecretRef secret_refs = 5; }
+// BuildConfig 的 dockerfile 为空表示不显式指定，受理时按上下文根目录自动选择构建方式。
+// method 只由服务端在受理冻结后填写（DOCKERFILE 或 RAILPACK），保存配置时忽略；
+// 冻结后的 dockerfile 是实际使用的文件路径，Railpack 构建为空。
+message BuildConfig { string dockerfile = 1; string context = 2; string target = 3; map<string,string> args = 4; repeated BuildSecretRef secret_refs = 5; string method = 6; }
 message BuildOverrides { optional string dockerfile = 1; optional string context = 2; optional string target = 3; map<string,string> args = 4; repeated BuildSecretRef secret_refs = 5; }
 message Artifact { string id = 1; string registry_id = 2; int64 credential_version = 3; string repository = 4; string tag = 5; string digest = 6; string platform = 7; string state = 8; string verified_at = 9; }
 message Build {

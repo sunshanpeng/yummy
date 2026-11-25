@@ -58,13 +58,11 @@ func validPath(value string, dot bool) bool {
 	return value != "" && len(value) <= 512 && utf8.ValidString(value) && !strings.ContainsAny(value, "\\\x00\r\n") && !path.IsAbs(value) && path.Clean(value) == value && value != ".." && !strings.HasPrefix(value, "../") && (dot || value != ".")
 }
 func validateConfig(c Config) (Config, error) {
-	if c.Dockerfile == "" {
-		c.Dockerfile = "Dockerfile"
-	}
+	// Dockerfile 路径可以为空：受理时按上下文根目录自动选择 Dockerfile 或 Railpack。
 	if c.Context == "" {
 		c.Context = "."
 	}
-	if !validPath(c.Dockerfile, false) || !validPath(c.Context, true) || (c.Target != "" && !nameRE.MatchString(c.Target)) {
+	if (c.Dockerfile != "" && !validPath(c.Dockerfile, false)) || !validPath(c.Context, true) || (c.Target != "" && !nameRE.MatchString(c.Target)) {
 		return c, invalid("构建路径或目标非法")
 	}
 	if len(c.Args) > 64 {
@@ -113,13 +111,15 @@ func configAt(tx *gorm.DB, ws, app string, expected int64) (Config, error) {
 		return Config{}, authorization.ErrConflict
 	}
 	if record.Revision == 0 {
-		return Config{Dockerfile: "Dockerfile", Context: "."}, nil
+		return Config{Context: "."}, nil
 	}
 	return record.Spec, nil
 }
 
 // SaveConfig 使用应用行锁做 revision CAS；不允许把平台目的地作为业务配置保存。
 func (s *Service) SaveConfig(ctx context.Context, p authorization.Principal, ws, app string, expected int64, c Config) (int64, error) {
+	// 构建方式只由受理时的源码快照决定，客户端回传的值不保存。
+	c.Method = ""
 	c, err := validateConfig(c)
 	if err != nil {
 		return 0, err
@@ -202,14 +202,10 @@ func (s *Service) prepare(tx *gorm.DB, ws, app string, in CreateInput) (Preview,
 	if !src.ExpiresAt.After(time.Now()) {
 		return fail(ErrSourceExpired)
 	}
-	found := false
-	for _, entry := range src.Entries {
-		if entry.Path == config.Dockerfile && !entry.Directory {
-			found = true
-		}
-	}
-	if !found || (config.Context != "." && !strings.HasPrefix(config.Dockerfile, config.Context+"/")) {
-		return fail(ErrSourceInvalid)
+	// 构建方式在这里按已验证快照自动选择并冻结，预览与受理共用同一结论。
+	config, err = resolveMethod(config, src.Entries)
+	if err != nil {
+		return fail(err)
 	}
 	out = Preview{SourceSnapshotID: src.ID, SourceSHA256: src.SHA256, ConfigRevision: in.ConfigRevision, Config: config, AutoDeploy: in.AutoDeploy}
 	if in.AutoDeploy {

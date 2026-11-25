@@ -54,8 +54,11 @@ func pack(ctx context.Context, writer io.Writer, options Options) (result Result
 	if err != nil {
 		return result, err
 	}
+	// 显式路径必须存在；未显式指定时，上下文根目录有 Dockerfile 就使用它，
+	// 缺失则按纯源码上传（Dockerfile 为空，由服务端受理构建时交给 Railpack）。
+	explicit := options.Dockerfile != ""
 	dockerfile := options.Dockerfile
-	if dockerfile == "" {
+	if !explicit {
 		dockerfile = path.Join(contextPath, "Dockerfile")
 	}
 	dockerfile, err = cleanPath(dockerfile, false)
@@ -70,7 +73,6 @@ func pack(ctx context.Context, writer io.Writer, options Options) (result Result
 	if err != nil {
 		return result, ErrDockerfile
 	}
-	result.Dockerfile = dockerfile
 	if err = checkComponents(root, contextPath); err != nil {
 		return result, err
 	}
@@ -79,15 +81,24 @@ func pack(ctx context.Context, writer io.Writer, options Options) (result Result
 		return result, err
 	}
 	defer contextRoot.Close()
-	if err = checkComponents(contextRoot, dockerfile); err != nil {
-		return result, fmt.Errorf("%w: %w", ErrDockerfile, err)
+	if !explicit {
+		// 只在文件完全不存在时才视为纯源码；已存在但不合法（目录、链接等）仍按输入错误处理。
+		if _, statErr := contextRoot.Lstat(filepath.FromSlash(dockerfile)); errors.Is(statErr, os.ErrNotExist) {
+			dockerfile = ""
+		}
 	}
-	info, err := contextRoot.Lstat(filepath.FromSlash(dockerfile))
-	if err != nil || !info.Mode().IsRegular() {
-		return result, ErrDockerfile
-	}
-	if platformReason(dockerfile) != "" {
-		return result, &PathError{dockerfile, ErrSensitive}
+	result.Dockerfile = dockerfile
+	if dockerfile != "" {
+		if err = checkComponents(contextRoot, dockerfile); err != nil {
+			return result, fmt.Errorf("%w: %w", ErrDockerfile, err)
+		}
+		info, statErr := contextRoot.Lstat(filepath.FromSlash(dockerfile))
+		if statErr != nil || !info.Mode().IsRegular() {
+			return result, ErrDockerfile
+		}
+		if platformReason(dockerfile) != "" {
+			return result, &PathError{dockerfile, ErrSensitive}
+		}
 	}
 	matcher, ignorePath, err := loadIgnore(contextRoot, dockerfile)
 	if err != nil {
@@ -214,7 +225,7 @@ func pack(ctx context.Context, writer io.Writer, options Options) (result Result
 	if err != nil {
 		return result, err
 	}
-	if !foundDockerfile {
+	if dockerfile != "" && !foundDockerfile {
 		return result, ErrDockerfile
 	}
 	if tarWriter != nil {
@@ -231,11 +242,20 @@ func pack(ctx context.Context, writer io.Writer, options Options) (result Result
 	return result, nil
 }
 
+// loadIgnore 读取 Docker ignore 规则：优先 <Dockerfile>.dockerignore，其次根目录 .dockerignore。
+// 纯源码上传（dockerfile 为空）没有对应的专用文件，只读取根目录 .dockerignore。
 func loadIgnore(root *os.Root, dockerfile string) (*patternmatcher.PatternMatcher, string, error) {
-	ignorePath := dockerfile + ".dockerignore"
-	info, err := root.Lstat(filepath.FromSlash(ignorePath))
-	if errors.Is(err, os.ErrNotExist) {
-		ignorePath = ".dockerignore"
+	ignorePath := ".dockerignore"
+	var info os.FileInfo
+	var err error
+	if dockerfile != "" {
+		ignorePath = dockerfile + ".dockerignore"
+		info, err = root.Lstat(filepath.FromSlash(ignorePath))
+		if errors.Is(err, os.ErrNotExist) {
+			ignorePath = ".dockerignore"
+			info, err = root.Lstat(ignorePath)
+		}
+	} else {
 		info, err = root.Lstat(ignorePath)
 	}
 	if errors.Is(err, os.ErrNotExist) {

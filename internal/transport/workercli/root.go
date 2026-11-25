@@ -89,6 +89,7 @@ func newRoot(settings map[string]any) *cobra.Command {
 		qualificationFile, journalDir                                    string
 		observeInterval, rotationCheckInterval                           time.Duration
 		buildKitAddr, hostBuildCtl, kubeletMetricsEndpoint               string
+		railpackFrontendImage, railpackPath                              string
 	)
 	run := &cobra.Command{Use: "run", Short: "以已登记身份运行worker执行内核", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
 		obs, err := observability.Start(cmd.Context(), observability.Options{ServiceName: "yummy-worker", OTLPEndpoint: config.GetString("otel-endpoint"), LogLevel: config.GetString("log-level")})
@@ -135,7 +136,7 @@ func newRoot(settings map[string]any) *cobra.Command {
 		if err != nil {
 			return err
 		}
-		capabilities, err := workerexec.LoadInstalledCapabilities(qualificationFile, runnerImage, buildKitImage)
+		capabilities, err := workerexec.LoadInstalledCapabilities(qualificationFile, runnerImage, buildKitImage, railpackFrontendImage)
 		if err != nil {
 			return err
 		}
@@ -145,7 +146,7 @@ func newRoot(settings map[string]any) *cobra.Command {
 			return err
 		}
 		guard := &generationClientHolder{}
-		runOptions := workerexec.Options{Adapter: adapter, Client: client, Node: node, BuildNamespace: buildNamespace, RuntimeNamespace: runtimeNamespace, Generation: workerexec.GenerationGuard(guard), ObserveInterval: observeInterval, Installed: capabilities, BuildKitAddr: buildKitAddr, HostBuildCtl: hostBuildCtl}
+		runOptions := workerexec.Options{Adapter: adapter, Client: client, Node: node, BuildNamespace: buildNamespace, RuntimeNamespace: runtimeNamespace, Generation: workerexec.GenerationGuard(guard), ObserveInterval: observeInterval, Installed: capabilities, BuildKitAddr: buildKitAddr, HostBuildCtl: hostBuildCtl, RailpackPath: railpackPath}
 		// 指标采集双重失败关闭：安装资格 metrics=true 且显式提供 kubelet metrics 地址。
 		if capabilities.Metrics && kubeletMetricsEndpoint != "" {
 			caData, err := os.ReadFile(kubeCAFile)
@@ -234,6 +235,8 @@ func newRoot(settings map[string]any) *cobra.Command {
 	run.Flags().StringVar(&journalDir, "journal-dir", "", "可选事件journal目录（缺省为state-dir/journal）")
 	run.Flags().StringVar(&buildKitAddr, "buildkit-addr", "", "宿主构建模式：节点级 rootless BuildKit 守护 socket 地址（资格 host_build=true 时必填）")
 	run.Flags().StringVar(&hostBuildCtl, "buildctl-path", "", "宿主构建模式：buildctl 固定二进制路径（资格 host_build=true 时必填）")
+	run.Flags().StringVar(&railpackFrontendImage, "railpack-frontend-image", "", "可选 Railpack BuildKit 前端镜像（digest 钉住，覆盖资格文件）；与所用 Railpack 版本配套。未配置时本节点拒绝没有 Dockerfile 的构建")
+	run.Flags().StringVar(&railpackPath, "railpack-path", "", "宿主构建模式：Railpack 固定二进制路径（与 --railpack-frontend-image 同时配置才接受没有 Dockerfile 的构建；Pod 模式随 runner 镜像提供）")
 	run.Flags().StringVar(&kubeletMetricsEndpoint, "kubelet-metrics-endpoint", "", "节点 kubelet metrics 地址（如 https://节点IP:10250/metrics；资格 metrics=true 时与 --metrics-enabled 同开）")
 	run.Flags().DurationVar(&observeInterval, "observe-interval", 0, "可选部署观察间隔（默认5秒）")
 	for _, name := range []string{"state-dir", "kube-apiserver", "kube-ca-file", "kube-token-file", "node-name", "build-namespace", "runtime-namespace"} {

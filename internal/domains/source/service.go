@@ -108,11 +108,10 @@ func (s *Service) CreateUpload(ctx context.Context, principal authorization.Prin
 	if decodeErr != nil || len(digest) != 32 || input.Size <= 0 || input.Size > s.limits.MaxCompressedBytes {
 		return result, authorization.ErrInvalid
 	}
+	// 空值表示不显式指定 Dockerfile（纯源码或由构建按上下文根目录自动选择）；
+	// 显式路径必须合法，并在 CompleteUpload 时验证归档中确有该文件。
 	dockerfile := input.Dockerfile
-	if dockerfile == "" {
-		dockerfile = "Dockerfile"
-	}
-	if !validDockerfile(dockerfile) {
+	if dockerfile != "" && !validDockerfile(dockerfile) {
 		return result, sourcearchive.ErrDockerfile
 	}
 	err = s.access.Do(ctx, principal, false, func(tx *gorm.DB, current authorization.Principal) error {

@@ -79,7 +79,7 @@ func TestRoundTripNormalizedAndDeterministic(t *testing.T) {
 	if created.SHA256 != hex.EncodeToString(digest[:]) || created.CompressedBytes != int64(len(first)) {
 		t.Fatalf("实际摘要或字节统计错误: %+v", created)
 	}
-	inspected, err := Inspect(context.Background(), bytes.NewReader(first), ArchiveOptions{ExpectedSHA256: created.SHA256})
+	inspected, err := Inspect(context.Background(), bytes.NewReader(first), ArchiveOptions{Dockerfile: created.Dockerfile, ExpectedSHA256: created.SHA256})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -408,8 +408,11 @@ func TestArchiveIntegrityAndNoConcatenatedMembers(t *testing.T) {
 		})
 	}
 	missing := maliciousArchive(t, []archiveItem{{name: "hello", body: "no dockerfile"}})
-	if _, err := Inspect(context.Background(), bytes.NewReader(missing), ArchiveOptions{}); !errors.Is(err, ErrDockerfile) {
-		t.Fatalf("允许缺少Dockerfile: %v", err)
+	if _, err := Inspect(context.Background(), bytes.NewReader(missing), ArchiveOptions{Dockerfile: "Dockerfile"}); !errors.Is(err, ErrDockerfile) {
+		t.Fatalf("显式指定的 Dockerfile 缺失必须报错: %v", err)
+	}
+	if _, err := Inspect(context.Background(), bytes.NewReader(missing), ArchiveOptions{}); err != nil {
+		t.Fatalf("未指定 Dockerfile 的纯源码归档应通过检查: %v", err)
 	}
 }
 
@@ -511,5 +514,60 @@ func TestCancellationAndInvalidIgnore(t *testing.T) {
 	put(t, root, ".dockerignore", strings.Repeat("x", maxIgnoreBytes+1), 0644)
 	if _, err := Preview(context.Background(), options); !errors.Is(err, ErrLimit) {
 		t.Fatalf("ignore文件未受限: %v", err)
+	}
+}
+
+// 未显式指定 Dockerfile 且上下文根目录没有 Dockerfile 时是纯源码上传：
+// 打包成功、结果不含 Dockerfile 路径，归档检查也不要求 Dockerfile。
+func TestSourceOnlyArchiveWithoutDockerfile(t *testing.T) {
+	root := t.TempDir()
+	put(t, root, "package.json", `{"name":"demo"}`, 0644)
+	put(t, root, "src/index.js", "console.log('hi')", 0644)
+	put(t, root, ".dockerignore", "ignored.txt\n", 0644)
+	put(t, root, "ignored.txt", "skip", 0644)
+	options := Options{Root: root, AllowRoots: []string{root}}
+	packed, result := archive(t, options)
+	if result.Dockerfile != "" {
+		t.Fatalf("纯源码上传不应带 Dockerfile 路径: %q", result.Dockerfile)
+	}
+	if contains(result, "ignored.txt") || !contains(result, ".dockerignore") || !contains(result, "package.json") {
+		t.Fatalf("根 .dockerignore 未按预期生效: %v", paths(result))
+	}
+	inspected, err := Inspect(context.Background(), bytes.NewReader(packed), ArchiveOptions{ExpectedSHA256: result.SHA256})
+	if err != nil || inspected.Dockerfile != "" {
+		t.Fatalf("归档检查不应要求 Dockerfile: %+v %v", inspected, err)
+	}
+	if _, err := Inspect(context.Background(), bytes.NewReader(packed), ArchiveOptions{Dockerfile: "Dockerfile"}); !errors.Is(err, ErrDockerfile) {
+		t.Fatalf("显式指定的 Dockerfile 缺失必须报错: %v", err)
+	}
+}
+
+// 未显式指定时，上下文根目录的 Dockerfile 优先；显式指定的缺失路径仍是输入错误。
+func TestImplicitDockerfileDetectionAndExplicitFailure(t *testing.T) {
+	root, options := fixture(t)
+	if result, err := Preview(context.Background(), options); err != nil || result.Dockerfile != "Dockerfile" {
+		t.Fatalf("应自动使用根目录 Dockerfile: %+v %v", result, err)
+	}
+	options.Dockerfile = "missing/Dockerfile"
+	if _, err := Preview(context.Background(), options); !errors.Is(err, ErrDockerfile) {
+		t.Fatalf("显式路径缺失应报错: %v", err)
+	}
+	// 子目录上下文：只看该上下文根目录，不向上或向下搜索。
+	put(t, root, "app/main.py", "print(1)", 0644)
+	sub := Options{Root: root, AllowRoots: []string{root}, Context: "app"}
+	if result, err := Preview(context.Background(), sub); err != nil || result.Dockerfile != "" {
+		t.Fatalf("子目录上下文无 Dockerfile 应为纯源码: %+v %v", result, err)
+	}
+}
+
+// 已存在但不是普通文件的 Dockerfile 不是“缺失”：必须按输入错误处理，不能悄悄改走纯源码。
+func TestImplicitDockerfileThatIsNotRegularFileFails(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "Dockerfile"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	put(t, root, "app.txt", "x", 0644)
+	if _, err := Preview(context.Background(), Options{Root: root, AllowRoots: []string{root}}); !errors.Is(err, ErrDockerfile) {
+		t.Fatalf("目录形态的 Dockerfile 应报错: %v", err)
 	}
 }

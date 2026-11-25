@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"sync"
 	"syscall"
+	"time"
 
 	platformv1 "github.com/sunshanpeng/yummy/gen/go/platform/v1"
 	"github.com/sunshanpeng/yummy/internal/infra/buildrunner"
@@ -36,24 +37,21 @@ const HostBuildFixedMetadataPath = "/workspace/buildkit-metadata.json"
 // （世界可读），metadata 由守护（专用用户）写入。
 const hostBuildWorkspace = "/workspace"
 
-// hostBuildMu 保护在飞构建进程登记；CANCEL 据此终止并等待真实退出。
+type hostBuildExecution struct {
+	cancel context.CancelFunc
+	done   chan struct{}
+	jobUID string
+}
+
+// 宿主构建从准备源码到日志收尾都属于同一次执行，取消需要等整条执行退出。
 var hostBuildMu sync.Mutex
-var hostBuildProcs = map[string]*exec.Cmd{}
+var hostBuildExecutions = map[string]*hostBuildExecution{}
+
+// 不同宿主构建共用源码、计划、凭据和 metadata 路径，进程内一次只允许一个任务使用。
+var hostBuildSlot = make(chan struct{}, 1)
 
 func (e *Executor) hostJobUID(task kube.BuildTask) string {
 	return hostJobUIDPrefix + task.StableJobName
-}
-
-func (e *Executor) registerHostProc(attemptID string, cmd *exec.Cmd) {
-	hostBuildMu.Lock()
-	hostBuildProcs[attemptID] = cmd
-	hostBuildMu.Unlock()
-}
-
-func (e *Executor) unregisterHostProc(attemptID string) {
-	hostBuildMu.Lock()
-	delete(hostBuildProcs, attemptID)
-	hostBuildMu.Unlock()
 }
 
 // runHostBuild 驱动一次宿主构建：ACCEPTED → 源码准备（限界下载+SHA 校验）→
@@ -68,10 +66,36 @@ func (e *Executor) runHostBuild(ctx context.Context, command *platformv1.WorkerB
 		// 控制面已持久化宿主稳定 UID：沿用，绝不发明新值。
 		jobUID = command.JobUid
 	}
+	hostBuildMu.Lock()
+	// 受理后控制面可能同时下发 RECONCILE，已有执行会自行上报，不重复操作固定工作目录。
+	if hostBuildExecutions[task.AttemptID] != nil {
+		hostBuildMu.Unlock()
+		return nil
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	execution := &hostBuildExecution{cancel: cancel, done: make(chan struct{}), jobUID: jobUID}
+	hostBuildExecutions[task.AttemptID] = execution
+	hostBuildMu.Unlock()
+	defer func() {
+		cancel()
+		hostBuildMu.Lock()
+		delete(hostBuildExecutions, task.AttemptID)
+		close(execution.done)
+		hostBuildMu.Unlock()
+	}()
 	if command.Action == "RUN" {
 		if err := emitter.BuildEvent(&platformv1.WorkerBuildEvent{AttemptId: command.AttemptId, Kind: "ACCEPTED", JobUid: jobUID}); err != nil {
 			return err
 		}
+	}
+	select {
+	case hostBuildSlot <- struct{}{}:
+		defer func() { <-hostBuildSlot }()
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	err := e.hostBuildRun(ctx, command, task, jobUID, emitter)
 	if err != nil {
@@ -112,10 +136,33 @@ func hostBuildArgs(task kube.BuildTask) []string {
 // （上次异常退出可能残留旧密钥），再以 0700 重建，文件 0600；没有密钥时不创建目录。
 // buildctl 在客户端读取这些文件并经会话交给守护进程，守护用户不需要读取权限。
 func writeHostSecrets(dir string, secrets []kube.BuildSecret) error {
+	files := make([]hostMountFile, 0, len(secrets))
+	for i, secret := range secrets {
+		files = append(files, hostMountFile{name: "secret-" + strconv.Itoa(i), value: secret.Value})
+	}
+	return writeHostFiles(dir, files)
+}
+
+// writeHostMounts 写 Railpack 路径的挂载文件：构建密钥为 secret-<序号>，非敏感构建参数为 arg-<序号>，
+// 目录与权限规则和 writeHostSecrets 相同。
+func writeHostMounts(dir string, mounts []buildrunner.RailpackMount) error {
+	files := make([]hostMountFile, 0, len(mounts))
+	for _, mount := range mounts {
+		files = append(files, hostMountFile{name: mount.File, value: mount.Value})
+	}
+	return writeHostFiles(dir, files)
+}
+
+type hostMountFile struct {
+	name  string
+	value []byte
+}
+
+func writeHostFiles(dir string, files []hostMountFile) error {
 	if err := os.RemoveAll(dir); err != nil {
 		return err
 	}
-	if len(secrets) == 0 {
+	if len(files) == 0 {
 		return nil
 	}
 	if err := os.MkdirAll(dir, 0700); err != nil {
@@ -125,9 +172,8 @@ func writeHostSecrets(dir string, secrets []kube.BuildSecret) error {
 	if err := os.Chmod(dir, 0700); err != nil {
 		return err
 	}
-	for i, secret := range secrets {
-		name := filepath.Join(dir, "secret-"+strconv.Itoa(i))
-		if err := os.WriteFile(name, secret.Value, 0600); err != nil {
+	for _, file := range files {
+		if err := os.WriteFile(filepath.Join(dir, file.name), file.value, 0600); err != nil {
 			return err
 		}
 	}
@@ -166,7 +212,20 @@ func (w hostLogWriter) Write(p []byte) (int, error) {
 }
 
 func (e *Executor) hostBuildRun(ctx context.Context, command *platformv1.WorkerBuildCommand, task kube.BuildTask, jobUID string, emitter Emitter) error {
-	args := hostBuildArgs(task)
+	railpack := task.Method == kube.MethodRailpack
+	if railpack && !e.hostRailpackReady() {
+		return e.railpackUnavailable(command, jobUID, emitter)
+	}
+	var args []string
+	var mounts []buildrunner.RailpackMount
+	if railpack {
+		var err error
+		if args, mounts, err = e.hostRailpackArgs(task); err != nil {
+			return fmt.Errorf("workerexec: Railpack 构建参数无效: %w", err)
+		}
+	} else {
+		args = hostBuildArgs(task)
+	}
 	if err := buildrunner.ValidateBuildArgs(args); err != nil {
 		// 可运维性：只输出参数键名（不含值，防泄漏 build-arg 敏感值）。
 		keys := make([]string, 0, len(args))
@@ -249,21 +308,17 @@ func (e *Executor) hostBuildRun(ctx context.Context, command *platformv1.WorkerB
 	// 构建密钥文件：固定目录、0700/0600，构建结束（含失败、取消）无条件清理。
 	// defer 先于写入登记，写到一半失败也不会残留。
 	defer os.RemoveAll(buildrunner.BuildAuthDir)
-	if err := writeHostSecrets(buildrunner.BuildAuthDir, task.Secrets); err != nil {
+	if railpack {
+		err = writeHostMounts(buildrunner.BuildAuthDir, mounts)
+	} else {
+		err = writeHostSecrets(buildrunner.BuildAuthDir, task.Secrets)
+	}
+	if err != nil {
 		return err
 	}
 
-	// buildctl 提交：构建在守护进程侧执行；stdout/stderr 合流后分块上报。
-	// args[0] 是固定校验契约的子命令标记；buildctl 实际参数从 args[1:] 起，
-	// metadata 由 buildctl --metadata-file 写入固定路径（与 pod 路径同契约）。
-	cmdArgs := []string{"--addr", e.options.BuildKitAddr,
-		"build", "--metadata-file=" + HostBuildFixedMetadataPath}
-	cmdArgs = append(cmdArgs, args[1:]...)
-	cmd := exec.CommandContext(ctx, e.options.HostBuildCtl, cmdArgs...)
-	cmd.Env = []string{"PATH=/usr/local/bin:/usr/bin:/bin", "HOME=/tmp", "DOCKER_CONFIG=" + credDir, "TMPDIR=" + credDir}
-	e.registerHostProc(task.AttemptID, cmd)
-	defer e.unregisterHostProc(task.AttemptID)
-
+	// 日志脱敏与 Pod 路径同一实现：仓库凭据与构建密钥的已知明文替换为 [REDACTED]。
+	// 脱敏器会扣留最长秘密长度的尾部，输出读完后必须 Close 才会冲出；识别输出与构建输出共用同一条日志序列。
 	logSeq := 0
 	var logMu sync.Mutex
 	emitChunk := func(content []byte) {
@@ -280,37 +335,53 @@ func (e *Executor) hostBuildRun(ctx context.Context, command *platformv1.WorkerB
 		}
 		_ = emitter.BuildLog(&platformv1.WorkerBuildLog{AttemptId: command.AttemptId, Seq: int64(seq), Content: chunk})
 	}
-	pr, pw, err := os.Pipe()
-	if err != nil {
-		return err
-	}
-	// 日志脱敏与 Pod 路径同一实现：仓库凭据与构建密钥的已知明文替换为 [REDACTED]。
-	// 脱敏器会扣留最长秘密长度的尾部，输出读完后必须 Close 才会冲出。
 	redactor := buildrunner.NewRedactingWriter(hostLogWriter{emit: emitChunk}, redactionSecrets)
-	cmd.Stdout = pw
-	cmd.Stderr = pw
+	// 提前返回的路径也要冲出被扣留的尾部；重复 Close 无副作用。
+	defer redactor.Close()
+
+	if railpack {
+		// 识别阶段：Railpack 只读取源码并生成计划，不运行项目脚本；失败原因进入构建日志。
+		if err := e.hostStage(command, jobUID, emitter, "PLANNING"); err != nil {
+			return err
+		}
+		uid, gid := railpackDropIdentity()
+		result, planErr := buildrunner.PlanRailpack(ctx, buildrunner.PlanOptions{
+			Binary: e.options.RailpackPath, SourceDir: filepath.Join(hostBuildWorkspace, "source", filepath.FromSlash(task.Context)),
+			Args: task.BuildArgs, SecretNames: secretIDs(task.Secrets), DropToUID: uid, DropToGID: gid, Output: redactor,
+		})
+		if planErr != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			code := railpackFailureCode(planErr)
+			if code == "" {
+				// 目录不可写等宿主环境问题不是用户可修复的失败，交给重投而不是伪造构建失败。
+				return planErr
+			}
+			_, _ = fmt.Fprintf(redactor, "Railpack 识别失败：%v\n", planErr)
+			_ = redactor.Close()
+			return emitter.BuildEvent(&platformv1.WorkerBuildEvent{AttemptId: command.AttemptId, Kind: "FAILED", JobUid: jobUID, ErrorCode: code, LogsComplete: true})
+		}
+		_, _ = fmt.Fprintln(redactor, buildrunner.PlanSummary(result))
+		if err := e.hostStage(command, jobUID, emitter, "BUILDING"); err != nil {
+			return err
+		}
+	}
+
+	// buildctl 提交：构建在守护进程侧执行；stdout/stderr 合流后分块上报。
+	// args[0] 是固定校验契约的子命令标记，buildctl 的 build 子命令参数就是 args 本身；
+	// metadata 由 buildctl --metadata-file 写入固定路径（与 pod 路径同契约）。
+	cmdArgs := append([]string{"--addr", e.options.BuildKitAddr}, args...)
+	cmd := exec.CommandContext(ctx, e.options.HostBuildCtl, cmdArgs...)
+	cmd.Env = []string{"PATH=/usr/local/bin:/usr/bin:/bin", "HOME=/tmp", "DOCKER_CONFIG=" + credDir, "TMPDIR=" + credDir}
+	cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGTERM) }
+	cmd.WaitDelay = 5 * time.Second
+	cmd.Stdout = redactor
+	cmd.Stderr = redactor
 	if err := cmd.Start(); err != nil {
-		pw.Close()
 		return err
 	}
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		buffer := make([]byte, maxLogChunk)
-		for {
-			n, readErr := pr.Read(buffer)
-			if n > 0 {
-				_, _ = redactor.Write(buffer[:n])
-			}
-			if readErr != nil {
-				return
-			}
-		}
-	}()
 	err = cmd.Wait()
-	pw.Close()
-	wg.Wait()
 	// 先冲出被扣留的尾部，终态事件携带 LogsComplete 时日志必须已经完整上报。
 	_ = redactor.Close()
 	if err != nil {
@@ -332,23 +403,24 @@ func (e *Executor) hostBuildRun(ctx context.Context, command *platformv1.WorkerB
 	return emitter.BuildEvent(&platformv1.WorkerBuildEvent{AttemptId: command.AttemptId, Kind: "SUCCEEDED", JobUid: jobUID, Digest: digest, LogsComplete: true})
 }
 
-// cancelHostBuild 终止在飞构建进程并等待真实退出后才发射 STOPPED；
-// 没有在飞进程时按"已消失"处理（RECONCILE 重跑自会恢复一致）。
+// cancelHostBuild 取消在飞执行并等待源码准备、规划、构建和清理全部退出后才发射 STOPPED。
 func (e *Executor) cancelHostBuild(ctx context.Context, command *platformv1.WorkerBuildCommand, emitter Emitter) error {
 	hostBuildMu.Lock()
-	cmd, ok := hostBuildProcs[command.AttemptId]
+	execution := hostBuildExecutions[command.AttemptId]
 	hostBuildMu.Unlock()
-	if ok && cmd.Process != nil {
-		_ = cmd.Process.Signal(syscall.SIGTERM)
-		done := make(chan struct{})
-		go func() { _ = cmd.Wait(); close(done) }()
+	jobUID := command.JobUid
+	if execution != nil {
+		execution.cancel()
 		select {
-		case <-done:
+		case <-execution.done:
 		case <-ctx.Done():
 			return ctx.Err()
 		}
+		if jobUID == "" {
+			jobUID = execution.jobUID
+		}
 	}
-	return emitter.BuildEvent(&platformv1.WorkerBuildEvent{AttemptId: command.AttemptId, Kind: "STOPPED", JobUid: command.JobUid, LogsComplete: true})
+	return emitter.BuildEvent(&platformv1.WorkerBuildEvent{AttemptId: command.AttemptId, Kind: "STOPPED", JobUid: jobUID, LogsComplete: true})
 }
 
 // hostWorldReadable 让守护用户读取 worker(root) 准备的源码上下文。
