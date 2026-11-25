@@ -8,7 +8,7 @@ import { errorMessage } from "./lib/platform";
 
 const search = (raw: Record<string, unknown>): { cursor?: string } => ({ cursor: typeof raw.cursor === "string" ? raw.cursor : undefined });
 const root = createRootRoute({ component: ConsoleRoot, notFoundComponent: () => <div className="page"><Notice>页面不存在，请从顶部返回工作空间。</Notice></div>, errorComponent: ({ error }) => <div className="page"><Notice tone="error">页面加载失败：{errorMessage(error)}</Notice></div> });
-const login = createRoute({ getParentRoute: () => root, path: "/login", validateSearch: (raw: Record<string, unknown>): { redirect?: string; return_request?: string } => ({ redirect: typeof raw.redirect === "string" ? raw.redirect : undefined, return_request: typeof raw.return_request === "string" ? raw.return_request : undefined }), component: () => <AuthPage mode="login" /> });
+const login = createRoute({ getParentRoute: () => root, path: "/login", validateSearch: (raw: Record<string, unknown>): { redirect?: string; return_request?: string; oidc_failed?: boolean } => ({ oidc_failed: raw.oidc_failed === true || raw.oidc_failed === "true" ? true : undefined, redirect: typeof raw.redirect === "string" ? raw.redirect : undefined, return_request: typeof raw.return_request === "string" ? raw.return_request : undefined }), component: () => <AuthPage mode="login" /> });
 const invite = createRoute({ getParentRoute: () => root, path: "/accept-invite", component: () => <AuthPage mode="invite" /> });
 const reset = createRoute({ getParentRoute: () => root, path: "/reset-password", component: () => <AuthPage mode="reset" /> });
 const authenticated = createRoute({ getParentRoute: () => root, id: "authenticated", component: AuthenticatedShell });
@@ -25,6 +25,7 @@ const globalRegistries = createRoute({ getParentRoute: () => authenticated, path
 const globalPolicy = createRoute({ getParentRoute: () => authenticated, path: "/platform/policy", component: lazyRouteComponent(() => import("./pages/platform"), "PlatformPolicyRoute") });
 const globalAllocations = createRoute({ getParentRoute: () => authenticated, path: "/platform/allocations", component: lazyRouteComponent(() => import("./pages/platform"), "PlatformAllocationsRoute") });
 const globalOAuthClients = createRoute({ getParentRoute: () => authenticated, path: "/platform/oauth-clients", validateSearch: search, component: lazyRouteComponent(() => import("./pages/platform"), "PlatformOAuthClientsRoute") });
+const globalAudit = createRoute({ getParentRoute: () => authenticated, path: "/platform/audit", validateSearch: search, component: lazyRouteComponent(() => import("./pages/platform"), "PlatformAuditRoute") });
 const workspace = createRoute({ getParentRoute: () => authenticated, path: "/w/$workspaceSlug", component: WorkspaceLayout });
 const apps = createRoute({ getParentRoute: () => workspace, path: "apps", validateSearch: search, component: ApplicationsPage });
 const app = createRoute({ getParentRoute: () => workspace, path: "apps/$applicationSlug", component: ApplicationLayout });
@@ -47,7 +48,8 @@ const manageIndex = createRoute({ getParentRoute: () => manage, path: "/", befor
 const settings = createRoute({ getParentRoute: () => manage, path: "settings", component: () => <WorkspaceManagement tab="settings" /> });
 const members = createRoute({ getParentRoute: () => manage, path: "members", validateSearch: search, component: () => <WorkspaceManagement tab="members" /> });
 const invitations = createRoute({ getParentRoute: () => manage, path: "invitations", component: () => <WorkspaceManagement tab="invitations" /> });
-const routeTree = root.addChildren([login, invite, reset, authenticated.addChildren([home, account, tokens, connections, authorize, global, globalWorkspaces, globalUsers, globalNodes, globalRegistries, globalPolicy, globalAllocations, globalOAuthClients, workspace.addChildren([apps, app.addChildren([overview, basic, access, runtime, legacyRuntime, source, legacySource, builds, newBuild, buildDetail, buildSettings, legacyBuildSettings, deployments, deploymentDetail]), manage.addChildren([manageIndex, settings, members, invitations])])])]);
+const workspaceAudit = createRoute({ getParentRoute: () => manage, path: "audit", validateSearch: search, component: () => <WorkspaceManagement tab="audit" /> });
+const routeTree = root.addChildren([login, invite, reset, authenticated.addChildren([home, account, tokens, connections, authorize, global, globalWorkspaces, globalUsers, globalNodes, globalRegistries, globalPolicy, globalAllocations, globalOAuthClients, globalAudit, workspace.addChildren([apps, app.addChildren([overview, basic, access, runtime, legacyRuntime, source, legacySource, builds, newBuild, buildDetail, buildSettings, legacyBuildSettings, deployments, deploymentDetail]), manage.addChildren([manageIndex, settings, members, invitations, workspaceAudit])])])]);
 export const router = createRouter({ routeTree, defaultPreload: "intent", scrollRestoration: true });
 
 declare module "@tanstack/react-router" {

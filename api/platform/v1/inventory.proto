@@ -2,6 +2,8 @@ syntax = "proto3";
 package platform.v1;
 option go_package = "github.com/sunshanpeng/yummy/gen/go/platform/v1;platformv1";
 service InventoryService {
+  // 只读取当前运行集群中 worker 上报的机器清单。
+  rpc ListClusterMachines(ListClusterMachinesRequest) returns (ListClusterMachinesResponse);
   rpc ListNodes(ListNodesRequest) returns (ListNodesResponse);
   rpc GetNode(GetNodeRequest) returns (GetNodeResponse);
   rpc CreateNode(CreateNodeRequest) returns (CreateNodeResponse);
@@ -117,3 +119,14 @@ message GetInstanceSettingsRequest {}
 message GetInstanceSettingsResponse { bool workspace_self_create = 1; }
 message SetWorkspaceSelfCreateRequest { bool enabled = 1; }
 message SetWorkspaceSelfCreateResponse { bool workspace_self_create = 1; }
+message ClusterMachine {
+  string uid = 1; string name = 2; string os = 3; string arch = 4; string kubelet_version = 5;
+  bool ready = 6; bool schedulable = 7;
+}
+message ListClusterMachinesRequest {}
+message ListClusterMachinesResponse {
+  repeated ClusterMachine machines = 1;
+  string observed_at = 2;
+  bool truncated = 3;
+  string reason = 4;
+}

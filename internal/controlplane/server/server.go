@@ -11,8 +11,10 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	platformv1 "github.com/sunshanpeng/yummy/gen/go/platform/v1"
 	"github.com/sunshanpeng/yummy/internal/bff/mcp"
 	"github.com/sunshanpeng/yummy/internal/domains/application"
+	"github.com/sunshanpeng/yummy/internal/domains/audit"
 	"github.com/sunshanpeng/yummy/internal/domains/authorization"
 	"github.com/sunshanpeng/yummy/internal/domains/build"
 	"github.com/sunshanpeng/yummy/internal/domains/buildsecret"
@@ -43,6 +45,9 @@ type Config struct {
 	CSRFKey                 string
 	MasterKey               string
 	OAuthKey                string
+	OIDCIssuer              string
+	OIDCClientID            string
+	OIDCClientSecret        string
 	SourceRoot              string
 	WorkerCACertificatePath string
 	WorkerCAPrivateKeyPath  string
@@ -118,6 +123,17 @@ func openWithDatabase(ctx context.Context, db *gorm.DB, config Config, assets fs
 		_ = store.Close(db)
 		return nil, err
 	}
+	var oidcProviders []oauth.OIDCProviderConfig
+	if config.OIDCIssuer != "" || config.OIDCClientID != "" || config.OIDCClientSecret != "" {
+		if config.OAuthKey == "" || config.OIDCIssuer == "" || config.OIDCClientID == "" || config.OIDCClientSecret == "" {
+			_ = store.Close(db)
+			return nil, errors.New("启用外部 OIDC 需要提供 OAuth 密钥、Issuer、客户端 ID 和客户端密钥")
+		}
+		oidcProviders = []oauth.OIDCProviderConfig{{
+			Name: transport.ExternalOIDCProvider, Issuer: config.OIDCIssuer, ClientID: config.OIDCClientID, ClientSecret: config.OIDCClientSecret,
+			RedirectURI: strings.TrimRight(config.PublicBaseURL, "/") + transport.OIDCCallbackPath,
+		}}
+	}
 	var oauthService *oauth.Service
 	var authenticateOAuth session.BearerAuthenticator
 	if config.OAuthKey != "" {
@@ -126,7 +142,7 @@ func openWithDatabase(ctx context.Context, db *gorm.DB, config Config, assets fs
 			_ = store.Close(db)
 			return nil, errors.New("OAuth 密钥必须是独立的 Base64 编码32字节随机值")
 		}
-		oauthService, err = oauth.NewService(db, access, identityService, oauth.Config{PublicBaseURL: config.PublicBaseURL, HMACSecret: oauthKey, AllowInsecureLoopback: config.AllowLocalHTTP})
+		oauthService, err = oauth.NewService(db, access, identityService, oauth.Config{PublicBaseURL: config.PublicBaseURL, HMACSecret: oauthKey, AllowInsecureLoopback: config.AllowLocalHTTP, OIDCProviders: oidcProviders})
 		if err != nil {
 			_ = store.Close(db)
 			return nil, err
@@ -153,7 +169,7 @@ func openWithDatabase(ctx context.Context, db *gorm.DB, config Config, assets fs
 	reader := &artifactReader{db: db, inventory: inventoryService, authHosts: config.RegistryAuthHosts, deniedHosts: config.RegistryDeniedHosts}
 	buildVerifier := buildArtifactVerifier{reader: reader}
 	deploymentService := deployment.NewService(db, access, configService, buildService, deploymentArtifactVerifier{reader: reader})
-	applicationService := application.NewService(db, access, deploymentService)
+	applicationService := application.NewService(db, access, deploymentService, buildService)
 	materials := &workerMaterials{db: db, box: box, source: sources, secrets: secretService, inventory: inventoryService, baseURL: strings.TrimRight(config.PublicBaseURL, "/")}
 	var enrollmentService *enrollment.Service
 	var gateway *workergateway.Gateway
@@ -180,7 +196,8 @@ func openWithDatabase(ctx context.Context, db *gorm.DB, config Config, assets fs
 		workerHTTP = workerHandler(enrollmentService, gateway)
 	}
 	router := gin.New()
-	router.Use(gin.CustomRecovery(func(c *gin.Context, _ any) {
+	// Gin 的默认异常输出会转储 Cookie 和查询串，统一使用结构化日志。
+	router.Use(gin.CustomRecoveryWithWriter(nil, func(c *gin.Context, _ any) {
 		log.Error("控制面请求发生异常")
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"code": "internal", "message": "控制面内部错误"})
 	}))
@@ -193,9 +210,14 @@ func openWithDatabase(ctx context.Context, db *gorm.DB, config Config, assets fs
 	mount(transport.NewIdentityHandler(identityService, sessions, log, rpcOptions...))
 	mount(transport.NewWorkspaceHandler(workspace.NewService(db, access), log, rpcOptions...))
 	mount(transport.NewApplicationHandler(applicationService, log, rpcOptions...))
+	mount(transport.NewAuditHandler(audit.NewService(access), log, rpcOptions...))
 	mount(transport.NewRuntimeConfigHandler(configService, log, rpcOptions...))
 	mount(transport.NewSourceHandler(sources, log, rpcOptions...))
-	mount(transport.NewInventoryHandler(inventoryService, log, rpcOptions...))
+	var readClusterMachines func(string) (*platformv1.ClusterMachinesReport, time.Time)
+	if gateway != nil {
+		readClusterMachines = gateway.ClusterMachines
+	}
+	mount(transport.NewInventoryHandler(inventoryService, log, readClusterMachines, rpcOptions...))
 	mount(transport.NewBuildHandler(buildService, log, rpcOptions...))
 	mount(transport.NewBuildSecretHandler(secretService, log, rpcOptions...))
 	mount(transport.NewDeploymentHandler(deploymentService, log, rpcOptions...))
@@ -204,6 +226,10 @@ func openWithDatabase(ctx context.Context, db *gorm.DB, config Config, assets fs
 		// 全局管理员专用 OAuth 客户端管理；oauthService 未装配（未配置 OAuthKey）时失败关闭不注册。
 		mount(transport.NewOAuthAdminHandler(oauthService, log, rpcOptions...))
 	}
+	oidcLogin := transport.NewOIDCLogin(oauthService, sessions, strings.HasPrefix(config.PublicBaseURL, "https://"), len(oidcProviders) != 0)
+	router.GET("/auth/oidc/status", gin.WrapF(oidcLogin.Status))
+	router.POST("/auth/oidc/start", gin.WrapF(oidcLogin.Start))
+	router.GET(transport.OIDCCallbackPath, gin.WrapF(oidcLogin.Callback))
 	var remoteMCP http.Handler
 	if oauthService != nil {
 		router.GET("/.well-known/oauth-authorization-server", gin.WrapF(oauthService.Metadata))

@@ -10,6 +10,8 @@ service OAuthAdminService {
   rpc ListOAuthClients(ListOAuthClientsRequest) returns (ListOAuthClientsResponse);
   // 停用即撤销该客户端全部既有授权；重新启用不恢复已撤销授权。
   rpc SetOAuthClientActive(SetOAuthClientActiveRequest) returns (SetOAuthClientActiveResponse);
+  // 将已配置外部身份源的 subject 显式绑定到已有账户。
+  rpc BindExternalIdentity(BindExternalIdentityRequest) returns (BindExternalIdentityResponse);
 }
 message OAuthClient {
   string client_id = 1; string name = 2; string source = 3;
@@ -22,3 +24,5 @@ message ListOAuthClientsRequest { int32 limit = 1; string cursor = 2; }
 message ListOAuthClientsResponse { repeated OAuthClient clients = 1; string next_cursor = 2; }
 message SetOAuthClientActiveRequest { string client_id = 1; bool active = 2; }
 message SetOAuthClientActiveResponse { OAuthClient client = 1; }
+message BindExternalIdentityRequest { string user_id = 1; string subject = 2; }
+message BindExternalIdentityResponse {}

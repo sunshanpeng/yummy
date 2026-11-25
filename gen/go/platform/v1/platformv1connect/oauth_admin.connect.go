@@ -42,6 +42,9 @@ const (
 	// OAuthAdminServiceSetOAuthClientActiveProcedure is the fully-qualified name of the
 	// OAuthAdminService's SetOAuthClientActive RPC.
 	OAuthAdminServiceSetOAuthClientActiveProcedure = "/platform.v1.OAuthAdminService/SetOAuthClientActive"
+	// OAuthAdminServiceBindExternalIdentityProcedure is the fully-qualified name of the
+	// OAuthAdminService's BindExternalIdentity RPC.
+	OAuthAdminServiceBindExternalIdentityProcedure = "/platform.v1.OAuthAdminService/BindExternalIdentity"
 )
 
 // OAuthAdminServiceClient is a client for the platform.v1.OAuthAdminService service.
@@ -52,6 +55,8 @@ type OAuthAdminServiceClient interface {
 	ListOAuthClients(context.Context, *connect.Request[v1.ListOAuthClientsRequest]) (*connect.Response[v1.ListOAuthClientsResponse], error)
 	// 停用即撤销该客户端全部既有授权；重新启用不恢复已撤销授权。
 	SetOAuthClientActive(context.Context, *connect.Request[v1.SetOAuthClientActiveRequest]) (*connect.Response[v1.SetOAuthClientActiveResponse], error)
+	// 将已配置外部身份源的 subject 显式绑定到已有账户。
+	BindExternalIdentity(context.Context, *connect.Request[v1.BindExternalIdentityRequest]) (*connect.Response[v1.BindExternalIdentityResponse], error)
 }
 
 // NewOAuthAdminServiceClient constructs a client for the platform.v1.OAuthAdminService service. By
@@ -83,6 +88,12 @@ func NewOAuthAdminServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(oAuthAdminServiceMethods.ByName("SetOAuthClientActive")),
 			connect.WithClientOptions(opts...),
 		),
+		bindExternalIdentity: connect.NewClient[v1.BindExternalIdentityRequest, v1.BindExternalIdentityResponse](
+			httpClient,
+			baseURL+OAuthAdminServiceBindExternalIdentityProcedure,
+			connect.WithSchema(oAuthAdminServiceMethods.ByName("BindExternalIdentity")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -91,6 +102,7 @@ type oAuthAdminServiceClient struct {
 	registerOAuthClient  *connect.Client[v1.RegisterOAuthClientRequest, v1.RegisterOAuthClientResponse]
 	listOAuthClients     *connect.Client[v1.ListOAuthClientsRequest, v1.ListOAuthClientsResponse]
 	setOAuthClientActive *connect.Client[v1.SetOAuthClientActiveRequest, v1.SetOAuthClientActiveResponse]
+	bindExternalIdentity *connect.Client[v1.BindExternalIdentityRequest, v1.BindExternalIdentityResponse]
 }
 
 // RegisterOAuthClient calls platform.v1.OAuthAdminService.RegisterOAuthClient.
@@ -108,6 +120,11 @@ func (c *oAuthAdminServiceClient) SetOAuthClientActive(ctx context.Context, req 
 	return c.setOAuthClientActive.CallUnary(ctx, req)
 }
 
+// BindExternalIdentity calls platform.v1.OAuthAdminService.BindExternalIdentity.
+func (c *oAuthAdminServiceClient) BindExternalIdentity(ctx context.Context, req *connect.Request[v1.BindExternalIdentityRequest]) (*connect.Response[v1.BindExternalIdentityResponse], error) {
+	return c.bindExternalIdentity.CallUnary(ctx, req)
+}
+
 // OAuthAdminServiceHandler is an implementation of the platform.v1.OAuthAdminService service.
 type OAuthAdminServiceHandler interface {
 	// 登记预注册公共客户端；client_id 重复返回冲突，不做静默覆盖。
@@ -116,6 +133,8 @@ type OAuthAdminServiceHandler interface {
 	ListOAuthClients(context.Context, *connect.Request[v1.ListOAuthClientsRequest]) (*connect.Response[v1.ListOAuthClientsResponse], error)
 	// 停用即撤销该客户端全部既有授权；重新启用不恢复已撤销授权。
 	SetOAuthClientActive(context.Context, *connect.Request[v1.SetOAuthClientActiveRequest]) (*connect.Response[v1.SetOAuthClientActiveResponse], error)
+	// 将已配置外部身份源的 subject 显式绑定到已有账户。
+	BindExternalIdentity(context.Context, *connect.Request[v1.BindExternalIdentityRequest]) (*connect.Response[v1.BindExternalIdentityResponse], error)
 }
 
 // NewOAuthAdminServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -143,6 +162,12 @@ func NewOAuthAdminServiceHandler(svc OAuthAdminServiceHandler, opts ...connect.H
 		connect.WithSchema(oAuthAdminServiceMethods.ByName("SetOAuthClientActive")),
 		connect.WithHandlerOptions(opts...),
 	)
+	oAuthAdminServiceBindExternalIdentityHandler := connect.NewUnaryHandler(
+		OAuthAdminServiceBindExternalIdentityProcedure,
+		svc.BindExternalIdentity,
+		connect.WithSchema(oAuthAdminServiceMethods.ByName("BindExternalIdentity")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/platform.v1.OAuthAdminService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case OAuthAdminServiceRegisterOAuthClientProcedure:
@@ -151,6 +176,8 @@ func NewOAuthAdminServiceHandler(svc OAuthAdminServiceHandler, opts ...connect.H
 			oAuthAdminServiceListOAuthClientsHandler.ServeHTTP(w, r)
 		case OAuthAdminServiceSetOAuthClientActiveProcedure:
 			oAuthAdminServiceSetOAuthClientActiveHandler.ServeHTTP(w, r)
+		case OAuthAdminServiceBindExternalIdentityProcedure:
+			oAuthAdminServiceBindExternalIdentityHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -170,4 +197,8 @@ func (UnimplementedOAuthAdminServiceHandler) ListOAuthClients(context.Context, *
 
 func (UnimplementedOAuthAdminServiceHandler) SetOAuthClientActive(context.Context, *connect.Request[v1.SetOAuthClientActiveRequest]) (*connect.Response[v1.SetOAuthClientActiveResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("platform.v1.OAuthAdminService.SetOAuthClientActive is not implemented"))
+}
+
+func (UnimplementedOAuthAdminServiceHandler) BindExternalIdentity(context.Context, *connect.Request[v1.BindExternalIdentityRequest]) (*connect.Response[v1.BindExternalIdentityResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("platform.v1.OAuthAdminService.BindExternalIdentity is not implemented"))
 }

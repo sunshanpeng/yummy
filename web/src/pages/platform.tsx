@@ -11,14 +11,16 @@ import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 import { ConfirmAction, DataForm, DataTable, Empty, Heading, Notice, Pager, QueryState, SecretOnce, required, resourceName } from "../components/console-kit";
 import { formatTime, platform, roleLabel, tokenScopes } from "../lib/platform";
-import { invalidateMethods, useRPC, useUser } from "../lib/queries";
+import { invalidateMethods, useExternalLogin, useRPC, useUser } from "../lib/queries";
 import { useCursor } from "./workspaces";
+import { AuditEvents } from "./audit";
+import { PlatformSetup } from "./platform-setup";
 import { AllocationsPage, NodesPage, PolicyPage, RegistriesPage } from "./inventory";
 
-export function PlatformPage({ users = false, tab }: { users?: boolean; tab?: "nodes" | "registries" | "policy" | "allocations" | "oauth-clients" }) {
+export function PlatformPage({ users = false, tab }: { users?: boolean; tab?: "nodes" | "registries" | "policy" | "allocations" | "oauth-clients" | "audit" }) {
   const user = useUser();
   if (!user.instanceAdmin) return <div className="page"><Notice tone="error">此页面仅供全局管理员使用。</Notice></div>;
-  return <div className="page"><Heading title="全局管理" description="实例级管理范围。工作空间权限不授予基础设施或其他用户个人凭证的管理权。" /><nav className="tabs-nav" aria-label="全局管理导航"><Link to="/platform/workspaces" aria-current={!users && !tab ? "page" : undefined}>工作空间</Link><Link to="/platform/users" aria-current={users ? "page" : undefined}>用户与安全</Link>{([{ path: "nodes", label: "执行节点" }, { path: "registries", label: "输出仓库" }, { path: "policy", label: "平台策略" }, { path: "allocations", label: "资源分配" }, { path: "oauth-clients", label: "OAuth 客户端" }] as const).map((item) => <Link key={item.path} to={`/platform/${item.path}`} aria-current={tab === item.path ? "page" : undefined}>{item.label}</Link>)}</nav>{users ? <Users /> : tab === "nodes" ? <NodesPage /> : tab === "registries" ? <RegistriesPage /> : tab === "policy" ? <PolicyPage /> : tab === "allocations" ? <AllocationsPage /> : tab === "oauth-clients" ? <OAuthClientsPage /> : <Workspaces />}</div>;
+  return <div className="page"><Heading title="全局管理" description="实例级管理范围。工作空间权限不授予基础设施或其他用户个人凭证的管理权。" /><nav className="tabs-nav" aria-label="全局管理导航"><Link to="/platform/workspaces" aria-current={!users && !tab ? "page" : undefined}>工作空间</Link><Link to="/platform/users" aria-current={users ? "page" : undefined}>用户与安全</Link>{([{ path: "nodes", label: "执行节点" }, { path: "registries", label: "输出仓库" }, { path: "policy", label: "平台策略" }, { path: "allocations", label: "资源分配" }, { path: "oauth-clients", label: "OAuth 客户端" }, { path: "audit", label: "全局审计" }] as const).map((item) => <Link key={item.path} to={`/platform/${item.path}`} aria-current={tab === item.path ? "page" : undefined}>{item.label}</Link>)}</nav>{users ? <Users /> : tab === "nodes" ? <NodesPage /> : tab === "registries" ? <RegistriesPage /> : tab === "policy" ? <PolicyPage /> : tab === "allocations" ? <AllocationsPage /> : tab === "oauth-clients" ? <OAuthClientsPage /> : tab === "audit" ? <GlobalAudit /> : <Workspaces />}</div>;
 }
 export const PlatformWorkspacesRoute = () => <PlatformPage />;
 export const PlatformUsersRoute = () => <PlatformPage users />;
@@ -27,6 +29,12 @@ export const PlatformRegistriesRoute = () => <PlatformPage tab="registries" />;
 export const PlatformPolicyRoute = () => <PlatformPage tab="policy" />;
 export const PlatformAllocationsRoute = () => <PlatformPage tab="allocations" />;
 export const PlatformOAuthClientsRoute = () => <PlatformPage tab="oauth-clients" />;
+export const PlatformAuditRoute = () => <PlatformPage tab="audit" />;
+
+function GlobalAudit() {
+  const pagination = useCursor();
+  return <AuditEvents {...pagination} />;
+}
 
 function Workspaces() {
   const { cursor, onPage } = useCursor(); const [creating, setCreating] = useState(false); const client = useQueryClient();
@@ -43,7 +51,7 @@ function Workspaces() {
       setSavingToggle(false);
     }
   };
-  return <div className="stack"><Notice tone={selfCreate ? "success" : "neutral"}>{selfCreate ? "已开启：所有登录用户都可以自行创建工作空间。" : "已关闭：只有全局管理员可以创建工作空间。"}</Notice><div className="flex items-center justify-between gap-4"><h2 className="text-lg font-semibold">全部工作空间</h2><div className="flex items-center gap-3"><Button onClick={toggleSelfCreate} variant={selfCreate ? "outline" : "default"} disabled={savingToggle}>{savingToggle ? "保存中…" : selfCreate ? "仅管理员可创建" : "允许成员创建"}</Button><Button onClick={() => setCreating(!creating)} variant={creating ? "outline" : "default"}><Plus />{creating ? "取消创建" : "创建空间"}</Button></div></div>{creating && <section className="section max-w-2xl"><DataForm fields={[{ name: "name", label: "工作空间名称", schema: required.max(100, "名称最多 100 字符") }, { name: "slug", label: "空间标识", schema: resourceName, hint: "将用于访问地址与命令行，创建后不可修改；小写字母、数字和中划线，最长 30 位，需保持唯一。" }, { name: "description", label: "空间说明", type: "textarea", schema: z.string().max(2000, "说明最多 2000 字符") }]} submitLabel="创建工作空间" onSubmit={async (value) => { await platform.workspaces.createWorkspace({ name: value.name, slug: value.slug, description: value.description }); setCreating(false); await invalidateMethods(client, ["ListWorkspaces"]); }} /></section>}<QueryState query={query}>{query.data?.workspaces.length ? <><DataTable label="全部工作空间" rows={query.data.workspaces} columns={[
+  return <div className="stack"><PlatformSetup workspaces={query.data?.workspaces ?? []} workspaceQuery={query} onCreateWorkspace={() => setCreating(true)} /><Notice tone={selfCreate ? "success" : "neutral"}>{selfCreate ? "已开启：所有登录用户都可以自行创建工作空间。" : "已关闭：只有全局管理员可以创建工作空间。"}</Notice><div className="flex items-center justify-between gap-4"><h2 className="text-lg font-semibold">全部工作空间</h2><div className="flex items-center gap-3"><Button onClick={toggleSelfCreate} variant={selfCreate ? "outline" : "default"} disabled={savingToggle}>{savingToggle ? "保存中…" : selfCreate ? "仅管理员可创建" : "允许成员创建"}</Button><Button onClick={() => setCreating(!creating)} variant={creating ? "outline" : "default"}><Plus />{creating ? "取消创建" : "创建空间"}</Button></div></div>{creating && <section className="section max-w-2xl"><DataForm fields={[{ name: "name", label: "工作空间名称", schema: required.max(100, "名称最多 100 字符") }, { name: "slug", label: "空间标识", schema: resourceName, hint: "将用于访问地址与命令行，创建后不可修改；小写字母、数字和中划线，最长 30 位，需保持唯一。" }, { name: "description", label: "空间说明", type: "textarea", schema: z.string().max(2000, "说明最多 2000 字符") }]} submitLabel="创建工作空间" onSubmit={async (value) => { await platform.workspaces.createWorkspace({ name: value.name, slug: value.slug, description: value.description }); setCreating(false); await invalidateMethods(client, ["ListWorkspaces"]); }} /></section>}<QueryState query={query}>{query.data?.workspaces.length ? <><DataTable label="全部工作空间" rows={query.data.workspaces} columns={[
     { id: "name", title: "工作空间", cell: (workspace) => <div><Link className="text-link font-medium" to="/w/$workspaceSlug/apps" params={{ workspaceSlug: workspace.slug }}>{workspace.name}</Link><p className="mt-1 text-xs text-muted-foreground">{workspace.slug}</p></div> },
     { id: "description", title: "说明", cell: (workspace) => <p className="max-w-md break-words text-muted-foreground">{workspace.description || "—"}</p> },
     { id: "role", title: "你的业务权限", cell: (workspace) => roleLabel(workspace.role) },
@@ -51,13 +59,22 @@ function Workspaces() {
   ]} /><Pager cursor={cursor} nextCursor={query.data.nextCursor} onPage={onPage} /></> : <Empty title="尚无工作空间" description="创建空间后即可邀请成员，并在空间中创建应用。全局管理员自动具备各空间业务权限。" />}</QueryState></div>;
 }
 function Users() {
+  const externalLogin = useExternalLogin();
+  const [bindingUser, setBindingUser] = useState<{ id: string; username: string }>();
   const query = useRPC(IdentityService.method.listUsers, {}); const current = useUser(); const client = useQueryClient(); const [secret, setSecret] = useState("");
   const refresh = () => invalidateMethods(client, ["ListUsers", "ListWorkspaceMembers", "ListApplicationMembers"]);
-  return <div className="stack"><Notice>停用用户或创建密码重置会立即使该用户原有会话及 PAT 失效。管理员不能查看、创建或撤销他人的个人 PAT。</Notice>{secret && <SecretOnce value={secret} title="密码重置链接已生成" onDismiss={() => setSecret("")} />}<QueryState query={query}>{query.data?.users.length ? <DataTable label="实例用户" rows={query.data.users} columns={[
+  return <div className="stack"><Notice>停用用户或创建密码重置会立即使该用户原有会话及 PAT 失效。管理员不能查看、创建或撤销他人的个人 PAT。</Notice>{externalLogin.data && bindingUser && <section className="section max-w-xl space-y-4">
+    <div><h3 className="font-semibold">绑定「{bindingUser.username}」的团队身份</h3><p className="text-sm text-muted-foreground">请核对身份源提供的稳定 subject。绑定后该身份可以登录此账户。</p></div>
+    <DataForm key={bindingUser.id} fields={[{ name: "subject", label: "外部身份 subject", schema: required.max(1024) }]} submitLabel="确认绑定团队身份" successMessage="团队身份已绑定。" onSubmit={async ({ subject }) => {
+      await platform.oauthAdmin.bindExternalIdentity({ userId: bindingUser.id, subject: subject.trim() });
+      await invalidateMethods(client, ["ListAuditEvents"]);
+    }} />
+    <Button variant="ghost" size="sm" onClick={() => setBindingUser(undefined)}>关闭绑定表单</Button>
+  </section>}{secret && <SecretOnce value={secret} title="密码重置链接已生成" onDismiss={() => setSecret("")} />}<QueryState query={query}>{query.data?.users.length ? <DataTable label="实例用户" rows={query.data.users} columns={[
     { id: "name", title: "用户", cell: (user) => <div><p className="font-medium">{user.username}{user.id === current.id && <span className="ml-2 text-xs text-muted-foreground">当前账户</span>}</p><p className="mt-1 break-all text-xs text-muted-foreground">{user.id}</p></div> },
     { id: "role", title: "实例身份", cell: (user) => user.instanceAdmin ? "全局管理员" : "普通用户" },
     { id: "status", title: "账户状态", cell: (user) => <Badge variant={user.status === "ACTIVE" ? "outline" : "secondary"}>{user.status === "ACTIVE" ? "正常" : "已停用"}</Badge> },
-    { id: "actions", title: "安全操作", cell: (user) => <div className="flex flex-wrap gap-2"><ConfirmAction label={user.status === "ACTIVE" ? "停用用户" : "启用用户"} destructive={user.status === "ACTIVE"} description={user.status === "ACTIVE" ? `停用 ${user.username} 将立即终止其身份访问。最后一位全局管理员不能被停用。` : `重新启用 ${user.username}，此前失效的会话及 PAT 不会恢复。`} onConfirm={async () => { await platform.identity.setUserStatus({ userId: user.id, status: user.status === "ACTIVE" ? "DISABLED" : "ACTIVE" }); if (user.id === current.id) { await client.cancelQueries(); client.clear(); window.location.assign("/login"); } else await refresh(); }} /><ConfirmAction label="重置密码" disabled={user.status !== "ACTIVE"} description={`为 ${user.username} 生成一次性密码重置链接，原有会话及 PAT 将立即失效。请通过安全渠道发送链接。`} onConfirm={async () => { const response = await platform.identity.createPasswordReset({ userId: user.id }); if (!response.token) throw new Error("服务端未返回重置令牌"); setSecret(`${window.location.origin}/reset-password#token=${encodeURIComponent(response.token)}`); if (user.id === current.id) await client.cancelQueries(); }} /></div> },
+    { id: "actions", title: "安全操作", cell: (user) => <div className="flex flex-wrap gap-2"><ConfirmAction label={user.status === "ACTIVE" ? "停用用户" : "启用用户"} destructive={user.status === "ACTIVE"} description={user.status === "ACTIVE" ? `停用 ${user.username} 将立即终止其身份访问。最后一位全局管理员不能被停用。` : `重新启用 ${user.username}，此前失效的会话及 PAT 不会恢复。`} onConfirm={async () => { await platform.identity.setUserStatus({ userId: user.id, status: user.status === "ACTIVE" ? "DISABLED" : "ACTIVE" }); if (user.id === current.id) { await client.cancelQueries(); client.clear(); window.location.assign("/login"); } else await refresh(); }} />{externalLogin.data && user.status === "ACTIVE" && <Button variant="outline" size="sm" onClick={() => setBindingUser({ id: user.id, username: user.username })}>绑定团队身份</Button>}<ConfirmAction label="重置密码" disabled={user.status !== "ACTIVE"} description={`为 ${user.username} 生成一次性密码重置链接，原有会话及 PAT 将立即失效。请通过安全渠道发送链接。`} onConfirm={async () => { const response = await platform.identity.createPasswordReset({ userId: user.id }); if (!response.token) throw new Error("服务端未返回重置令牌"); setSecret(`${window.location.origin}/reset-password#token=${encodeURIComponent(response.token)}`); if (user.id === current.id) await client.cancelQueries(); }} /></div> },
   ]} /> : <Empty title="没有用户" description="当前没有可显示的实例用户。" />}</QueryState><p className="text-xs text-muted-foreground">用户接口当前最多返回 1000 条；协议尚未提供游标，未在前端伪造分页。</p></div>;
 }
 

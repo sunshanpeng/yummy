@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"time"
 
 	"connectrpc.com/connect"
 	platformv1 "github.com/sunshanpeng/yummy/gen/go/platform/v1"
@@ -14,12 +15,13 @@ import (
 )
 
 type InventoryHandler struct {
-	Service *inventory.Service
-	Log     *zap.Logger
+	Service             *inventory.Service
+	Log                 *zap.Logger
+	ReadClusterMachines func(string) (*platformv1.ClusterMachinesReport, time.Time)
 }
 
-func NewInventoryHandler(service *inventory.Service, log *zap.Logger, opts ...connect.HandlerOption) (string, http.Handler) {
-	return platformv1connect.NewInventoryServiceHandler(&InventoryHandler{service, log}, append(opts, connect.WithCodec(StrictJSONCodec{}), connect.WithReadMaxBytes(256<<10), connect.WithInterceptors(ValidationInterceptor()))...)
+func NewInventoryHandler(service *inventory.Service, log *zap.Logger, readClusterMachines func(string) (*platformv1.ClusterMachinesReport, time.Time), opts ...connect.HandlerOption) (string, http.Handler) {
+	return platformv1connect.NewInventoryServiceHandler(&InventoryHandler{Service: service, Log: log, ReadClusterMachines: readClusterMachines}, append(opts, connect.WithCodec(StrictJSONCodec{}), connect.WithReadMaxBytes(256<<10), connect.WithInterceptors(ValidationInterceptor()))...)
 }
 func inventoryError(log *zap.Logger, err error) error {
 	if errors.Is(err, inventory.ErrNotReady) {
@@ -50,6 +52,38 @@ func nodeQualificationMessage(v inventory.QualificationView) *platformv1.NodeQua
 }
 func domainTLSSecretMessage(v inventory.DomainTLSView) *platformv1.DomainTLSSecret {
 	return &platformv1.DomainTLSSecret{Domain: v.Domain, SecretName: v.SecretName}
+}
+func (h *InventoryHandler) ListClusterMachines(ctx context.Context, _ *connect.Request[platformv1.ListClusterMachinesRequest]) (*connect.Response[platformv1.ListClusterMachinesResponse], error) {
+	principal, err := authorization.FromContext(ctx)
+	if err != nil {
+		return nil, inventoryError(h.Log, err)
+	}
+	policy, err := h.Service.GetPolicy(ctx, principal, 0)
+	result := &platformv1.ListClusterMachinesResponse{}
+	if errors.Is(err, authorization.ErrNotFound) {
+		result.Reason = "请先配置平台运行节点。"
+		return connect.NewResponse(result), nil
+	}
+	if err != nil {
+		return nil, inventoryError(h.Log, err)
+	}
+	if h.ReadClusterMachines == nil {
+		result.Reason = "控制面尚未启用 worker 网关。"
+		return connect.NewResponse(result), nil
+	}
+	report, observed := h.ReadClusterMachines(policy.RuntimeNodeID)
+	switch {
+	case report == nil:
+		result.Reason = "等待策略运行节点的 worker 上报集群机器。"
+	case report.ErrorCode == "FORBIDDEN":
+		result.Reason = "worker 缺少 Kubernetes 节点列表的只读权限。"
+	case report.ErrorCode == "UNAVAILABLE":
+		result.Reason = "worker 暂时无法读取 Kubernetes 节点列表。"
+	default:
+		result.Machines, result.Truncated = report.Machines, report.Truncated
+		result.ObservedAt = timestamp(observed)
+	}
+	return connect.NewResponse(result), nil
 }
 func (h *InventoryHandler) ListNodes(ctx context.Context, r *connect.Request[platformv1.ListNodesRequest]) (*connect.Response[platformv1.ListNodesResponse], error) {
 	p, e := authorization.FromContext(ctx)

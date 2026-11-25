@@ -40,7 +40,7 @@ type Service struct {
 	strategy      oauth2.CoreStrategy
 	base          string
 	allowLoopback bool
-	oidcProviders map[string]*externalProvider
+	oidcProviders map[string]*oidcProvider
 }
 
 func NewService(db *gorm.DB, access *authorization.Access, identityService *identity.Service, config Config) (*Service, error) {
@@ -64,16 +64,15 @@ func NewService(db *gorm.DB, access *authorization.Access, identityService *iden
 	if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&client).Error; err != nil {
 		return nil, err
 	}
-	service.oidcProviders = make(map[string]*externalProvider)
+	service.oidcProviders = make(map[string]*oidcProvider)
 	for _, providerConfig := range config.OIDCProviders {
-		provider, err := service.configureOIDC(context.Background(), providerConfig)
-		if err != nil {
+		if err := service.validateOIDCConfig(providerConfig); err != nil {
 			return nil, err
 		}
 		if _, exists := service.oidcProviders[providerConfig.Name]; exists {
 			return nil, authorization.ErrInvalid
 		}
-		service.oidcProviders[providerConfig.Name] = provider
+		service.oidcProviders[providerConfig.Name] = &oidcProvider{config: providerConfig}
 	}
 	return service, nil
 }

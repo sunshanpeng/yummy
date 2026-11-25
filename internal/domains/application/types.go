@@ -3,15 +3,16 @@ package application
 import "time"
 
 type View struct {
-	ID           string    `json:"id"`
-	WorkspaceID  string    `json:"workspaceId"`
-	Name         string    `json:"name"`
-	Description  string    `json:"description"`
-	Status       string    `json:"status"`
-	Revision     int64     `json:"revision"`
-	Capabilities []string  `json:"capabilities"`
-	CreatedAt    time.Time `json:"createdAt"`
-	UpdatedAt    time.Time `json:"updatedAt"`
+	ID            string    `json:"id"`
+	WorkspaceID   string    `json:"workspaceId"`
+	Name          string    `json:"name"`
+	Description   string    `json:"description"`
+	Status        string    `json:"status"`
+	Revision      int64     `json:"revision"`
+	Capabilities  []string  `json:"capabilities"`
+	CreatedAt     time.Time `json:"createdAt"`
+	UpdatedAt     time.Time `json:"updatedAt"`
+	DeletionReady bool      `json:"deletionReady,omitempty"`
 }
 
 type Page struct {

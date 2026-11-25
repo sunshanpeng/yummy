@@ -374,6 +374,14 @@ func (m *Manager) Logout(ctx context.Context) error {
 }
 
 func (m *Manager) AllowLogin(ctx context.Context, username string) error {
+	return m.allowLogin(ctx, "ip:", "account:"+strings.ToLower(strings.TrimSpace(username)))
+}
+
+func (m *Manager) AllowOIDCLogin(ctx context.Context) error {
+	return m.allowLogin(ctx, "oidc:ip:")
+}
+
+func (m *Manager) allowLogin(ctx context.Context, remotePrefix string, accountKeys ...string) error {
 	x, ok := ctx.Value(exchangeKey{}).(exchange)
 	if !ok {
 		return errors.New("缺少会话请求上下文")
@@ -383,7 +391,7 @@ func (m *Manager) AllowLogin(ctx context.Context, username string) error {
 		host = x.request.RemoteAddr
 	}
 	// 不相信客户端提供的 X-Forwarded-For；代理部署需明确可信代理配置后再扩展。
-	for _, key := range []string{"ip:" + host, "account:" + strings.ToLower(strings.TrimSpace(username))} {
+	for _, key := range append([]string{remotePrefix + host}, accountKeys...) {
 		count, err := m.redis.Eval(ctx, `local n=redis.call('INCR',KEYS[1]);if n==1 then redis.call('EXPIRE',KEYS[1],900) end;return n`, []string{"yummy:login:" + security.Digest(key)}).Int()
 		if err != nil {
 			return ErrUnavailable

@@ -10,6 +10,7 @@ import { Badge } from "../components/ui/badge";
 import { ConfirmAction, DataForm, DataTable, Empty, Heading, Notice, Pager, QueryState, SecretOnce, required, resourceName } from "../components/console-kit";
 import { can, formatTime, platform, roleLabel } from "../lib/platform";
 import { invalidateMethods, useRPC } from "../lib/queries";
+import { AuditEvents } from "./audit";
 
 const WorkspaceContext = createContext<Workspace | undefined>(undefined);
 const ApplicationContext = createContext<Application | undefined>(undefined);
@@ -50,7 +51,35 @@ export function ApplicationsPage() {
       await navigate({ to: "/w/$workspaceSlug/apps/$applicationSlug/settings/runtime", params: { workspaceSlug: workspace.slug, applicationSlug: response.application.name } });
     }} /></section>}
     <QueryState query={query}>{query.data?.applications.length ? <><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{query.data.applications.map((application) => <Link key={application.id} to="/w/$workspaceSlug/apps/$applicationSlug" params={{ workspaceSlug: workspace.slug, applicationSlug: application.name }} className="group flex min-w-0 flex-col rounded-lg border bg-card p-6 transition-colors hover:border-input hover:bg-muted/40"><div className="mb-5 flex items-center justify-between gap-3"><Box className="size-5 text-muted-foreground" strokeWidth={1.5} /><Badge variant="outline">运行状态见详情</Badge></div><h2 className="truncate text-lg font-semibold">{application.name}</h2><p className="mt-2 line-clamp-2 min-h-10 text-sm text-muted-foreground">{application.description || "尚未填写应用说明"}</p><div className="mt-6 flex items-center justify-between gap-3 border-t pt-4 text-xs text-muted-foreground"><span>更新于 {formatTime(application.updatedAt)}</span><ArrowRight className="size-4 group-hover:text-foreground" /></div></Link>)}</div><Pager cursor={cursor} nextCursor={query.data.nextCursor} onPage={onPage} /></> : <Empty title="从你的第一个应用开始" description={can(workspace, "application:create") ? "创建只需一个名称。运行配置保存、构建与部署是不同步骤，不会自动执行。" : "当前没有已授权的应用。请联系空间管理员获得应用访问权限。"} />}</QueryState>
+    {can(workspace, "workspace:write") && <ArchivedApplications workspaceId={workspace.id} />}
   </div>;
+}
+function ArchivedApplications({ workspaceId }: { workspaceId: string }) {
+  const [open, setOpen] = useState(false);
+  const [cursor, setCursor] = useState("");
+  const [deletedName, setDeletedName] = useState("");
+  const client = useQueryClient();
+  const query = useRPC(ApplicationService.method.listApplications, { workspaceId, archivedOnly: true, limit: 24, cursor }, { enabled: open });
+  return <section className="section space-y-3">
+    <Button variant="outline" aria-expanded={open} aria-controls="archived-applications" onClick={() => setOpen(!open)}>已归档应用</Button>
+    <div id="archived-applications" className="space-y-3" hidden={!open}>
+      {open && <QueryState query={query}>
+        {deletedName && <Notice tone="success">已删除「{deletedName}」，可重新使用该名称。</Notice>}
+        {query.data?.applications.length ? <DataTable rows={query.data.applications} label="已归档应用" columns={[
+          { id: "name", title: "应用", cell: (app) => <span className="break-all font-medium">{app.name}</span> },
+          { id: "updated", title: "归档时间", cell: (app) => formatTime(app.updatedAt) },
+          { id: "delete", title: "操作", cell: (app) => app.deletionReady
+            ? <ConfirmAction label="删除应用" destructive title={`删除「${app.name}」`} description="删除后可重新使用该名称。审计与历史数据仍关联到原应用 ID。" onConfirm={async () => {
+              await platform.applications.deleteApplication({ workspaceId, applicationId: app.id, expectedRevision: app.revision });
+              setDeletedName(app.name);
+              await invalidateMethods(client, ["ListApplications", "ListAuditEvents"]);
+            }} />
+            : <span className="text-sm text-muted-foreground">待清理集群资源</span> },
+        ]} /> : <p className="text-sm text-muted-foreground">没有已归档应用。</p>}
+        <Pager cursor={cursor} nextCursor={query.data?.nextCursor} onPage={setCursor} />
+      </QueryState>}
+    </div>
+  </section>;
 }
 export function ApplicationLayout() {
   const workspace = useWorkspace(); const { applicationSlug } = useParams({ strict: false }) as { applicationSlug: string };
@@ -60,7 +89,18 @@ export function ApplicationLayout() {
 }
 export function ApplicationBasic() {
   const app = useApplication(); const client = useQueryClient();
-  return <section className="section max-w-3xl"><h2 className="section-title">基本信息</h2><p className="mb-6 text-sm text-muted-foreground">此处只更新应用资料，不会修改运行配置或触发部署。</p><DataForm key={app.revision.toString()} disabled={!can(app, "config:write")} fields={[{ name: "name", label: "应用名称", value: app.name, readOnly: true, hint: "应用名创建后不可修改；用于访问地址与 URL。" }, { name: "description", label: "应用说明", value: app.description, type: "textarea", schema: z.string().max(2000, "说明最多 2000 字符") }]} successMessage="应用资料已保存。" onSubmit={async (value) => { await platform.applications.updateApplication({ workspaceId: app.workspaceId, applicationId: app.id, name: value.name, description: value.description, expectedRevision: app.revision }); await invalidateMethods(client, ["GetApplication", "ListApplications", "ListWorkspaceMembers"]); }} />{!can(app, "config:write") && <p className="mt-4 text-sm text-muted-foreground">你有查看权限，但不能修改应用资料。</p>}</section>;
+  const workspace = useWorkspace(); const navigate = useNavigate();
+  return <div className="stack"><section className="section max-w-3xl"><h2 className="section-title">基本信息</h2><p className="mb-6 text-sm text-muted-foreground">此处只更新应用资料，不会修改运行配置或触发部署。</p><DataForm key={app.revision.toString()} disabled={!can(app, "config:write")} fields={[{ name: "name", label: "应用名称", value: app.name, readOnly: true, hint: "应用名创建后不可修改；用于访问地址与 URL。" }, { name: "description", label: "应用说明", value: app.description, type: "textarea", schema: z.string().max(2000, "说明最多 2000 字符") }]} successMessage="应用资料已保存。" onSubmit={async (value) => { await platform.applications.updateApplication({ workspaceId: app.workspaceId, applicationId: app.id, name: value.name, description: value.description, expectedRevision: app.revision }); await invalidateMethods(client, ["GetApplication", "ListApplications", "ListWorkspaceMembers"]); }} />{!can(app, "config:write") && <p className="mt-4 text-sm text-muted-foreground">你有查看权限，但不能修改应用资料。</p>}</section>
+    {can(workspace, "workspace:write") && <section className="section max-w-3xl space-y-3">
+      <h2 className="section-title">归档应用</h2>
+      <p className="text-sm text-muted-foreground">应用必须先停止运行，并等待在途部署结束。归档后保留名称、历史记录和持久卷。</p>
+      <ConfirmAction label="归档应用" destructive description={`确认归档「${app.name}」？归档后应用将从列表移除，并停止接受新操作。`} onConfirm={async () => {
+        await platform.applications.archiveApplication({ workspaceId: workspace.id, applicationId: app.id, expectedRevision: app.revision });
+        await navigate({ to: "/w/$workspaceSlug/apps", params: { workspaceSlug: workspace.slug } });
+        await invalidateMethods(client, ["GetApplication", "ListApplications", "ListWorkspaceMembers", "ListAuditEvents"]);
+      }} />
+    </section>}
+  </div>;
 }
 export function ApplicationAccess() {
   const app = useApplication(); const workspace = useWorkspace(); const { cursor, onPage } = useCursor(); const client = useQueryClient();
@@ -77,14 +117,28 @@ export function ApplicationAccess() {
   ]} /><Pager cursor={cursor} nextCursor={members.data.nextCursor} onPage={onPage} /></> : <Empty title="没有显式应用成员" description="空间及全局管理员仍继承业务访问权限。可在上方授予空间成员应用权限。" />}</QueryState></div>;
 }
 const applicationRoleOptions = [{ value: "viewer", label: "查看者" }, { value: "developer", label: "开发者" }, { value: "maintainer", label: "应用管理员" }];
-export function WorkspaceManagement({ tab }: { tab: "settings" | "members" | "invitations" }) {
+export function WorkspaceManagement({ tab }: { tab: "settings" | "members" | "invitations" | "audit" }) {
   const workspace = useWorkspace(); const allowed = can(workspace, "workspace:write");
   if (!allowed) return <div className="page"><Notice>当前账户没有管理此工作空间的权限。</Notice></div>;
-  return <div className="page"><Heading title="工作空间管理" description={`${workspace.name} · 仅管理本空间资料、团队身份与应用授权，不包含实例基础设施。`} /><nav className="tabs-nav" aria-label="工作空间管理导航">{([{ tab: "settings", name: "空间设置" }, { tab: "members", name: "成员与授权概览" }, { tab: "invitations", name: "邀请" }] as const).map((item) => <Link key={item.tab} to={`/w/$workspaceSlug/manage/${item.tab}`} params={{ workspaceSlug: workspace.slug }} aria-current={tab === item.tab ? "page" : undefined}>{item.name}</Link>)}</nav>{tab === "settings" ? <WorkspaceSettings /> : tab === "members" ? <WorkspaceMembers /> : <WorkspaceInvitations />}</div>;
+  return <div className="page"><Heading title="工作空间管理" description={`${workspace.name} · 仅管理本空间资料、团队身份与应用授权，不包含实例基础设施。`} /><nav className="tabs-nav" aria-label="工作空间管理导航">{([{ tab: "settings", name: "空间设置" }, { tab: "members", name: "成员与授权概览" }, { tab: "invitations", name: "邀请" }, { tab: "audit", name: "空间审计" }] as const).map((item) => <Link key={item.tab} to={`/w/$workspaceSlug/manage/${item.tab}`} params={{ workspaceSlug: workspace.slug }} aria-current={tab === item.tab ? "page" : undefined}>{item.name}</Link>)}</nav>{tab === "settings" ? <WorkspaceSettings /> : tab === "members" ? <WorkspaceMembers /> : tab === "invitations" ? <WorkspaceInvitations /> : <WorkspaceAudit workspaceId={workspace.id} />}</div>;
+}
+function WorkspaceAudit({ workspaceId }: { workspaceId: string }) {
+  const pagination = useCursor();
+  return <AuditEvents workspaceId={workspaceId} {...pagination} />;
 }
 function WorkspaceSettings() {
-  const workspace = useWorkspace(); const client = useQueryClient();
-  return <section className="section max-w-3xl"><h2 className="section-title mb-6">空间资料</h2><DataForm key={workspace.revision.toString()} fields={[{ name: "name", label: "空间名称", value: workspace.name, schema: required.max(100, "名称最多 100 字符") }, { name: "slug", label: "空间标识", value: workspace.slug, readOnly: true, hint: "空间标识创建后不可修改；用于访问地址与命令行。" }, { name: "description", label: "空间说明", value: workspace.description, type: "textarea", schema: z.string().max(2000, "说明最多 2000 字符") }]} successMessage="工作空间资料已保存。" onSubmit={async (value) => { await platform.workspaces.updateWorkspace({ workspaceId: workspace.id, name: value.name, slug: value.slug, description: value.description, expectedRevision: workspace.revision }); await invalidateMethods(client, ["GetWorkspace", "ListWorkspaces"]); }} /></section>;
+  const workspace = useWorkspace(); const client = useQueryClient(); const navigate = useNavigate();
+  return <div className="stack"><section className="section max-w-3xl"><h2 className="section-title mb-6">空间资料</h2><DataForm key={workspace.revision.toString()} fields={[{ name: "name", label: "空间名称", value: workspace.name, schema: required.max(100, "名称最多 100 字符") }, { name: "slug", label: "空间标识", value: workspace.slug, readOnly: true, hint: "空间标识创建后不可修改；用于访问地址与命令行。" }, { name: "description", label: "空间说明", value: workspace.description, type: "textarea", schema: z.string().max(2000, "说明最多 2000 字符") }]} successMessage="工作空间资料已保存。" onSubmit={async (value) => { await platform.workspaces.updateWorkspace({ workspaceId: workspace.id, name: value.name, slug: value.slug, description: value.description, expectedRevision: workspace.revision }); await invalidateMethods(client, ["GetWorkspace", "ListWorkspaces"]); }} /></section>
+    <section className="section max-w-3xl space-y-3">
+      <h2 className="section-title">归档工作空间</h2>
+      <p className="text-sm text-muted-foreground">先归档空间中的全部应用。归档后保留原空间名称和审计记录。</p>
+      <ConfirmAction label="归档工作空间" destructive description={`确认归档「${workspace.name}」？归档后成员将无法进入此工作空间。`} onConfirm={async () => {
+        await platform.workspaces.archiveWorkspace({ workspaceId: workspace.id, expectedRevision: workspace.revision });
+        await navigate({ to: "/" });
+        await invalidateMethods(client, ["GetWorkspace", "ListWorkspaces", "ListAuditEvents"]);
+      }} />
+    </section>
+  </div>;
 }
 function WorkspaceMembers() {
   const workspace = useWorkspace(); const { cursor, onPage } = useCursor(); const client = useQueryClient();

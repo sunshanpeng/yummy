@@ -52,6 +52,7 @@ func (g *Gateway) heartbeat(ctx context.Context, s *session, message *platformv1
 	if updated.RowsAffected != 1 {
 		return workerprotocol.ErrIdentity
 	}
+	g.storeClusterMachines(s, registered.ClusterNodeUID, message.GetClusterMachines())
 	return nil
 }
 func (g *Gateway) qualification(ctx context.Context, s *session, message *platformv1.WorkerQualification) error {

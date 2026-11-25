@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file platform/v1/oauth_admin.proto.
  */
 export const file_platform_v1_oauth_admin: GenFile = /*@__PURE__*/
-  fileDesc("Ch1wbGF0Zm9ybS92MS9vYXV0aF9hZG1pbi5wcm90bxILcGxhdGZvcm0udjEinAEKC09BdXRoQ2xpZW50EhEKCWNsaWVudF9pZBgBIAEoCRIMCgRuYW1lGAIgASgJEg4KBnNvdXJjZRgDIAEoCRIVCg1yZWRpcmVjdF91cmlzGAQgAygJEg4KBnNjb3BlcxgFIAMoCRIRCglyZXNvdXJjZXMYBiADKAkSDgoGYWN0aXZlGAcgASgIEhIKCmNyZWF0ZWRfYXQYCCABKAkidwoaUmVnaXN0ZXJPQXV0aENsaWVudFJlcXVlc3QSEQoJY2xpZW50X2lkGAEgASgJEgwKBG5hbWUYAiABKAkSFQoNcmVkaXJlY3RfdXJpcxgDIAMoCRIOCgZzY29wZXMYBCADKAkSEQoJcmVzb3VyY2VzGAUgAygJIkcKG1JlZ2lzdGVyT0F1dGhDbGllbnRSZXNwb25zZRIoCgZjbGllbnQYASABKAsyGC5wbGF0Zm9ybS52MS5PQXV0aENsaWVudCI4ChdMaXN0T0F1dGhDbGllbnRzUmVxdWVzdBINCgVsaW1pdBgBIAEoBRIOCgZjdXJzb3IYAiABKAkiWgoYTGlzdE9BdXRoQ2xpZW50c1Jlc3BvbnNlEikKB2NsaWVudHMYASADKAsyGC5wbGF0Zm9ybS52MS5PQXV0aENsaWVudBITCgtuZXh0X2N1cnNvchgCIAEoCSJAChtTZXRPQXV0aENsaWVudEFjdGl2ZVJlcXVlc3QSEQoJY2xpZW50X2lkGAEgASgJEg4KBmFjdGl2ZRgCIAEoCCJIChxTZXRPQXV0aENsaWVudEFjdGl2ZVJlc3BvbnNlEigKBmNsaWVudBgBIAEoCzIYLnBsYXRmb3JtLnYxLk9BdXRoQ2xpZW50MssCChFPQXV0aEFkbWluU2VydmljZRJoChNSZWdpc3Rlck9BdXRoQ2xpZW50EicucGxhdGZvcm0udjEuUmVnaXN0ZXJPQXV0aENsaWVudFJlcXVlc3QaKC5wbGF0Zm9ybS52MS5SZWdpc3Rlck9BdXRoQ2xpZW50UmVzcG9uc2USXwoQTGlzdE9BdXRoQ2xpZW50cxIkLnBsYXRmb3JtLnYxLkxpc3RPQXV0aENsaWVudHNSZXF1ZXN0GiUucGxhdGZvcm0udjEuTGlzdE9BdXRoQ2xpZW50c1Jlc3BvbnNlEmsKFFNldE9BdXRoQ2xpZW50QWN0aXZlEigucGxhdGZvcm0udjEuU2V0T0F1dGhDbGllbnRBY3RpdmVSZXF1ZXN0GikucGxhdGZvcm0udjEuU2V0T0F1dGhDbGllbnRBY3RpdmVSZXNwb25zZUI8WjpnaXRodWIuY29tL3N1bnNoYW5wZW5nL3l1bW15L2dlbi9nby9wbGF0Zm9ybS92MTtwbGF0Zm9ybXYxYgZwcm90bzM");
+  fileDesc("Ch1wbGF0Zm9ybS92MS9vYXV0aF9hZG1pbi5wcm90bxILcGxhdGZvcm0udjEinAEKC09BdXRoQ2xpZW50EhEKCWNsaWVudF9pZBgBIAEoCRIMCgRuYW1lGAIgASgJEg4KBnNvdXJjZRgDIAEoCRIVCg1yZWRpcmVjdF91cmlzGAQgAygJEg4KBnNjb3BlcxgFIAMoCRIRCglyZXNvdXJjZXMYBiADKAkSDgoGYWN0aXZlGAcgASgIEhIKCmNyZWF0ZWRfYXQYCCABKAkidwoaUmVnaXN0ZXJPQXV0aENsaWVudFJlcXVlc3QSEQoJY2xpZW50X2lkGAEgASgJEgwKBG5hbWUYAiABKAkSFQoNcmVkaXJlY3RfdXJpcxgDIAMoCRIOCgZzY29wZXMYBCADKAkSEQoJcmVzb3VyY2VzGAUgAygJIkcKG1JlZ2lzdGVyT0F1dGhDbGllbnRSZXNwb25zZRIoCgZjbGllbnQYASABKAsyGC5wbGF0Zm9ybS52MS5PQXV0aENsaWVudCI4ChdMaXN0T0F1dGhDbGllbnRzUmVxdWVzdBINCgVsaW1pdBgBIAEoBRIOCgZjdXJzb3IYAiABKAkiWgoYTGlzdE9BdXRoQ2xpZW50c1Jlc3BvbnNlEikKB2NsaWVudHMYASADKAsyGC5wbGF0Zm9ybS52MS5PQXV0aENsaWVudBITCgtuZXh0X2N1cnNvchgCIAEoCSJAChtTZXRPQXV0aENsaWVudEFjdGl2ZVJlcXVlc3QSEQoJY2xpZW50X2lkGAEgASgJEg4KBmFjdGl2ZRgCIAEoCCJIChxTZXRPQXV0aENsaWVudEFjdGl2ZVJlc3BvbnNlEigKBmNsaWVudBgBIAEoCzIYLnBsYXRmb3JtLnYxLk9BdXRoQ2xpZW50Ij8KG0JpbmRFeHRlcm5hbElkZW50aXR5UmVxdWVzdBIPCgd1c2VyX2lkGAEgASgJEg8KB3N1YmplY3QYAiABKAkiHgocQmluZEV4dGVybmFsSWRlbnRpdHlSZXNwb25zZTK4AwoRT0F1dGhBZG1pblNlcnZpY2USaAoTUmVnaXN0ZXJPQXV0aENsaWVudBInLnBsYXRmb3JtLnYxLlJlZ2lzdGVyT0F1dGhDbGllbnRSZXF1ZXN0GigucGxhdGZvcm0udjEuUmVnaXN0ZXJPQXV0aENsaWVudFJlc3BvbnNlEl8KEExpc3RPQXV0aENsaWVudHMSJC5wbGF0Zm9ybS52MS5MaXN0T0F1dGhDbGllbnRzUmVxdWVzdBolLnBsYXRmb3JtLnYxLkxpc3RPQXV0aENsaWVudHNSZXNwb25zZRJrChRTZXRPQXV0aENsaWVudEFjdGl2ZRIoLnBsYXRmb3JtLnYxLlNldE9BdXRoQ2xpZW50QWN0aXZlUmVxdWVzdBopLnBsYXRmb3JtLnYxLlNldE9BdXRoQ2xpZW50QWN0aXZlUmVzcG9uc2USawoUQmluZEV4dGVybmFsSWRlbnRpdHkSKC5wbGF0Zm9ybS52MS5CaW5kRXh0ZXJuYWxJZGVudGl0eVJlcXVlc3QaKS5wbGF0Zm9ybS52MS5CaW5kRXh0ZXJuYWxJZGVudGl0eVJlc3BvbnNlQjxaOmdpdGh1Yi5jb20vc3Vuc2hhbnBlbmcveXVtbXkvZ2VuL2dvL3BsYXRmb3JtL3YxO3BsYXRmb3JtdjFiBnByb3RvMw");
 
 /**
  * @generated from message platform.v1.OAuthClient
@@ -202,6 +202,41 @@ export const SetOAuthClientActiveResponseSchema: GenMessage<SetOAuthClientActive
   messageDesc(file_platform_v1_oauth_admin, 6);
 
 /**
+ * @generated from message platform.v1.BindExternalIdentityRequest
+ */
+export type BindExternalIdentityRequest = Message<"platform.v1.BindExternalIdentityRequest"> & {
+  /**
+   * @generated from field: string user_id = 1;
+   */
+  userId: string;
+
+  /**
+   * @generated from field: string subject = 2;
+   */
+  subject: string;
+};
+
+/**
+ * Describes the message platform.v1.BindExternalIdentityRequest.
+ * Use `create(BindExternalIdentityRequestSchema)` to create a new message.
+ */
+export const BindExternalIdentityRequestSchema: GenMessage<BindExternalIdentityRequest> = /*@__PURE__*/
+  messageDesc(file_platform_v1_oauth_admin, 7);
+
+/**
+ * @generated from message platform.v1.BindExternalIdentityResponse
+ */
+export type BindExternalIdentityResponse = Message<"platform.v1.BindExternalIdentityResponse"> & {
+};
+
+/**
+ * Describes the message platform.v1.BindExternalIdentityResponse.
+ * Use `create(BindExternalIdentityResponseSchema)` to create a new message.
+ */
+export const BindExternalIdentityResponseSchema: GenMessage<BindExternalIdentityResponse> = /*@__PURE__*/
+  messageDesc(file_platform_v1_oauth_admin, 8);
+
+/**
  * OAuth 客户端管理属实例级平台管理，仅全局管理员可操作；公共客户端本无 secret，
  * 视图不暴露任何凭证字段。
  *
@@ -237,6 +272,16 @@ export const OAuthAdminService: GenService<{
     methodKind: "unary";
     input: typeof SetOAuthClientActiveRequestSchema;
     output: typeof SetOAuthClientActiveResponseSchema;
+  },
+  /**
+   * 将已配置外部身份源的 subject 显式绑定到已有账户。
+   *
+   * @generated from rpc platform.v1.OAuthAdminService.BindExternalIdentity
+   */
+  bindExternalIdentity: {
+    methodKind: "unary";
+    input: typeof BindExternalIdentityRequestSchema;
+    output: typeof BindExternalIdentityResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_platform_v1_oauth_admin, 0);

@@ -181,7 +181,10 @@ func newRoot(settings map[string]any) *cobra.Command {
 			TLS:     &tls.Config{MinVersion: tls.VersionTLS12, GetClientCertificate: holder.GetClientCertificate, RootCAs: rootCAs},
 			Journal: journal, Executor: executor,
 			Heartbeat: func() *platformv1.WorkerHeartbeat {
-				return &platformv1.WorkerHeartbeat{ClusterNodeUid: facts.UID, Os: facts.OS, Arch: facts.Arch}
+				probeContext, cancel := context.WithTimeout(cmd.Context(), 2*time.Second)
+				defer cancel()
+				report := workerexec.ReadClusterMachines(probeContext, client)
+				return &platformv1.WorkerHeartbeat{ClusterNodeUid: facts.UID, Os: facts.OS, Arch: facts.Arch, ClusterMachines: report}
 			},
 			Qualification: func(nonce string) *platformv1.WorkerQualification {
 				// TODO(资格发放流程): probe_artifact_digest/registry_id/credential_version

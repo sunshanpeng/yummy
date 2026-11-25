@@ -12,6 +12,16 @@ import (
 	"gorm.io/gorm/clause"
 )
 
+// HasBuildHistory 用于应用删除门禁。已受理的构建可能已经在集群中创建资源。
+func (s *Service) HasBuildHistory(tx *gorm.DB, ws, app string) (bool, error) {
+	var build buildRecord
+	err := tx.Select("id").Where("workspace_id = ? AND application_id = ?", ws, app).Take(&build).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
 func (s *Service) Get(ctx context.Context, p authorization.Principal, ws, app, id string) (View, error) {
 	var out View
 	err := s.access.Do(ctx, p, false, func(tx *gorm.DB, current authorization.Principal) error {

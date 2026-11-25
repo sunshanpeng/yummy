@@ -33,6 +33,9 @@ const (
 // reflection-formatted method names, remove the leading slash and convert the remaining slash to a
 // period.
 const (
+	// InventoryServiceListClusterMachinesProcedure is the fully-qualified name of the
+	// InventoryService's ListClusterMachines RPC.
+	InventoryServiceListClusterMachinesProcedure = "/platform.v1.InventoryService/ListClusterMachines"
 	// InventoryServiceListNodesProcedure is the fully-qualified name of the InventoryService's
 	// ListNodes RPC.
 	InventoryServiceListNodesProcedure = "/platform.v1.InventoryService/ListNodes"
@@ -100,6 +103,8 @@ const (
 
 // InventoryServiceClient is a client for the platform.v1.InventoryService service.
 type InventoryServiceClient interface {
+	// 只读取当前运行集群中 worker 上报的机器清单。
+	ListClusterMachines(context.Context, *connect.Request[v1.ListClusterMachinesRequest]) (*connect.Response[v1.ListClusterMachinesResponse], error)
 	ListNodes(context.Context, *connect.Request[v1.ListNodesRequest]) (*connect.Response[v1.ListNodesResponse], error)
 	GetNode(context.Context, *connect.Request[v1.GetNodeRequest]) (*connect.Response[v1.GetNodeResponse], error)
 	CreateNode(context.Context, *connect.Request[v1.CreateNodeRequest]) (*connect.Response[v1.CreateNodeResponse], error)
@@ -139,6 +144,12 @@ func NewInventoryServiceClient(httpClient connect.HTTPClient, baseURL string, op
 	baseURL = strings.TrimRight(baseURL, "/")
 	inventoryServiceMethods := v1.File_platform_v1_inventory_proto.Services().ByName("InventoryService").Methods()
 	return &inventoryServiceClient{
+		listClusterMachines: connect.NewClient[v1.ListClusterMachinesRequest, v1.ListClusterMachinesResponse](
+			httpClient,
+			baseURL+InventoryServiceListClusterMachinesProcedure,
+			connect.WithSchema(inventoryServiceMethods.ByName("ListClusterMachines")),
+			connect.WithClientOptions(opts...),
+		),
 		listNodes: connect.NewClient[v1.ListNodesRequest, v1.ListNodesResponse](
 			httpClient,
 			baseURL+InventoryServiceListNodesProcedure,
@@ -270,6 +281,7 @@ func NewInventoryServiceClient(httpClient connect.HTTPClient, baseURL string, op
 
 // inventoryServiceClient implements InventoryServiceClient.
 type inventoryServiceClient struct {
+	listClusterMachines       *connect.Client[v1.ListClusterMachinesRequest, v1.ListClusterMachinesResponse]
 	listNodes                 *connect.Client[v1.ListNodesRequest, v1.ListNodesResponse]
 	getNode                   *connect.Client[v1.GetNodeRequest, v1.GetNodeResponse]
 	createNode                *connect.Client[v1.CreateNodeRequest, v1.CreateNodeResponse]
@@ -291,6 +303,11 @@ type inventoryServiceClient struct {
 	verifyRegistry            *connect.Client[v1.VerifyRegistryRequest, v1.VerifyRegistryResponse]
 	getInstanceSettings       *connect.Client[v1.GetInstanceSettingsRequest, v1.GetInstanceSettingsResponse]
 	setWorkspaceSelfCreate    *connect.Client[v1.SetWorkspaceSelfCreateRequest, v1.SetWorkspaceSelfCreateResponse]
+}
+
+// ListClusterMachines calls platform.v1.InventoryService.ListClusterMachines.
+func (c *inventoryServiceClient) ListClusterMachines(ctx context.Context, req *connect.Request[v1.ListClusterMachinesRequest]) (*connect.Response[v1.ListClusterMachinesResponse], error) {
+	return c.listClusterMachines.CallUnary(ctx, req)
 }
 
 // ListNodes calls platform.v1.InventoryService.ListNodes.
@@ -400,6 +417,8 @@ func (c *inventoryServiceClient) SetWorkspaceSelfCreate(ctx context.Context, req
 
 // InventoryServiceHandler is an implementation of the platform.v1.InventoryService service.
 type InventoryServiceHandler interface {
+	// 只读取当前运行集群中 worker 上报的机器清单。
+	ListClusterMachines(context.Context, *connect.Request[v1.ListClusterMachinesRequest]) (*connect.Response[v1.ListClusterMachinesResponse], error)
 	ListNodes(context.Context, *connect.Request[v1.ListNodesRequest]) (*connect.Response[v1.ListNodesResponse], error)
 	GetNode(context.Context, *connect.Request[v1.GetNodeRequest]) (*connect.Response[v1.GetNodeResponse], error)
 	CreateNode(context.Context, *connect.Request[v1.CreateNodeRequest]) (*connect.Response[v1.CreateNodeResponse], error)
@@ -435,6 +454,12 @@ type InventoryServiceHandler interface {
 // and JSON codecs. They also support gzip compression.
 func NewInventoryServiceHandler(svc InventoryServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
 	inventoryServiceMethods := v1.File_platform_v1_inventory_proto.Services().ByName("InventoryService").Methods()
+	inventoryServiceListClusterMachinesHandler := connect.NewUnaryHandler(
+		InventoryServiceListClusterMachinesProcedure,
+		svc.ListClusterMachines,
+		connect.WithSchema(inventoryServiceMethods.ByName("ListClusterMachines")),
+		connect.WithHandlerOptions(opts...),
+	)
 	inventoryServiceListNodesHandler := connect.NewUnaryHandler(
 		InventoryServiceListNodesProcedure,
 		svc.ListNodes,
@@ -563,6 +588,8 @@ func NewInventoryServiceHandler(svc InventoryServiceHandler, opts ...connect.Han
 	)
 	return "/platform.v1.InventoryService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
+		case InventoryServiceListClusterMachinesProcedure:
+			inventoryServiceListClusterMachinesHandler.ServeHTTP(w, r)
 		case InventoryServiceListNodesProcedure:
 			inventoryServiceListNodesHandler.ServeHTTP(w, r)
 		case InventoryServiceGetNodeProcedure:
@@ -613,6 +640,10 @@ func NewInventoryServiceHandler(svc InventoryServiceHandler, opts ...connect.Han
 
 // UnimplementedInventoryServiceHandler returns CodeUnimplemented from all methods.
 type UnimplementedInventoryServiceHandler struct{}
+
+func (UnimplementedInventoryServiceHandler) ListClusterMachines(context.Context, *connect.Request[v1.ListClusterMachinesRequest]) (*connect.Response[v1.ListClusterMachinesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("platform.v1.InventoryService.ListClusterMachines is not implemented"))
+}
 
 func (UnimplementedInventoryServiceHandler) ListNodes(context.Context, *connect.Request[v1.ListNodesRequest]) (*connect.Response[v1.ListNodesResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("platform.v1.InventoryService.ListNodes is not implemented"))

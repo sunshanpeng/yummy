@@ -26,6 +26,12 @@ worker-addr: "127.0.0.1:8443"        # worker mTLS 网关
 # ---- OAuth（留空关闭 OAuth 与远端 MCP） ----
 # oauth-key: ""
 
+# ---- 外部团队登录（可选，依赖 oauth-key） ----
+# 供应方回调须使用公开站点根地址加 /auth/oidc/callback。
+# oidc-issuer: "https://identity.example.com"
+# oidc-client-id: ""
+# oidc-client-secret: ""
+
 # ---- worker 网关 TLS（留空禁用登记） ----
 # worker-ca-cert: "/etc/yummy/worker-ca.crt"
 # worker-ca-key: "/etc/yummy/worker-ca.key"

@@ -131,7 +131,7 @@ roleRef:
   kind: Role
   name: yummy-runtime-worker
 ---
-# 节点级权限仅允许GET本节点。无nodes/proxy、exec、attach、cluster-admin。
+# 节点级权限用于读取本节点及指标，并可列出集群节点。无 nodes/proxy、exec、attach、cluster-admin。
 # Kubelet Webhook授权是否正确执行nodes/metrics+resourceNames须在专用服务器验证。
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -142,6 +142,10 @@ rules:
     resources: [nodes, nodes/metrics]
     resourceNames: [replace-with-exact-worker-node-name]
     verbs: [get]
+  # 集群机器清单从 Kubernetes 实时读取，只允许列出节点。
+  - apiGroups: [""]
+    resources: [nodes]
+    verbs: [list]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

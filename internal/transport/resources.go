@@ -32,7 +32,7 @@ func workspaceMessage(v workspace.View) *platformv1.Workspace {
 	return &platformv1.Workspace{Id: v.ID, Name: v.Name, Slug: v.Slug, Description: v.Description, Status: v.Status, Revision: v.Revision, Role: v.Role, Capabilities: v.Capabilities, CreatedAt: timestamp(v.CreatedAt), UpdatedAt: timestamp(v.UpdatedAt)}
 }
 func applicationMessage(v application.View) *platformv1.Application {
-	return &platformv1.Application{Id: v.ID, WorkspaceId: v.WorkspaceID, Name: v.Name, Description: v.Description, Status: v.Status, Revision: v.Revision, Capabilities: v.Capabilities, CreatedAt: timestamp(v.CreatedAt), UpdatedAt: timestamp(v.UpdatedAt)}
+	return &platformv1.Application{Id: v.ID, WorkspaceId: v.WorkspaceID, Name: v.Name, Description: v.Description, Status: v.Status, Revision: v.Revision, Capabilities: v.Capabilities, CreatedAt: timestamp(v.CreatedAt), UpdatedAt: timestamp(v.UpdatedAt), DeletionReady: v.DeletionReady}
 }
 func (h *WorkspaceHandler) ListWorkspaces(ctx context.Context, req *connect.Request[platformv1.ListWorkspacesRequest]) (*connect.Response[platformv1.ListWorkspacesResponse], error) {
 	p, err := authorization.FromContext(ctx)
@@ -136,7 +136,11 @@ func (h *ApplicationHandler) ListApplications(ctx context.Context, req *connect.
 	if err != nil {
 		return nil, RPCError(h.Log, err)
 	}
-	page, err := h.Service.List(ctx, p, req.Msg.WorkspaceId, int(req.Msg.Limit), req.Msg.Cursor)
+	list := h.Service.List
+	if req.Msg.ArchivedOnly {
+		list = h.Service.ListArchived
+	}
+	page, err := list(ctx, p, req.Msg.WorkspaceId, int(req.Msg.Limit), req.Msg.Cursor)
 	if err != nil {
 		return nil, RPCError(h.Log, err)
 	}
@@ -188,6 +192,16 @@ func (h *ApplicationHandler) ArchiveApplication(ctx context.Context, req *connec
 		return nil, RPCError(h.Log, err)
 	}
 	return connect.NewResponse(&platformv1.ArchiveApplicationResponse{}), nil
+}
+func (h *ApplicationHandler) DeleteApplication(ctx context.Context, req *connect.Request[platformv1.DeleteApplicationRequest]) (*connect.Response[platformv1.DeleteApplicationResponse], error) {
+	p, err := authorization.FromContext(ctx)
+	if err != nil {
+		return nil, RPCError(h.Log, err)
+	}
+	if err := h.Service.Delete(ctx, p, req.Msg.WorkspaceId, req.Msg.ApplicationId, req.Msg.ExpectedRevision); err != nil {
+		return nil, RPCError(h.Log, err)
+	}
+	return connect.NewResponse(&platformv1.DeleteApplicationResponse{}), nil
 }
 func (h *ApplicationHandler) ListApplicationMembers(ctx context.Context, req *connect.Request[platformv1.ListApplicationMembersRequest]) (*connect.Response[platformv1.ListApplicationMembersResponse], error) {
 	p, err := authorization.FromContext(ctx)

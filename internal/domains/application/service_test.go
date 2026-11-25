@@ -10,6 +10,7 @@ import (
 
 	"github.com/sunshanpeng/yummy/internal/domains/application"
 	"github.com/sunshanpeng/yummy/internal/domains/authorization"
+	"github.com/sunshanpeng/yummy/internal/domains/build"
 	"github.com/sunshanpeng/yummy/internal/domains/deployment"
 	"github.com/sunshanpeng/yummy/internal/infra/store/model"
 	"github.com/sunshanpeng/yummy/internal/infra/testkit"
@@ -31,7 +32,7 @@ func fixture(t *testing.T) (*gorm.DB, *application.Service, authorization.Princi
 	}
 	// 归档前置校验接真实部署域实现（StoppedForArchive 只读运行状态，不依赖
 	// 运行配置/校验器），与控制面装配一致。
-	return db, application.NewService(db, access, deployment.NewService(db, access, nil, nil, nil)), authorization.Principal{UserID: "root", AuthVersion: 1}, authorization.Principal{UserID: "alice", AuthVersion: 1}
+	return db, application.NewService(db, access, deployment.NewService(db, access, nil, nil, nil), build.NewService(db, access, nil, nil)), authorization.Principal{UserID: "root", AuthVersion: 1}, authorization.Principal{UserID: "alice", AuthVersion: 1}
 }
 
 func TestCreateApplicationIsNameOnlyIdempotentAndAuditedOnce(t *testing.T) {
@@ -105,7 +106,7 @@ func TestConcurrentIdempotentCreateUsesDatabaseLock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	other := application.NewService(db, otherAccess, service.Runtimes)
+	other := application.NewService(db, otherAccess, service.Runtimes, service.Builds)
 	start := make(chan struct{})
 	ids := make(chan string, 2)
 	failures := make(chan error, 2)
@@ -341,11 +342,68 @@ func TestArchiveRequiresStoppedRuntime(t *testing.T) {
 	if err := service.Archive(ctx, root, "space-a", app.ID, 1); !errors.Is(err, authorization.ErrConflict) {
 		t.Fatalf("运行中的应用可归档=%v", err)
 	}
+	if err := state("desired_state='STOP', observed_state='UNKNOWN' WHERE id = ?", app.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.Archive(ctx, root, "space-a", app.ID, 1); !errors.Is(err, authorization.ErrConflict) {
+		t.Fatalf("停止失败且无在途操作的应用可归档=%v", err)
+	}
 	// 停止完成后（期望 STOP 且无在途操作）允许归档。
 	if err := state("desired_state='STOP', observed_state='STOPPED' WHERE id = ?", app.ID); err != nil {
 		t.Fatal(err)
 	}
 	if err := service.Archive(ctx, root, "space-a", app.ID, 1); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestDeleteArchivedUnusedApplicationPreservesHistoryAndReleasesName(t *testing.T) {
+	db, service, root, alice := fixture(t)
+	ctx := context.Background()
+	const ws = "space-a"
+	input := application.CreateInput{Name: "gateway", IdempotencyKey: "original"}
+	app, err := service.Create(ctx, root, ws, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.Delete(ctx, root, ws, app.ID, 1); !errors.Is(err, authorization.ErrConflict) {
+		t.Fatalf("活动应用不能删除：%v", err)
+	}
+	if err := service.Archive(ctx, root, ws, app.ID, 1); err != nil {
+		t.Fatal(err)
+	}
+	page, err := service.ListArchived(ctx, root, ws, 24, "")
+	if err != nil || len(page.Items) != 1 || page.Items[0].ID != app.ID || page.Items[0].Revision != 2 || !page.Items[0].DeletionReady {
+		t.Fatalf("归档清单：%+v，%v", page, err)
+	}
+	if _, err := service.ListArchived(ctx, alice, ws, 24, ""); !errors.Is(err, authorization.ErrDenied) {
+		t.Fatalf("普通成员能枚举归档应用：%v", err)
+	}
+	if err := service.Delete(ctx, alice, ws, app.ID, 2); !errors.Is(err, authorization.ErrDenied) {
+		t.Fatalf("普通成员能删除归档应用：%v", err)
+	}
+	if err := service.Delete(ctx, root, ws, app.ID, 1); !errors.Is(err, authorization.ErrConflict) {
+		t.Fatalf("旧版本能删除归档应用：%v", err)
+	}
+	if err := service.Delete(ctx, root, ws, app.ID, 2); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.Delete(ctx, root, ws, app.ID, 2); err != nil {
+		t.Fatalf("重复删除应幂等：%v", err)
+	}
+	if page, err := service.ListArchived(ctx, root, ws, 24, ""); err != nil || len(page.Items) != 0 {
+		t.Fatalf("归档清单仍有已删除应用：%+v，%v", page, err)
+	}
+	input.IdempotencyKey = "recreated"
+	newApp, err := service.Create(ctx, root, ws, input)
+	if err != nil || newApp.ID == app.ID {
+		t.Fatalf("同名重建：%+v，%v", newApp, err)
+	}
+	if view, err := service.Get(ctx, root, ws, "", app.Name); err != nil || view.ID != newApp.ID {
+		t.Fatalf("同名查找：%+v，%v", view, err)
+	}
+	var count int64
+	if err := db.Model(&model.AuditEvent{}).Where("application_id = ? AND action = ?", app.ID, "application.delete").Count(&count).Error; err != nil || count != 1 {
+		t.Fatalf("删除审计数 %d，%v", count, err)
 	}
 }

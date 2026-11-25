@@ -432,3 +432,27 @@ func TestBuildLogAcknowledgesIdenticalRetransmissionAndRejectsConflictingPayload
 		}
 	}
 }
+
+func TestClusterMachinesFollowHeartbeatSession(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	s := &session{ctx: ctx, identity: enrollment.Identity{NodeID: "worker-node"}}
+	gateway := &Gateway{sessions: map[string]*session{"worker-node": s}}
+	if report, _ := gateway.ClusterMachines("worker-node"); report != nil {
+		t.Fatal("尚无上报时返回了集群清单")
+	}
+	report := &platformv1.ClusterMachinesReport{Machines: []*platformv1.ClusterMachine{{Uid: "host-uid", Name: "host-a", Ready: true}}}
+	gateway.storeClusterMachines(s, "host-uid", report)
+	view, expires := gateway.ClusterMachines("worker-node")
+	if view.GetMachines()[0].GetName() != "host-a" || expires.IsZero() {
+		t.Fatalf("未返回工作节点上报的清单：%+v", view)
+	}
+	view.Machines[0].Name = "corrupt"
+	if again, _ := gateway.ClusterMachines("worker-node"); again.GetMachines()[0].GetName() != "host-a" {
+		t.Fatal("读取结果可以修改存储的快照")
+	}
+	cancel()
+	if report, _ := gateway.ClusterMachines("worker-node"); report != nil {
+		t.Fatal("断开的连接仍暴露机器清单")
+	}
+}

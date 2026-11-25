@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -28,6 +29,7 @@ type fakeIdP struct {
 	mu                     sync.Mutex
 	nonce, challenge, mode string
 	exchanges              int
+	discoveryUnavailable   atomic.Bool
 }
 
 func newFakeIdP(t *testing.T) *fakeIdP {
@@ -39,6 +41,10 @@ func newFakeIdP(t *testing.T) *fakeIdP {
 	idp := &fakeIdP{key: key}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
+		if idp.discoveryUnavailable.Load() {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{"issuer": idp.server.URL, "authorization_endpoint": idp.server.URL + "/authorize", "token_endpoint": idp.server.URL + "/token", "jwks_uri": idp.server.URL + "/keys", "response_types_supported": []string{"code"}, "subject_types_supported": []string{"public"}, "id_token_signing_alg_values_supported": []string{"RS256"}})
 	})
@@ -159,6 +165,27 @@ func TestOIDCIssuerSubjectBindingAndReplay(t *testing.T) {
 		t.Fatal("消费未清PKCE")
 	}
 }
+
+func TestOIDCDiscoveryOutageDoesNotPreventServiceStartup(t *testing.T) {
+	e := setup(t)
+	idp := newFakeIdP(t)
+	idp.discoveryUnavailable.Store(true)
+	service := e.oidcService(t, idp)
+	ctx := context.Background()
+	if err := service.BindExternalIdentity(ctx, e.root, "team", "subject-a", "dev"); err != nil {
+		t.Fatalf("身份源不可用时无法绑定已知身份：%v", err)
+	}
+	if _, err := service.StartOIDC(ctx, "team", strings.Repeat("a", 32)); !errors.Is(err, ErrOIDC) {
+		t.Fatalf("身份源不可用时启动了团队登录：%v", err)
+	}
+	idp.discoveryUnavailable.Store(false)
+	state, binding := startFake(t, service, idp, "")
+	p, err := service.CompleteOIDC(ctx, "team", state, "provider-code", binding)
+	if err != nil || p.UserID != "dev" {
+		t.Fatalf("身份源恢复后未能登录：%+v，%v", p, err)
+	}
+}
+
 func digestState(state string) string {
 	sum := sha256.Sum256([]byte(state))
 	return hex.EncodeToString(sum[:])

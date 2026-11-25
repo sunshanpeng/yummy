@@ -18,6 +18,7 @@ service ApplicationService {
   rpc CreateApplication(CreateApplicationRequest) returns (CreateApplicationResponse);
   rpc UpdateApplication(UpdateApplicationRequest) returns (UpdateApplicationResponse);
   rpc ArchiveApplication(ArchiveApplicationRequest) returns (ArchiveApplicationResponse);
+  rpc DeleteApplication(DeleteApplicationRequest) returns (DeleteApplicationResponse);
   rpc ListApplicationMembers(ListApplicationMembersRequest) returns (ListApplicationMembersResponse);
   rpc SetApplicationMember(SetApplicationMemberRequest) returns (SetApplicationMemberResponse);
   rpc RemoveApplicationMember(RemoveApplicationMemberRequest) returns (RemoveApplicationMemberResponse);
@@ -31,6 +32,7 @@ message Application {
   string id = 1; string workspace_id = 2; string name = 3; string description = 4;
   string status = 5; int64 revision = 6; repeated string capabilities = 7;
   string created_at = 8; string updated_at = 9;
+  bool deletion_ready = 10;
 }
 message ApplicationGrant { string application_id = 1; string application_name = 2; string role = 3; }
 message WorkspaceMember {
@@ -58,7 +60,11 @@ message ChangeWorkspaceMemberRoleRequest { string workspace_id = 1; string user_
 message ChangeWorkspaceMemberRoleResponse {}
 message RemoveWorkspaceMemberRequest { string workspace_id = 1; string user_id = 2; }
 message RemoveWorkspaceMemberResponse {}
-message ListApplicationsRequest { string workspace_id = 1; int32 limit = 2; string cursor = 3; }
+message ListApplicationsRequest {
+  string workspace_id = 1; int32 limit = 2; string cursor = 3;
+  // 仅空间及全局管理员可查询归档项，常规应用列表仍只返回活跃应用。
+  bool archived_only = 4;
+}
 message ListApplicationsResponse { repeated Application applications = 1; string next_cursor = 2; }
 // 应用定位：application_id 与 application_name 二选一。URL 等面向用户的场景
 // 使用应用名（与空间名同一规范、创建后不可修改），内部引用与 CLI 用资源 ID。
@@ -71,6 +77,8 @@ message UpdateApplicationRequest { string workspace_id = 1; string application_i
 message UpdateApplicationResponse { Application application = 1; }
 message ArchiveApplicationRequest { string workspace_id = 1; string application_id = 2; int64 expected_revision = 3; }
 message ArchiveApplicationResponse {}
+message DeleteApplicationRequest { string workspace_id = 1; string application_id = 2; int64 expected_revision = 3; }
+message DeleteApplicationResponse {}
 message ListApplicationMembersRequest { string workspace_id = 1; string application_id = 2; int32 limit = 3; string cursor = 4; }
 message ListApplicationMembersResponse { repeated ApplicationMember members = 1; string next_cursor = 2; }
 message SetApplicationMemberRequest { string workspace_id = 1; string application_id = 2; string user_id = 3; string role = 4; }

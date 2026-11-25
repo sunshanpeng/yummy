@@ -18,23 +18,33 @@ func (s *Service) Stop(ctx context.Context, p authorization.Principal, ws, app s
 }
 
 // StoppedForArchive 判断应用能否安全归档：从未部署（无运行状态行）或期望状态
-// 已停止且无在途操作。归档后运行停止接口因活跃状态校验拒绝，放行仍运行或
-// 有在途部署的应用会让工作负载失控；停止操作成功收尾需要副本归零证据，
-// 期望状态与在途操作因此构成“已停止”的充分条件。调用方须持有应用的写授权，
+// 和实际观察都已停止且无在途操作。停止失败也会清除在途标记，只有副本归零证据才能支持归档。
+// 调用方须持有应用的写授权，
 // 方法自身只读运行事实，供应用域归档边界经显式接口依赖。
 func (s *Service) StoppedForArchive(tx *gorm.DB, ws, app string) (bool, error) {
 	var runtime struct {
 		DesiredState      string
+		ObservedState     string
 		ActiveOperationID *string
 	}
-	err := tx.Table("application_runtime_states").Select("desired_state, active_operation_id").Where("workspace_id = ? AND application_id = ?", ws, app).Take(&runtime).Error
+	err := tx.Table("application_runtime_states").Select("desired_state, observed_state, active_operation_id").Where("workspace_id = ? AND application_id = ?", ws, app).Take(&runtime).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return true, nil
 	}
 	if err != nil {
 		return false, err
 	}
-	return runtime.DesiredState == DesiredStop && runtime.ActiveOperationID == nil, nil
+	return runtime.DesiredState == DesiredStop && runtime.ObservedState == Stopped && runtime.ActiveOperationID == nil, nil
+}
+
+// HasRuntimeHistory 供删除应用检查是否可能存在集群资源，包含失败的发布。
+func (s *Service) HasRuntimeHistory(tx *gorm.DB, ws, app string) (bool, error) {
+	var placement Placement
+	err := tx.Select("id").Where("workspace_id = ? AND application_id = ?", ws, app).Take(&placement).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return false, nil
+	}
+	return err == nil, err
 }
 func (s *Service) Start(ctx context.Context, p authorization.Principal, ws, app string, in ChangeInput) (Result, error) {
 	return s.change(ctx, p, ws, app, in, Start)

@@ -31,16 +31,22 @@ var namePattern = regexp.MustCompile(`^[a-z](-?[a-z0-9])*$`)
 // 应用已停止且无在途部署，应用域不直查运行状态表。
 type RuntimeGuard interface {
 	StoppedForArchive(tx *gorm.DB, workspaceID, applicationID string) (bool, error)
+	HasRuntimeHistory(tx *gorm.DB, workspaceID, applicationID string) (bool, error)
+}
+
+type BuildHistory interface {
+	HasBuildHistory(tx *gorm.DB, workspaceID, applicationID string) (bool, error)
 }
 
 type Service struct {
 	DB       *gorm.DB
 	Access   *authorization.Access
 	Runtimes RuntimeGuard
+	Builds   BuildHistory
 }
 
-func NewService(db *gorm.DB, access *authorization.Access, runtimes RuntimeGuard) *Service {
-	return &Service{DB: db, Access: access, Runtimes: runtimes}
+func NewService(db *gorm.DB, access *authorization.Access, runtimes RuntimeGuard, builds BuildHistory) *Service {
+	return &Service{DB: db, Access: access, Runtimes: runtimes, Builds: builds}
 }
 
 func normalizeName(name string) (string, error) {
@@ -108,7 +114,7 @@ func (s *Service) Get(ctx context.Context, p authorization.Principal, workspaceI
 		locator := id
 		if id == "" {
 			var value model.Application
-			if err := tx.First(&value, "workspace_id = ? AND name = ?", workspaceID, name).Error; err != nil {
+			if err := tx.First(&value, "workspace_id = ? AND name = ? AND status = ?", workspaceID, name, model.ResourceActive).Error; err != nil {
 				if errors.Is(err, gorm.ErrRecordNotFound) {
 					return authorization.ErrNotFound
 				}

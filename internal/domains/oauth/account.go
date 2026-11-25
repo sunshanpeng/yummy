@@ -112,9 +112,15 @@ func (s *Service) CleanupExpiredRequests(ctx context.Context, limit int) (int64,
 	if limit < 1 || limit > 1000 {
 		return 0, authorization.ErrInvalid
 	}
-	result := s.db.WithContext(ctx).
-		Where("expires_at < NOW()").
-		Limit(limit).
-		Delete(&consentRecord{})
-	return result.RowsAffected, result.Error
+	var removed int64
+	for _, record := range []any{&consentRecord{}, &oidcLoginRecord{}} {
+		db := s.db.WithContext(ctx)
+		expired := db.Model(record).Select("id").Where("expires_at < NOW()").Order("expires_at, id").Limit(limit)
+		result := db.Where("id IN (?)", expired).Delete(record)
+		removed += result.RowsAffected
+		if result.Error != nil {
+			return removed, result.Error
+		}
+	}
+	return removed, nil
 }

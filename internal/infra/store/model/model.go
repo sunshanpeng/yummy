@@ -7,8 +7,9 @@ const (
 	UserActive   = "ACTIVE"
 	UserDisabled = "DISABLED"
 
-	ResourceActive   = "ACTIVE"
-	ResourceArchived = "ARCHIVED"
+	ResourceActive     = "ACTIVE"
+	ResourceArchived   = "ARCHIVED"
+	ApplicationDeleted = "DELETED"
 
 	WorkspaceAdmin      = "admin"
 	WorkspaceMemberRole = "member"

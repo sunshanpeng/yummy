@@ -467,12 +467,13 @@ func (x *WorkerWelcome) GetQualificationNonce() string {
 }
 
 type WorkerHeartbeat struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	ClusterNodeUid string                 `protobuf:"bytes,1,opt,name=cluster_node_uid,json=clusterNodeUid,proto3" json:"cluster_node_uid,omitempty"`
-	Os             string                 `protobuf:"bytes,2,opt,name=os,proto3" json:"os,omitempty"`
-	Arch           string                 `protobuf:"bytes,3,opt,name=arch,proto3" json:"arch,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	ClusterNodeUid  string                 `protobuf:"bytes,1,opt,name=cluster_node_uid,json=clusterNodeUid,proto3" json:"cluster_node_uid,omitempty"`
+	Os              string                 `protobuf:"bytes,2,opt,name=os,proto3" json:"os,omitempty"`
+	Arch            string                 `protobuf:"bytes,3,opt,name=arch,proto3" json:"arch,omitempty"`
+	ClusterMachines *ClusterMachinesReport `protobuf:"bytes,4,opt,name=cluster_machines,json=clusterMachines,proto3" json:"cluster_machines,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *WorkerHeartbeat) Reset() {
@@ -526,6 +527,73 @@ func (x *WorkerHeartbeat) GetArch() string {
 	return ""
 }
 
+func (x *WorkerHeartbeat) GetClusterMachines() *ClusterMachinesReport {
+	if x != nil {
+		return x.ClusterMachines
+	}
+	return nil
+}
+
+type ClusterMachinesReport struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Machines      []*ClusterMachine      `protobuf:"bytes,1,rep,name=machines,proto3" json:"machines,omitempty"`
+	Truncated     bool                   `protobuf:"varint,2,opt,name=truncated,proto3" json:"truncated,omitempty"`
+	ErrorCode     string                 `protobuf:"bytes,3,opt,name=error_code,json=errorCode,proto3" json:"error_code,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClusterMachinesReport) Reset() {
+	*x = ClusterMachinesReport{}
+	mi := &file_platform_v1_worker_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClusterMachinesReport) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClusterMachinesReport) ProtoMessage() {}
+
+func (x *ClusterMachinesReport) ProtoReflect() protoreflect.Message {
+	mi := &file_platform_v1_worker_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClusterMachinesReport.ProtoReflect.Descriptor instead.
+func (*ClusterMachinesReport) Descriptor() ([]byte, []int) {
+	return file_platform_v1_worker_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *ClusterMachinesReport) GetMachines() []*ClusterMachine {
+	if x != nil {
+		return x.Machines
+	}
+	return nil
+}
+
+func (x *ClusterMachinesReport) GetTruncated() bool {
+	if x != nil {
+		return x.Truncated
+	}
+	return false
+}
+
+func (x *ClusterMachinesReport) GetErrorCode() string {
+	if x != nil {
+		return x.ErrorCode
+	}
+	return ""
+}
+
 // 所有资格由控制面注入的验证器核对管理员登记的qualification_id；自报布尔值不是资格。
 type WorkerQualification struct {
 	state               protoimpl.MessageState `protogen:"open.v1"`
@@ -547,7 +615,7 @@ type WorkerQualification struct {
 
 func (x *WorkerQualification) Reset() {
 	*x = WorkerQualification{}
-	mi := &file_platform_v1_worker_proto_msgTypes[5]
+	mi := &file_platform_v1_worker_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -559,7 +627,7 @@ func (x *WorkerQualification) String() string {
 func (*WorkerQualification) ProtoMessage() {}
 
 func (x *WorkerQualification) ProtoReflect() protoreflect.Message {
-	mi := &file_platform_v1_worker_proto_msgTypes[5]
+	mi := &file_platform_v1_worker_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -572,7 +640,7 @@ func (x *WorkerQualification) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkerQualification.ProtoReflect.Descriptor instead.
 func (*WorkerQualification) Descriptor() ([]byte, []int) {
-	return file_platform_v1_worker_proto_rawDescGZIP(), []int{5}
+	return file_platform_v1_worker_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *WorkerQualification) GetQualificationId() string {
@@ -671,7 +739,7 @@ type WorkerRegistryCredential struct {
 
 func (x *WorkerRegistryCredential) Reset() {
 	*x = WorkerRegistryCredential{}
-	mi := &file_platform_v1_worker_proto_msgTypes[6]
+	mi := &file_platform_v1_worker_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -683,7 +751,7 @@ func (x *WorkerRegistryCredential) String() string {
 func (*WorkerRegistryCredential) ProtoMessage() {}
 
 func (x *WorkerRegistryCredential) ProtoReflect() protoreflect.Message {
-	mi := &file_platform_v1_worker_proto_msgTypes[6]
+	mi := &file_platform_v1_worker_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -696,7 +764,7 @@ func (x *WorkerRegistryCredential) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkerRegistryCredential.ProtoReflect.Descriptor instead.
 func (*WorkerRegistryCredential) Descriptor() ([]byte, []int) {
-	return file_platform_v1_worker_proto_rawDescGZIP(), []int{6}
+	return file_platform_v1_worker_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *WorkerRegistryCredential) GetOrigin() string {
@@ -737,7 +805,7 @@ type WorkerBuildSecret struct {
 
 func (x *WorkerBuildSecret) Reset() {
 	*x = WorkerBuildSecret{}
-	mi := &file_platform_v1_worker_proto_msgTypes[7]
+	mi := &file_platform_v1_worker_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -749,7 +817,7 @@ func (x *WorkerBuildSecret) String() string {
 func (*WorkerBuildSecret) ProtoMessage() {}
 
 func (x *WorkerBuildSecret) ProtoReflect() protoreflect.Message {
-	mi := &file_platform_v1_worker_proto_msgTypes[7]
+	mi := &file_platform_v1_worker_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -762,7 +830,7 @@ func (x *WorkerBuildSecret) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkerBuildSecret.ProtoReflect.Descriptor instead.
 func (*WorkerBuildSecret) Descriptor() ([]byte, []int) {
-	return file_platform_v1_worker_proto_rawDescGZIP(), []int{7}
+	return file_platform_v1_worker_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *WorkerBuildSecret) GetName() string {
@@ -791,7 +859,7 @@ type WorkerSourceGrant struct {
 
 func (x *WorkerSourceGrant) Reset() {
 	*x = WorkerSourceGrant{}
-	mi := &file_platform_v1_worker_proto_msgTypes[8]
+	mi := &file_platform_v1_worker_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -803,7 +871,7 @@ func (x *WorkerSourceGrant) String() string {
 func (*WorkerSourceGrant) ProtoMessage() {}
 
 func (x *WorkerSourceGrant) ProtoReflect() protoreflect.Message {
-	mi := &file_platform_v1_worker_proto_msgTypes[8]
+	mi := &file_platform_v1_worker_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -816,7 +884,7 @@ func (x *WorkerSourceGrant) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkerSourceGrant.ProtoReflect.Descriptor instead.
 func (*WorkerSourceGrant) Descriptor() ([]byte, []int) {
-	return file_platform_v1_worker_proto_rawDescGZIP(), []int{8}
+	return file_platform_v1_worker_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *WorkerSourceGrant) GetUrl() string {
@@ -884,7 +952,7 @@ type WorkerBuildCommand struct {
 
 func (x *WorkerBuildCommand) Reset() {
 	*x = WorkerBuildCommand{}
-	mi := &file_platform_v1_worker_proto_msgTypes[9]
+	mi := &file_platform_v1_worker_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -896,7 +964,7 @@ func (x *WorkerBuildCommand) String() string {
 func (*WorkerBuildCommand) ProtoMessage() {}
 
 func (x *WorkerBuildCommand) ProtoReflect() protoreflect.Message {
-	mi := &file_platform_v1_worker_proto_msgTypes[9]
+	mi := &file_platform_v1_worker_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -909,7 +977,7 @@ func (x *WorkerBuildCommand) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkerBuildCommand.ProtoReflect.Descriptor instead.
 func (*WorkerBuildCommand) Descriptor() ([]byte, []int) {
-	return file_platform_v1_worker_proto_rawDescGZIP(), []int{9}
+	return file_platform_v1_worker_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *WorkerBuildCommand) GetBuildId() string {
@@ -1113,7 +1181,7 @@ type WorkerDeploymentCommand struct {
 
 func (x *WorkerDeploymentCommand) Reset() {
 	*x = WorkerDeploymentCommand{}
-	mi := &file_platform_v1_worker_proto_msgTypes[10]
+	mi := &file_platform_v1_worker_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1125,7 +1193,7 @@ func (x *WorkerDeploymentCommand) String() string {
 func (*WorkerDeploymentCommand) ProtoMessage() {}
 
 func (x *WorkerDeploymentCommand) ProtoReflect() protoreflect.Message {
-	mi := &file_platform_v1_worker_proto_msgTypes[10]
+	mi := &file_platform_v1_worker_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1138,7 +1206,7 @@ func (x *WorkerDeploymentCommand) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkerDeploymentCommand.ProtoReflect.Descriptor instead.
 func (*WorkerDeploymentCommand) Descriptor() ([]byte, []int) {
-	return file_platform_v1_worker_proto_rawDescGZIP(), []int{10}
+	return file_platform_v1_worker_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *WorkerDeploymentCommand) GetWorkspaceId() string {
@@ -1304,7 +1372,7 @@ type WorkerBuildEvent struct {
 
 func (x *WorkerBuildEvent) Reset() {
 	*x = WorkerBuildEvent{}
-	mi := &file_platform_v1_worker_proto_msgTypes[11]
+	mi := &file_platform_v1_worker_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1316,7 +1384,7 @@ func (x *WorkerBuildEvent) String() string {
 func (*WorkerBuildEvent) ProtoMessage() {}
 
 func (x *WorkerBuildEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_platform_v1_worker_proto_msgTypes[11]
+	mi := &file_platform_v1_worker_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1329,7 +1397,7 @@ func (x *WorkerBuildEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkerBuildEvent.ProtoReflect.Descriptor instead.
 func (*WorkerBuildEvent) Descriptor() ([]byte, []int) {
-	return file_platform_v1_worker_proto_rawDescGZIP(), []int{11}
+	return file_platform_v1_worker_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *WorkerBuildEvent) GetAttemptId() string {
@@ -1400,7 +1468,7 @@ type WorkerBuildLog struct {
 
 func (x *WorkerBuildLog) Reset() {
 	*x = WorkerBuildLog{}
-	mi := &file_platform_v1_worker_proto_msgTypes[12]
+	mi := &file_platform_v1_worker_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1412,7 +1480,7 @@ func (x *WorkerBuildLog) String() string {
 func (*WorkerBuildLog) ProtoMessage() {}
 
 func (x *WorkerBuildLog) ProtoReflect() protoreflect.Message {
-	mi := &file_platform_v1_worker_proto_msgTypes[12]
+	mi := &file_platform_v1_worker_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1425,7 +1493,7 @@ func (x *WorkerBuildLog) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkerBuildLog.ProtoReflect.Descriptor instead.
 func (*WorkerBuildLog) Descriptor() ([]byte, []int) {
-	return file_platform_v1_worker_proto_rawDescGZIP(), []int{12}
+	return file_platform_v1_worker_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *WorkerBuildLog) GetAttemptId() string {
@@ -1482,7 +1550,7 @@ type WorkerDeploymentObservation struct {
 
 func (x *WorkerDeploymentObservation) Reset() {
 	*x = WorkerDeploymentObservation{}
-	mi := &file_platform_v1_worker_proto_msgTypes[13]
+	mi := &file_platform_v1_worker_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1494,7 +1562,7 @@ func (x *WorkerDeploymentObservation) String() string {
 func (*WorkerDeploymentObservation) ProtoMessage() {}
 
 func (x *WorkerDeploymentObservation) ProtoReflect() protoreflect.Message {
-	mi := &file_platform_v1_worker_proto_msgTypes[13]
+	mi := &file_platform_v1_worker_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1507,7 +1575,7 @@ func (x *WorkerDeploymentObservation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkerDeploymentObservation.ProtoReflect.Descriptor instead.
 func (*WorkerDeploymentObservation) Descriptor() ([]byte, []int) {
-	return file_platform_v1_worker_proto_rawDescGZIP(), []int{13}
+	return file_platform_v1_worker_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *WorkerDeploymentObservation) GetWorkspaceId() string {
@@ -1657,7 +1725,7 @@ type WorkerRuntimeLog struct {
 
 func (x *WorkerRuntimeLog) Reset() {
 	*x = WorkerRuntimeLog{}
-	mi := &file_platform_v1_worker_proto_msgTypes[14]
+	mi := &file_platform_v1_worker_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1669,7 +1737,7 @@ func (x *WorkerRuntimeLog) String() string {
 func (*WorkerRuntimeLog) ProtoMessage() {}
 
 func (x *WorkerRuntimeLog) ProtoReflect() protoreflect.Message {
-	mi := &file_platform_v1_worker_proto_msgTypes[14]
+	mi := &file_platform_v1_worker_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1682,7 +1750,7 @@ func (x *WorkerRuntimeLog) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkerRuntimeLog.ProtoReflect.Descriptor instead.
 func (*WorkerRuntimeLog) Descriptor() ([]byte, []int) {
-	return file_platform_v1_worker_proto_rawDescGZIP(), []int{14}
+	return file_platform_v1_worker_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *WorkerRuntimeLog) GetWorkspaceId() string {
@@ -1781,7 +1849,7 @@ type WorkerRuntimeMetric struct {
 
 func (x *WorkerRuntimeMetric) Reset() {
 	*x = WorkerRuntimeMetric{}
-	mi := &file_platform_v1_worker_proto_msgTypes[15]
+	mi := &file_platform_v1_worker_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1793,7 +1861,7 @@ func (x *WorkerRuntimeMetric) String() string {
 func (*WorkerRuntimeMetric) ProtoMessage() {}
 
 func (x *WorkerRuntimeMetric) ProtoReflect() protoreflect.Message {
-	mi := &file_platform_v1_worker_proto_msgTypes[15]
+	mi := &file_platform_v1_worker_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1806,7 +1874,7 @@ func (x *WorkerRuntimeMetric) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkerRuntimeMetric.ProtoReflect.Descriptor instead.
 func (*WorkerRuntimeMetric) Descriptor() ([]byte, []int) {
-	return file_platform_v1_worker_proto_rawDescGZIP(), []int{15}
+	return file_platform_v1_worker_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *WorkerRuntimeMetric) GetWorkspaceId() string {
@@ -1885,7 +1953,7 @@ type WorkerAck struct {
 
 func (x *WorkerAck) Reset() {
 	*x = WorkerAck{}
-	mi := &file_platform_v1_worker_proto_msgTypes[16]
+	mi := &file_platform_v1_worker_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1897,7 +1965,7 @@ func (x *WorkerAck) String() string {
 func (*WorkerAck) ProtoMessage() {}
 
 func (x *WorkerAck) ProtoReflect() protoreflect.Message {
-	mi := &file_platform_v1_worker_proto_msgTypes[16]
+	mi := &file_platform_v1_worker_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1910,7 +1978,7 @@ func (x *WorkerAck) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkerAck.ProtoReflect.Descriptor instead.
 func (*WorkerAck) Descriptor() ([]byte, []int) {
-	return file_platform_v1_worker_proto_rawDescGZIP(), []int{16}
+	return file_platform_v1_worker_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *WorkerAck) GetChannel() string {
@@ -1960,7 +2028,7 @@ type WorkerRejection struct {
 
 func (x *WorkerRejection) Reset() {
 	*x = WorkerRejection{}
-	mi := &file_platform_v1_worker_proto_msgTypes[17]
+	mi := &file_platform_v1_worker_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1972,7 +2040,7 @@ func (x *WorkerRejection) String() string {
 func (*WorkerRejection) ProtoMessage() {}
 
 func (x *WorkerRejection) ProtoReflect() protoreflect.Message {
-	mi := &file_platform_v1_worker_proto_msgTypes[17]
+	mi := &file_platform_v1_worker_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1985,7 +2053,7 @@ func (x *WorkerRejection) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkerRejection.ProtoReflect.Descriptor instead.
 func (*WorkerRejection) Descriptor() ([]byte, []int) {
-	return file_platform_v1_worker_proto_rawDescGZIP(), []int{17}
+	return file_platform_v1_worker_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *WorkerRejection) GetChannel() string {
@@ -2030,7 +2098,7 @@ type WorkerGenerationRequest struct {
 
 func (x *WorkerGenerationRequest) Reset() {
 	*x = WorkerGenerationRequest{}
-	mi := &file_platform_v1_worker_proto_msgTypes[18]
+	mi := &file_platform_v1_worker_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2042,7 +2110,7 @@ func (x *WorkerGenerationRequest) String() string {
 func (*WorkerGenerationRequest) ProtoMessage() {}
 
 func (x *WorkerGenerationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_platform_v1_worker_proto_msgTypes[18]
+	mi := &file_platform_v1_worker_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2055,7 +2123,7 @@ func (x *WorkerGenerationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkerGenerationRequest.ProtoReflect.Descriptor instead.
 func (*WorkerGenerationRequest) Descriptor() ([]byte, []int) {
-	return file_platform_v1_worker_proto_rawDescGZIP(), []int{18}
+	return file_platform_v1_worker_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *WorkerGenerationRequest) GetWorkspaceId() string {
@@ -2109,7 +2177,7 @@ type WorkerGenerationResponse struct {
 
 func (x *WorkerGenerationResponse) Reset() {
 	*x = WorkerGenerationResponse{}
-	mi := &file_platform_v1_worker_proto_msgTypes[19]
+	mi := &file_platform_v1_worker_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2121,7 +2189,7 @@ func (x *WorkerGenerationResponse) String() string {
 func (*WorkerGenerationResponse) ProtoMessage() {}
 
 func (x *WorkerGenerationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_platform_v1_worker_proto_msgTypes[19]
+	mi := &file_platform_v1_worker_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2134,7 +2202,7 @@ func (x *WorkerGenerationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkerGenerationResponse.ProtoReflect.Descriptor instead.
 func (*WorkerGenerationResponse) Descriptor() ([]byte, []int) {
-	return file_platform_v1_worker_proto_rawDescGZIP(), []int{19}
+	return file_platform_v1_worker_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *WorkerGenerationResponse) GetCurrent() bool {
@@ -2148,7 +2216,7 @@ var File_platform_v1_worker_proto protoreflect.FileDescriptor
 
 const file_platform_v1_worker_proto_rawDesc = "" +
 	"\n" +
-	"\x18platform/v1/worker.proto\x12\vplatform.v1\x1a platform/v1/runtime_config.proto\"\xc3\x04\n" +
+	"\x18platform/v1/worker.proto\x12\vplatform.v1\x1a platform/v1/runtime_config.proto\x1a\x1bplatform/v1/inventory.proto\"\xc3\x04\n" +
 	"\x0eWorkerEnvelope\x120\n" +
 	"\x05hello\x18\x01 \x01(\v2\x18.platform.v1.WorkerHelloH\x00R\x05hello\x12<\n" +
 	"\theartbeat\x18\x02 \x01(\v2\x1c.platform.v1.WorkerHeartbeatH\x00R\theartbeat\x12H\n" +
@@ -2177,11 +2245,17 @@ const file_platform_v1_worker_proto_rawDesc = "" +
 	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12\x1b\n" +
 	"\tserver_id\x18\x03 \x01(\tR\bserverId\x12)\n" +
 	"\x10connection_epoch\x18\x04 \x01(\x03R\x0fconnectionEpoch\x12/\n" +
-	"\x13qualification_nonce\x18\x05 \x01(\tR\x12qualificationNonce\"_\n" +
+	"\x13qualification_nonce\x18\x05 \x01(\tR\x12qualificationNonce\"\xae\x01\n" +
 	"\x0fWorkerHeartbeat\x12(\n" +
 	"\x10cluster_node_uid\x18\x01 \x01(\tR\x0eclusterNodeUid\x12\x0e\n" +
 	"\x02os\x18\x02 \x01(\tR\x02os\x12\x12\n" +
-	"\x04arch\x18\x03 \x01(\tR\x04arch\"\x8c\x03\n" +
+	"\x04arch\x18\x03 \x01(\tR\x04arch\x12M\n" +
+	"\x10cluster_machines\x18\x04 \x01(\v2\".platform.v1.ClusterMachinesReportR\x0fclusterMachines\"\x8d\x01\n" +
+	"\x15ClusterMachinesReport\x127\n" +
+	"\bmachines\x18\x01 \x03(\v2\x1b.platform.v1.ClusterMachineR\bmachines\x12\x1c\n" +
+	"\ttruncated\x18\x02 \x01(\bR\ttruncated\x12\x1d\n" +
+	"\n" +
+	"error_code\x18\x03 \x01(\tR\terrorCode\"\x8c\x03\n" +
 	"\x13WorkerQualification\x12)\n" +
 	"\x10qualification_id\x18\x01 \x01(\tR\x0fqualificationId\x12\x14\n" +
 	"\x05nonce\x18\x02 \x01(\tR\x05nonce\x12(\n" +
@@ -2390,64 +2464,68 @@ func file_platform_v1_worker_proto_rawDescGZIP() []byte {
 	return file_platform_v1_worker_proto_rawDescData
 }
 
-var file_platform_v1_worker_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
+var file_platform_v1_worker_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
 var file_platform_v1_worker_proto_goTypes = []any{
 	(*WorkerEnvelope)(nil),              // 0: platform.v1.WorkerEnvelope
 	(*ControlEnvelope)(nil),             // 1: platform.v1.ControlEnvelope
 	(*WorkerHello)(nil),                 // 2: platform.v1.WorkerHello
 	(*WorkerWelcome)(nil),               // 3: platform.v1.WorkerWelcome
 	(*WorkerHeartbeat)(nil),             // 4: platform.v1.WorkerHeartbeat
-	(*WorkerQualification)(nil),         // 5: platform.v1.WorkerQualification
-	(*WorkerRegistryCredential)(nil),    // 6: platform.v1.WorkerRegistryCredential
-	(*WorkerBuildSecret)(nil),           // 7: platform.v1.WorkerBuildSecret
-	(*WorkerSourceGrant)(nil),           // 8: platform.v1.WorkerSourceGrant
-	(*WorkerBuildCommand)(nil),          // 9: platform.v1.WorkerBuildCommand
-	(*WorkerDeploymentCommand)(nil),     // 10: platform.v1.WorkerDeploymentCommand
-	(*WorkerBuildEvent)(nil),            // 11: platform.v1.WorkerBuildEvent
-	(*WorkerBuildLog)(nil),              // 12: platform.v1.WorkerBuildLog
-	(*WorkerDeploymentObservation)(nil), // 13: platform.v1.WorkerDeploymentObservation
-	(*WorkerRuntimeLog)(nil),            // 14: platform.v1.WorkerRuntimeLog
-	(*WorkerRuntimeMetric)(nil),         // 15: platform.v1.WorkerRuntimeMetric
-	(*WorkerAck)(nil),                   // 16: platform.v1.WorkerAck
-	(*WorkerRejection)(nil),             // 17: platform.v1.WorkerRejection
-	(*WorkerGenerationRequest)(nil),     // 18: platform.v1.WorkerGenerationRequest
-	(*WorkerGenerationResponse)(nil),    // 19: platform.v1.WorkerGenerationResponse
-	nil,                                 // 20: platform.v1.WorkerBuildCommand.BuildArgsEntry
-	nil,                                 // 21: platform.v1.WorkerDeploymentCommand.MaterializedVariablesEntry
-	nil,                                 // 22: platform.v1.WorkerDeploymentCommand.MaterializedFilesEntry
-	(*RuntimeConfig)(nil),               // 23: platform.v1.RuntimeConfig
+	(*ClusterMachinesReport)(nil),       // 5: platform.v1.ClusterMachinesReport
+	(*WorkerQualification)(nil),         // 6: platform.v1.WorkerQualification
+	(*WorkerRegistryCredential)(nil),    // 7: platform.v1.WorkerRegistryCredential
+	(*WorkerBuildSecret)(nil),           // 8: platform.v1.WorkerBuildSecret
+	(*WorkerSourceGrant)(nil),           // 9: platform.v1.WorkerSourceGrant
+	(*WorkerBuildCommand)(nil),          // 10: platform.v1.WorkerBuildCommand
+	(*WorkerDeploymentCommand)(nil),     // 11: platform.v1.WorkerDeploymentCommand
+	(*WorkerBuildEvent)(nil),            // 12: platform.v1.WorkerBuildEvent
+	(*WorkerBuildLog)(nil),              // 13: platform.v1.WorkerBuildLog
+	(*WorkerDeploymentObservation)(nil), // 14: platform.v1.WorkerDeploymentObservation
+	(*WorkerRuntimeLog)(nil),            // 15: platform.v1.WorkerRuntimeLog
+	(*WorkerRuntimeMetric)(nil),         // 16: platform.v1.WorkerRuntimeMetric
+	(*WorkerAck)(nil),                   // 17: platform.v1.WorkerAck
+	(*WorkerRejection)(nil),             // 18: platform.v1.WorkerRejection
+	(*WorkerGenerationRequest)(nil),     // 19: platform.v1.WorkerGenerationRequest
+	(*WorkerGenerationResponse)(nil),    // 20: platform.v1.WorkerGenerationResponse
+	nil,                                 // 21: platform.v1.WorkerBuildCommand.BuildArgsEntry
+	nil,                                 // 22: platform.v1.WorkerDeploymentCommand.MaterializedVariablesEntry
+	nil,                                 // 23: platform.v1.WorkerDeploymentCommand.MaterializedFilesEntry
+	(*ClusterMachine)(nil),              // 24: platform.v1.ClusterMachine
+	(*RuntimeConfig)(nil),               // 25: platform.v1.RuntimeConfig
 }
 var file_platform_v1_worker_proto_depIdxs = []int32{
 	2,  // 0: platform.v1.WorkerEnvelope.hello:type_name -> platform.v1.WorkerHello
 	4,  // 1: platform.v1.WorkerEnvelope.heartbeat:type_name -> platform.v1.WorkerHeartbeat
-	5,  // 2: platform.v1.WorkerEnvelope.qualification:type_name -> platform.v1.WorkerQualification
-	11, // 3: platform.v1.WorkerEnvelope.build_event:type_name -> platform.v1.WorkerBuildEvent
-	12, // 4: platform.v1.WorkerEnvelope.build_log:type_name -> platform.v1.WorkerBuildLog
-	13, // 5: platform.v1.WorkerEnvelope.deployment_observation:type_name -> platform.v1.WorkerDeploymentObservation
-	14, // 6: platform.v1.WorkerEnvelope.runtime_log:type_name -> platform.v1.WorkerRuntimeLog
-	15, // 7: platform.v1.WorkerEnvelope.runtime_metric:type_name -> platform.v1.WorkerRuntimeMetric
+	6,  // 2: platform.v1.WorkerEnvelope.qualification:type_name -> platform.v1.WorkerQualification
+	12, // 3: platform.v1.WorkerEnvelope.build_event:type_name -> platform.v1.WorkerBuildEvent
+	13, // 4: platform.v1.WorkerEnvelope.build_log:type_name -> platform.v1.WorkerBuildLog
+	14, // 5: platform.v1.WorkerEnvelope.deployment_observation:type_name -> platform.v1.WorkerDeploymentObservation
+	15, // 6: platform.v1.WorkerEnvelope.runtime_log:type_name -> platform.v1.WorkerRuntimeLog
+	16, // 7: platform.v1.WorkerEnvelope.runtime_metric:type_name -> platform.v1.WorkerRuntimeMetric
 	3,  // 8: platform.v1.ControlEnvelope.welcome:type_name -> platform.v1.WorkerWelcome
-	9,  // 9: platform.v1.ControlEnvelope.build_command:type_name -> platform.v1.WorkerBuildCommand
-	10, // 10: platform.v1.ControlEnvelope.deployment_command:type_name -> platform.v1.WorkerDeploymentCommand
-	16, // 11: platform.v1.ControlEnvelope.ack:type_name -> platform.v1.WorkerAck
-	17, // 12: platform.v1.ControlEnvelope.rejection:type_name -> platform.v1.WorkerRejection
-	20, // 13: platform.v1.WorkerBuildCommand.build_args:type_name -> platform.v1.WorkerBuildCommand.BuildArgsEntry
-	8,  // 14: platform.v1.WorkerBuildCommand.source_grant:type_name -> platform.v1.WorkerSourceGrant
-	6,  // 15: platform.v1.WorkerBuildCommand.registry:type_name -> platform.v1.WorkerRegistryCredential
-	7,  // 16: platform.v1.WorkerBuildCommand.secrets:type_name -> platform.v1.WorkerBuildSecret
-	23, // 17: platform.v1.WorkerDeploymentCommand.config:type_name -> platform.v1.RuntimeConfig
-	21, // 18: platform.v1.WorkerDeploymentCommand.materialized_variables:type_name -> platform.v1.WorkerDeploymentCommand.MaterializedVariablesEntry
-	22, // 19: platform.v1.WorkerDeploymentCommand.materialized_files:type_name -> platform.v1.WorkerDeploymentCommand.MaterializedFilesEntry
-	6,  // 20: platform.v1.WorkerDeploymentCommand.registry:type_name -> platform.v1.WorkerRegistryCredential
-	0,  // 21: platform.v1.WorkerGateway.Connect:input_type -> platform.v1.WorkerEnvelope
-	18, // 22: platform.v1.WorkerGateway.CheckGeneration:input_type -> platform.v1.WorkerGenerationRequest
-	1,  // 23: platform.v1.WorkerGateway.Connect:output_type -> platform.v1.ControlEnvelope
-	19, // 24: platform.v1.WorkerGateway.CheckGeneration:output_type -> platform.v1.WorkerGenerationResponse
-	23, // [23:25] is the sub-list for method output_type
-	21, // [21:23] is the sub-list for method input_type
-	21, // [21:21] is the sub-list for extension type_name
-	21, // [21:21] is the sub-list for extension extendee
-	0,  // [0:21] is the sub-list for field type_name
+	10, // 9: platform.v1.ControlEnvelope.build_command:type_name -> platform.v1.WorkerBuildCommand
+	11, // 10: platform.v1.ControlEnvelope.deployment_command:type_name -> platform.v1.WorkerDeploymentCommand
+	17, // 11: platform.v1.ControlEnvelope.ack:type_name -> platform.v1.WorkerAck
+	18, // 12: platform.v1.ControlEnvelope.rejection:type_name -> platform.v1.WorkerRejection
+	5,  // 13: platform.v1.WorkerHeartbeat.cluster_machines:type_name -> platform.v1.ClusterMachinesReport
+	24, // 14: platform.v1.ClusterMachinesReport.machines:type_name -> platform.v1.ClusterMachine
+	21, // 15: platform.v1.WorkerBuildCommand.build_args:type_name -> platform.v1.WorkerBuildCommand.BuildArgsEntry
+	9,  // 16: platform.v1.WorkerBuildCommand.source_grant:type_name -> platform.v1.WorkerSourceGrant
+	7,  // 17: platform.v1.WorkerBuildCommand.registry:type_name -> platform.v1.WorkerRegistryCredential
+	8,  // 18: platform.v1.WorkerBuildCommand.secrets:type_name -> platform.v1.WorkerBuildSecret
+	25, // 19: platform.v1.WorkerDeploymentCommand.config:type_name -> platform.v1.RuntimeConfig
+	22, // 20: platform.v1.WorkerDeploymentCommand.materialized_variables:type_name -> platform.v1.WorkerDeploymentCommand.MaterializedVariablesEntry
+	23, // 21: platform.v1.WorkerDeploymentCommand.materialized_files:type_name -> platform.v1.WorkerDeploymentCommand.MaterializedFilesEntry
+	7,  // 22: platform.v1.WorkerDeploymentCommand.registry:type_name -> platform.v1.WorkerRegistryCredential
+	0,  // 23: platform.v1.WorkerGateway.Connect:input_type -> platform.v1.WorkerEnvelope
+	19, // 24: platform.v1.WorkerGateway.CheckGeneration:input_type -> platform.v1.WorkerGenerationRequest
+	1,  // 25: platform.v1.WorkerGateway.Connect:output_type -> platform.v1.ControlEnvelope
+	20, // 26: platform.v1.WorkerGateway.CheckGeneration:output_type -> platform.v1.WorkerGenerationResponse
+	25, // [25:27] is the sub-list for method output_type
+	23, // [23:25] is the sub-list for method input_type
+	23, // [23:23] is the sub-list for extension type_name
+	23, // [23:23] is the sub-list for extension extendee
+	0,  // [0:23] is the sub-list for field type_name
 }
 
 func init() { file_platform_v1_worker_proto_init() }
@@ -2456,6 +2534,7 @@ func file_platform_v1_worker_proto_init() {
 		return
 	}
 	file_platform_v1_runtime_config_proto_init()
+	file_platform_v1_inventory_proto_init()
 	file_platform_v1_worker_proto_msgTypes[0].OneofWrappers = []any{
 		(*WorkerEnvelope_Hello)(nil),
 		(*WorkerEnvelope_Heartbeat)(nil),
@@ -2479,7 +2558,7 @@ func file_platform_v1_worker_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_platform_v1_worker_proto_rawDesc), len(file_platform_v1_worker_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   23,
+			NumMessages:   24,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

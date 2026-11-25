@@ -25,13 +25,15 @@ type streamTransport struct {
 	stop func()
 }
 type session struct {
-	identity     enrollment.Identity
-	certificate  *x509.Certificate
-	epoch        int64
-	owner, nonce string
-	ctx          context.Context
-	cancel       context.CancelFunc
-	queue        chan *platformv1.ControlEnvelope
+	identity           enrollment.Identity
+	certificate        *x509.Certificate
+	epoch              int64
+	owner, nonce       string
+	ctx                context.Context
+	cancel             context.CancelFunc
+	queue              chan *platformv1.ControlEnvelope
+	clusterMachines    *platformv1.ClusterMachinesReport
+	machinesObservedAt time.Time
 }
 type Gateway struct {
 	config   Config

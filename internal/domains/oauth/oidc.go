@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -26,25 +27,40 @@ var ErrOIDC = errors.New("外部登录失败或身份尚未显式绑定")
 var providerNamePattern = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,62}$`)
 
 type OIDCProviderConfig struct{ Name, Issuer, ClientID, ClientSecret, RedirectURI string }
+type oidcProvider struct {
+	config     OIDCProviderConfig
+	mu         sync.Mutex
+	discovered *externalProvider
+}
 type externalProvider struct {
-	name, issuer string
-	config       xoauth2.Config
-	verifier     *oidc.IDTokenVerifier
-	client       *http.Client
+	config   xoauth2.Config
+	verifier *oidc.IDTokenVerifier
+	client   *http.Client
 }
 type OIDCStart struct {
 	URL       string
 	ExpiresAt time.Time
 }
 
-func (s *Service) configureOIDC(ctx context.Context, config OIDCProviderConfig) (*externalProvider, error) {
+func (s *Service) validateOIDCConfig(config OIDCProviderConfig) error {
 	if !providerNamePattern.MatchString(config.Name) || config.ClientID == "" || !s.trustedEndpoint(config.Issuer) || !s.trustedEndpoint(config.RedirectURI) {
-		return nil, authorization.ErrInvalid
+		return authorization.ErrInvalid
 	}
 	redirect, _ := url.Parse(config.RedirectURI)
 	if !strings.HasPrefix(config.RedirectURI, s.base+"/") || redirect.RawQuery != "" || redirect.Fragment != "" {
-		return nil, authorization.ErrInvalid
+		return authorization.ErrInvalid
 	}
+	return nil
+}
+
+// 在团队登录时发现身份源。仅缓存校验通过的端点，身份源故障时仍可使用本地登录。
+func (s *Service) discoverOIDC(ctx context.Context, configured *oidcProvider) (*externalProvider, error) {
+	configured.mu.Lock()
+	defer configured.mu.Unlock()
+	if configured.discovered != nil {
+		return configured.discovered, nil
+	}
+	config := configured.config
 	client := &http.Client{Timeout: 10 * time.Second, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return ErrOIDC }}
 	ctx = oidc.ClientContext(ctx, client)
 	provider, err := oidc.NewProvider(ctx, config.Issuer)
@@ -58,7 +74,8 @@ func (s *Service) configureOIDC(ctx context.Context, config OIDCProviderConfig) 
 	if provider.Claims(&discovery) != nil || !s.trustedEndpoint(discovery.JWKSURI) || !s.trustedEndpoint(endpoint.AuthURL) || !s.trustedEndpoint(endpoint.TokenURL) {
 		return nil, ErrOIDC
 	}
-	return &externalProvider{name: config.Name, issuer: config.Issuer, config: xoauth2.Config{ClientID: config.ClientID, ClientSecret: config.ClientSecret, RedirectURL: config.RedirectURI, Endpoint: endpoint, Scopes: []string{oidc.ScopeOpenID}}, verifier: provider.Verifier(&oidc.Config{ClientID: config.ClientID}), client: client}, nil
+	configured.discovered = &externalProvider{config: xoauth2.Config{ClientID: config.ClientID, ClientSecret: config.ClientSecret, RedirectURL: config.RedirectURI, Endpoint: endpoint, Scopes: []string{oidc.ScopeOpenID}}, verifier: provider.Verifier(&oidc.Config{ClientID: config.ClientID}), client: client}
+	return configured.discovered, nil
 }
 func (s *Service) trustedEndpoint(raw string) bool {
 	u, err := url.Parse(raw)
@@ -68,9 +85,13 @@ func (s *Service) trustedEndpoint(raw string) bool {
 // StartOIDC 的 browserBinding 必须由 HTTP 适配层安全Cookie产生；绝不来自任意用户参数。
 // 此服务不建立网页登录会话，最终 Principal 交给现有 session 层建立和轮换 Cookie。
 func (s *Service) StartOIDC(ctx context.Context, name, browserBinding string) (OIDCStart, error) {
-	provider, exists := s.oidcProviders[name]
+	configured, exists := s.oidcProviders[name]
 	if !exists || len(browserBinding) < 32 || len(browserBinding) > 1024 {
 		return OIDCStart{}, ErrOIDC
+	}
+	provider, err := s.discoverOIDC(ctx, configured)
+	if err != nil {
+		return OIDCStart{}, err
 	}
 	state, err := security.NewToken("oidcs_")
 	if err != nil {
@@ -99,7 +120,7 @@ func (s *Service) StartOIDC(ctx context.Context, name, browserBinding string) (O
 }
 
 func (s *Service) CompleteOIDC(ctx context.Context, name, state, code, browserBinding string) (authorization.Principal, error) {
-	provider, exists := s.oidcProviders[name]
+	configured, exists := s.oidcProviders[name]
 	if !exists || len(state) > 1024 || len(code) == 0 || len(code) > 4096 || len(browserBinding) < 32 || len(browserBinding) > 1024 {
 		return authorization.Principal{}, ErrOIDC
 	}
@@ -120,6 +141,10 @@ func (s *Service) CompleteOIDC(ctx context.Context, name, state, code, browserBi
 	if err != nil {
 		return authorization.Principal{}, ErrOIDC
 	}
+	provider, err := s.discoverOIDC(ctx, configured)
+	if err != nil {
+		return authorization.Principal{}, err
+	}
 	ctx = oidc.ClientContext(ctx, provider.client)
 	token, err := provider.config.Exchange(ctx, code, xoauth2.SetAuthURLParam("code_verifier", pkceVerifier))
 	if err != nil {
@@ -134,7 +159,7 @@ func (s *Service) CompleteOIDC(ctx context.Context, name, state, code, browserBi
 		return authorization.Principal{}, ErrOIDC
 	}
 	var binding oidcBindingRecord
-	if err := s.db.WithContext(ctx).First(&binding, "issuer=? AND subject=?", provider.issuer, verified.Subject).Error; err != nil {
+	if err := s.db.WithContext(ctx).First(&binding, "issuer=? AND subject=?", configured.config.Issuer, verified.Subject).Error; err != nil {
 		return authorization.Principal{}, ErrOIDC
 	}
 	var user model.User
@@ -168,14 +193,14 @@ func (s *Service) BindExternalIdentity(ctx context.Context, p authorization.Prin
 		if err := tx.First(&user, "id=? AND status=?", userID, model.UserActive).Error; err != nil {
 			return authorization.ErrNotFound
 		}
-		value := oidcBindingRecord{Issuer: provider.issuer, Subject: subject, UserID: userID}
+		value := oidcBindingRecord{Issuer: provider.config.Issuer, Subject: subject, UserID: userID}
 		result := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&value)
 		if result.Error != nil {
 			return result.Error
 		}
 		if result.RowsAffected == 0 {
 			var previous oidcBindingRecord
-			if err := tx.First(&previous, "issuer=? AND subject=?", provider.issuer, subject).Error; err != nil {
+			if err := tx.First(&previous, "issuer=? AND subject=?", value.Issuer, subject).Error; err != nil {
 				return err
 			}
 			if previous.UserID != userID {

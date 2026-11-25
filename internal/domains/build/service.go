@@ -337,8 +337,8 @@ func (s *Service) create(ctx context.Context, p authorization.Principal, ws, app
 			return err
 		}
 		var application model.Application
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&application, "workspace_id = ? AND id = ?", ws, app).Error; err != nil {
-			return err
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&application, "workspace_id = ? AND id = ? AND status = ?", ws, app, model.ResourceActive).Error; err != nil {
+			return missing(err)
 		}
 		preview, settings, policy, registry, err := s.prepare(tx, ws, app, in)
 		if err != nil {

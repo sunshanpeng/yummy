@@ -34,3 +34,13 @@ export function useRPC<I extends DescMessage, O extends DescMessage>(method: Des
     retry: false,
   });
 }
+
+export function useExternalLogin(enabled = true) {
+  return useQuery({
+    queryKey: ["external-login-enabled"],
+    queryFn: ({ signal }) => platform.externalLoginEnabled(signal),
+    staleTime: 60_000,
+    enabled,
+    retry: false,
+  });
+}

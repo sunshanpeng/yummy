@@ -10,7 +10,7 @@ import { sessionOptions } from "../session";
 import { GetSessionResponseSchema } from "../gen/platform/v1/identity_pb";
 import { SaveRuntimeConfigResponseSchema } from "../gen/platform/v1/runtime_config_pb";
 import { Code, ConnectError } from "@connectrpc/connect";
-import { UpdateRegistryResponseSchema } from "../gen/platform/v1/inventory_pb";
+import { UpdateRegistryResponseSchema, VerifyRegistryResponseSchema } from "../gen/platform/v1/inventory_pb";
 
 function mount(path: string, admin = false) {
   vi.spyOn(window, "scrollTo").mockImplementation(() => {});
@@ -74,6 +74,31 @@ describe("正式页面权限与作用域", () => {
     await user.click(screen.getByRole("button", { name: "创建并配置" }));
     expect(submit.mock.calls[2][0].idempotencyKey).not.toBe(submit.mock.calls[0][0].idempotencyKey);
   });
+  it("只允许删除无执行历史的归档应用，并在确认后刷新结果", async () => {
+    let deleted = false;
+    vi.spyOn(platform.transport, "unary").mockImplementation(async (method, _signal, _timeout, _header, input) => {
+      const archived = method.name === "ListApplications" && "archivedOnly" in input && input.archivedOnly;
+      if (method.name === "DeleteApplication") {
+        expect(input).toMatchObject({ workspaceId: "w1", applicationId: "unused", expectedRevision: 2n });
+        deleted = true;
+      }
+      const values = method.name === "GetWorkspace" ? { workspace: { id: "w1", slug: "w1", name: "空间", capabilities: ["workspace:read", "workspace:write"] } }
+        : method.name === "ListWorkspaces" ? { workspaces: [] }
+        : archived ? { applications: [{ id: "built", name: "built-app" }, ...(!deleted ? [{ id: "unused", name: "unused-app", revision: 2n, deletionReady: true }] : [])] }
+        : { applications: [] };
+      return { stream: false, service: method.parent, method, header: new Headers(), trailer: new Headers(), message: create(method.output, values) };
+    });
+    mount("/w/w1/apps");
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "已归档应用" }));
+    expect(await screen.findByText("待清理集群资源")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "删除应用" }));
+    expect(deleted).toBe(false);
+    await user.click(screen.getByRole("button", { name: "确认" }));
+    expect(await screen.findByText("已删除「unused-app」，可重新使用该名称。")).toBeTruthy();
+    await screen.findByText("built-app");
+    expect(screen.queryByRole("button", { name: "删除应用" })).toBeNull();
+  });
   it("未配置的平台策略由NotFound进入首次配置而不是伪造现有策略", async () => {
     vi.spyOn(platform.transport, "unary").mockImplementation(async (method) => {
       if (method.name === "GetExecutionPolicy") throw new ConnectError("尚未配置", Code.NotFound);
@@ -83,6 +108,62 @@ describe("正式页面权限与作用域", () => {
     expect(await screen.findByText("实例尚未配置执行策略，请选择真实节点和输出仓库。")).toBeTruthy();
     expect(screen.getByRole("button", { name: "保存平台策略" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "切换工作空间" })).toBeNull();
+  });
+  it("全局接入检查读取策略选定的节点和仓库，并区分入口配置与验证", async () => {
+    const calls = vi.spyOn(platform.transport, "unary").mockImplementation(async (method) => {
+      const values: Record<string, Record<string, unknown>> = {
+        GetExecutionPolicy: { policy: { revision: 1n, buildNodeId: "b1", runtimeNodeId: "r1", registryId: "reg1", baseDomain: "apps.example.test" } },
+        GetNode: { node: { status: "ACTIVE", os: "linux", arch: "amd64", clusterNodeUid: "k8s-node", lastSeen: new Date().toISOString(), buildReady: true, runtimeReady: true, ingressReady: true, metricsReady: true } },
+        GetRegistry: { registry: { id: "reg1", name: "输出", status: "ACTIVE" } },
+        ListWorkspaces: { workspaces: [{ id: "w1", name: "验收空间", slug: "demo" }] },
+        ListApplications: { applications: [{ id: "app1", name: "gateway" }] },
+        GetRuntimeStatus: { status: { observedState: "NOT_DEPLOYED" } },
+        GetWorkspaceAllocation: { allocation: { allowedNodeIds: ["b1", "r1"], revision: 1n } },
+      };
+      return { stream: false, service: method.parent, method, header: new Headers(), trailer: new Headers(), message: create(method.output, values[method.name] ?? {}) };
+    });
+    mount("/platform/workspaces", true);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "接入检查" }));
+    expect(await screen.findByText("输出仓库尚未验证，请先验证连接。")).toBeTruthy();
+    expect(await screen.findByText("apps.example.test 已配置，等待 HTTP 应用的实际入口探测。")).toBeTruthy();
+    expect((await screen.findByRole("link", { name: "前往应用部署" })).getAttribute("href")).toBe("/w/demo/apps/gateway/deployments");
+    expect(calls.mock.calls.filter(([method]) => method.name === "GetNode").map((entry) => entry[4])).toEqual(expect.arrayContaining([
+      expect.objectContaining({ nodeId: "b1" }), expect.objectContaining({ nodeId: "r1" }),
+    ]));
+  });
+
+  it("仓库验证使用当前修订，按服务端结果展示失败与重试", async () => {
+    vi.spyOn(platform.transport, "unary").mockImplementation(async (method) => ({
+      stream: false, service: method.parent, method, header: new Headers(), trailer: new Headers(),
+      message: create(method.output, { registries: [{ id: "reg-a", name: "测试仓库", status: "ACTIVE", revision: 4n }] }),
+    }));
+    const verify = vi.spyOn(platform.inventory, "verifyRegistry")
+      .mockResolvedValueOnce(create(VerifyRegistryResponseSchema, { message: "认证失败" }))
+      .mockResolvedValueOnce(create(VerifyRegistryResponseSchema, { ok: true }));
+    mount("/platform/registries", true);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "验证连接" }));
+    const submit = screen.getByRole("button", { name: "开始验证" });
+    await user.click(submit);
+    expect(await screen.findByRole("alert")).toHaveProperty("textContent", "认证失败");
+    expect(verify).toHaveBeenCalledWith({ registryId: "reg-a", expectedRevision: 4n, readReference: "" });
+    await user.click(submit);
+    expect(await screen.findByText("仓库连接和认证已通过。")).toBeTruthy();
+  });
+  it("仅向空间审计传入当前路由对应的空间 ID", async () => {
+    const request = vi.spyOn(platform.transport, "unary").mockImplementation(async (method) => {
+      const values = method.name === "GetWorkspace"
+        ? { workspace: { id: "space-id", slug: "space-name", name: "测试空间", capabilities: ["workspace:write"] } }
+        : method.name === "ListAuditEvents"
+          ? { events: [{ id: "evt-a", action: "application.archive", objectId: "app-a" }] }
+          : {};
+      return { stream: false, service: method.parent, method, header: new Headers(), trailer: new Headers(), message: create(method.output, values) };
+    });
+    mount("/w/space-name/manage/audit");
+    expect(await screen.findByText("application.archive")).toBeTruthy();
+    const call = request.mock.calls.find(([method]) => method.name === "ListAuditEvents");
+    expect(call?.[4]).toMatchObject({ workspaceId: "space-id", limit: 24 });
   });
   it("仓库不替换凭据时完全省略optional凭据字段", async () => {
     vi.spyOn(platform.transport, "unary").mockImplementation(async (method) => ({ stream: false, service: method.parent, method, header: new Headers(), trailer: new Headers(), message: create(method.output, { registries: [{ id: "registry-one", name: "output", url: "https://registry.example.com", status: "ACTIVE", revision: 2n, credentialConfigured: true, credentialVersion: 1n }] }) }));

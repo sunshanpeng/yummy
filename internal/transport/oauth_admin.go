@@ -75,3 +75,14 @@ func (h *OAuthAdminHandler) SetOAuthClientActive(ctx context.Context, r *connect
 	}
 	return connect.NewResponse(&platformv1.SetOAuthClientActiveResponse{Client: oauthClientMessage(v)}), nil
 }
+
+func (h *OAuthAdminHandler) BindExternalIdentity(ctx context.Context, r *connect.Request[platformv1.BindExternalIdentityRequest]) (*connect.Response[platformv1.BindExternalIdentityResponse], error) {
+	principal, err := authorization.FromContext(ctx)
+	if err != nil {
+		return nil, oauthAdminError(h.Log, err)
+	}
+	if err := h.Service.BindExternalIdentity(ctx, principal, ExternalOIDCProvider, r.Msg.GetSubject(), r.Msg.GetUserId()); err != nil {
+		return nil, oauthAdminError(h.Log, err)
+	}
+	return connect.NewResponse(&platformv1.BindExternalIdentityResponse{}), nil
+}

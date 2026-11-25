@@ -3,6 +3,7 @@ package platform.v1;
 option go_package = "github.com/sunshanpeng/yummy/gen/go/platform/v1;platformv1";
 
 import "platform/v1/runtime_config.proto";
+import "platform/v1/inventory.proto";
 
 // 只挂载在要求已验证客户端证书的独立HTTP/2入口；不经过浏览器会话认证。
 service WorkerGateway {
@@ -33,7 +34,11 @@ message ControlEnvelope {
 }
 message WorkerHello { string worker_id = 1; string node_id = 2; string version = 3; }
 message WorkerWelcome { string worker_id = 1; string node_id = 2; string server_id = 3; int64 connection_epoch = 4; string qualification_nonce = 5; }
-message WorkerHeartbeat { string cluster_node_uid = 1; string os = 2; string arch = 3; }
+message WorkerHeartbeat {
+  string cluster_node_uid = 1; string os = 2; string arch = 3;
+  ClusterMachinesReport cluster_machines = 4;
+}
+message ClusterMachinesReport { repeated ClusterMachine machines = 1; bool truncated = 2; string error_code = 3; }
 // 所有资格由控制面注入的验证器核对管理员登记的qualification_id；自报布尔值不是资格。
 message WorkerQualification {
   string qualification_id = 1; string nonce = 2; string cluster_node_uid = 3;

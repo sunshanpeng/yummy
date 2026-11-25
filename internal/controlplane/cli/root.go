@@ -95,7 +95,7 @@ func NewRoot(assets fs.FS, settings map[string]any) *cobra.Command {
 			defer cancel()
 			_ = obs.Shutdown(shutdownCtx)
 		}()
-		product, err := server.Open(cmd.Context(), server.Config{DatabaseURL: config.GetString("database-url"), RedisAddress: config.GetString("redis-addr"), PublicBaseURL: config.GetString("public-base-url"), SessionKey: config.GetString("session-key"), CSRFKey: config.GetString("csrf-key"), MasterKey: config.GetString("master-key"), OAuthKey: config.GetString("oauth-key"), SourceRoot: config.GetString("source-root"), WorkerCACertificatePath: config.GetString("worker-ca-cert"), WorkerCAPrivateKeyPath: config.GetString("worker-ca-key"), AllowLocalHTTP: config.GetBool("allow-local-http"), BehindTLSProxy: config.GetBool("behind-tls-proxy"), Obs: obs}, assets)
+		product, err := server.Open(cmd.Context(), server.Config{DatabaseURL: config.GetString("database-url"), RedisAddress: config.GetString("redis-addr"), PublicBaseURL: config.GetString("public-base-url"), SessionKey: config.GetString("session-key"), CSRFKey: config.GetString("csrf-key"), MasterKey: config.GetString("master-key"), OAuthKey: config.GetString("oauth-key"), OIDCIssuer: config.GetString("oidc-issuer"), OIDCClientID: config.GetString("oidc-client-id"), OIDCClientSecret: config.GetString("oidc-client-secret"), SourceRoot: config.GetString("source-root"), WorkerCACertificatePath: config.GetString("worker-ca-cert"), WorkerCAPrivateKeyPath: config.GetString("worker-ca-key"), AllowLocalHTTP: config.GetBool("allow-local-http"), BehindTLSProxy: config.GetBool("behind-tls-proxy"), Obs: obs}, assets)
 		if err != nil {
 			return err
 		}
@@ -149,6 +149,8 @@ func NewRoot(assets fs.FS, settings map[string]any) *cobra.Command {
 		{"session-key", "Base64 编码32字节会话密钥（推荐使用环境变量）"}, {"csrf-key", "独立的Base64编码32字节CSRF密钥（推荐使用环境变量）"},
 		{"master-key", "独立的Base64编码32字节秘密加密主密钥（推荐使用环境变量）"},
 		{"oauth-key", "独立的Base64编码32字节OAuth密钥，留空时关闭OAuth及远程MCP"},
+		{"oidc-issuer", "团队登录的 OIDC Issuer URL"}, {"oidc-client-id", "外部 OIDC 客户端 ID"},
+		{"oidc-client-secret", "外部 OIDC 客户端密钥（推荐配置文件或环境变量）"},
 		{"source-root", "显式持久化源码目录，必须预先创建"},
 		{"worker-ca-cert", "独立worker签发CA证书路径（留空禁用登记）"},
 		{"worker-ca-key", "独立worker签发CA私钥路径，仅本进程可读"},

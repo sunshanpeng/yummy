@@ -94,6 +94,21 @@ func TestProductHTTPSourceConfigurationBuildAndDeploymentBoundaries(t *testing.T
 	if err != nil || duplicate.Msg.Application.Id != app {
 		t.Fatalf("应用幂等: %v", err)
 	}
+	audit := platformv1connect.NewAuditServiceClient(client, base+"/api", csrf)
+	events, err := audit.ListAuditEvents(context.Background(), connect.NewRequest(&platformv1.ListAuditEventsRequest{WorkspaceId: ws}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundApplication := false
+	for _, event := range events.Msg.Events {
+		if event.WorkspaceId != ws {
+			t.Fatalf("空间审计返回其他范围的记录：%q", event.WorkspaceId)
+		}
+		foundApplication = foundApplication || event.ObjectId == app && event.Action == "application.create" && event.TraceId != ""
+	}
+	if !foundApplication {
+		t.Fatal("空间审计缺少应用创建记录及追踪 ID")
+	}
 	builds := platformv1connect.NewBuildServiceClient(client, base+"/api", csrf)
 	deployments := platformv1connect.NewDeploymentServiceClient(client, base+"/api", csrf)
 	configs := platformv1connect.NewRuntimeConfigServiceClient(client, base+"/api", csrf)
@@ -297,6 +312,21 @@ func TestProductHTTPSourceConfigurationBuildAndDeploymentBoundaries(t *testing.T
 	var releases int64
 	if err = db.Table("application_releases").Where("application_id=?", app).Count(&releases).Error; err != nil || releases != 0 {
 		t.Fatalf("保存配置/构建取消误发布: %d %v", releases, err)
+	}
+	// 已有执行历史的归档应用占用名称。临时归档后恢复 fixture，供下方部署检查使用。
+	ctx := context.Background()
+	if _, err = applications.ArchiveApplication(ctx, connect.NewRequest(&platformv1.ArchiveApplicationRequest{WorkspaceId: ws, ApplicationId: app, ExpectedRevision: 1})); err != nil {
+		t.Fatal(err)
+	}
+	archived, err := applications.ListApplications(ctx, connect.NewRequest(&platformv1.ListApplicationsRequest{WorkspaceId: ws, ArchivedOnly: true}))
+	if err != nil || len(archived.Msg.Applications) != 1 || archived.Msg.Applications[0].GetDeletionReady() {
+		t.Fatalf("有执行历史的应用不可删除：%v %v", archived, err)
+	}
+	if _, err := applications.DeleteApplication(ctx, connect.NewRequest(&platformv1.DeleteApplicationRequest{WorkspaceId: ws, ApplicationId: app, ExpectedRevision: 2})); connect.CodeOf(err) != connect.CodeAborted {
+		t.Fatalf("有执行历史的应用被删除：%v", err)
+	}
+	if err := db.Model(&model.Application{}).Where("id = ?", app).Update("status", model.ResourceActive).Error; err != nil {
+		t.Fatal(err)
 	}
 	// 显式插入测试发布事实，仅验证材料读取权限；不代表真实仓库或 Kubernetes 已验收。
 	fakeCertificate := &x509.Certificate{SerialNumber: big.NewInt(0xa1), Raw: []byte("test-certificate")}

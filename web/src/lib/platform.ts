@@ -59,6 +59,24 @@ export function createPlatformConnection(fetcher: typeof fetch = (...args) => fe
     builds: createClient(BuildService, transport),
     buildSecrets: createClient(BuildSecretService, transport),
     deployments: createClient(DeploymentService, transport),
+    async externalLoginEnabled(signal?: AbortSignal) {
+      const response = await fetcher("/auth/oidc/status", { credentials: "same-origin", cache: "no-store", signal });
+      if (!response.ok) return false;
+      const data = await response.json() as { enabled?: boolean };
+      return data.enabled === true;
+    },
+    async startExternalLogin(input: { returnRequest?: string; redirect?: string }) {
+      const response = await fetcher("/auth/oidc/start", {
+        method: "POST", credentials: "same-origin",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": await csrf() }, body: JSON.stringify(input),
+      });
+      if (response.status === 429) throw new Error("登录尝试过于频繁，请稍后重试。");
+      if (!response.ok) throw new Error("外部登录暂不可用，请重试或使用本地账户。");
+      const data = await response.json() as { url: string };
+      const target = new URL(data.url);
+      if (!["http:", "https:"].includes(target.protocol)) throw new Error("外部登录地址无效。");
+      window.location.assign(target.href);
+    },
     async listConnections(signal?: AbortSignal): Promise<{ connections: OAuthConnection[] }> {
       const response = await fetcher("/oauth/connections", { credentials: "same-origin", cache: "no-store", signal });
       if (!response.ok) throw new Error(response.status === 404 ? "实例未启用 OAuth 接入。" : "无法读取个人 Agent 连接。");
