@@ -96,10 +96,13 @@ worker 主动建立长连接，部署在客户网络时通常只需允许它访�
 ```bash
 ./bin/yummy auth login --server https://control.example.com
 ./bin/yummy workspace list
+./bin/yummy use <空间名>/<应用名>
+./bin/yummy deploy --dry-run
+./bin/yummy deploy
 ```
 
 `auth login` 使用浏览器 OAuth。使用个人访问令牌时，通过 `yummy auth token --server https://control.example.com --token-stdin` 从标准输入保存 PAT。
-Agent 也可通过控制面的远程 Streamable HTTP MCP 接入。认证和代理配置见[运维手册](docs/operations.md)。
+`yummy use` 绑定当前目录。确认应用运行配置后，`yummy deploy` 上传源码、构建并等待发布结果。Agent 也可通过控制面的远程 Streamable HTTP MCP 接入。认证和代理配置见[运维手册](docs/operations.md#身份接入)。
 
 ## 常用配置
 
@@ -150,4 +153,5 @@ docker compose exec redis redis-cli --scan --pattern 'session:*'
 - 架构总览（部署架构图 + 代码模块分层图）：[docs/architecture.md](docs/architecture.md)
 - 部署与运维：[docs/operations.md](docs/operations.md)
 - 设计文档：[docs/superpowers/specs/](docs/superpowers/specs/)
+- 首期剩余交互：[体验复评](docs/superpowers/specs/2026-10-23-paas-competitive-ux-review.md#4-首期尚需补齐的交互)
 - 项目约定：[AGENTS.md](AGENTS.md)

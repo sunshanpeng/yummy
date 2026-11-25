@@ -2,26 +2,13 @@
 
 2026-10-24 交付模型修订：基础设施由全局管理员统一管理，工作空间不能自定义；以 [交付方式与实例边界](2026-10-24-delivery-model-and-instance-boundaries-design.md) 为准。
 
-状态：待评审草案。初稿：2026-10-22；更新：2026-10-23（两层资源模型、管理入口及内嵌 OAuth）。配套：[产品方案](2026-10-22-agent-first-build-product-design.md)、[前端方案](2026-10-22-agent-first-build-frontend-design.md)。2026-10-24 的资源与字段边界以 [创建与配置边界复核](2026-10-24-application-configuration-boundaries-design.md) 为准。2026-10-26 修订集群/环境/部署、命名与最小 CLI，细则见 [命名、集群与最小 CLI](2026-10-26-naming-cluster-and-minimal-cli-design.md)。本次只进行设计与界面原型，不表示后端功能或集群环境已经验证。
+状态：待评审草案。初稿：2026-10-22；更新：2026-10-23（两层资源模型、管理入口及内嵌 OAuth）。配套：[产品方案](2026-10-22-agent-first-build-product-design.md)、[前端方案](2026-10-22-agent-first-build-frontend-design.md)。2026-10-24 的资源与字段边界以 [创建与配置边界](../../../AGENTS.md#创建与配置边界) 为准。2026-10-26 修订集群/环境/部署、命名与最小 CLI，细则见 [命名、集群与最小 CLI](2026-10-26-naming-cluster-and-minimal-cli-design.md)。本次只进行设计与界面原型，不表示后端功能或集群环境已经验证。
 
 本稿保留构建基础细节；首发运行、变量、域名、日志、监控和回滚的完整补充见 [首期运行方案](2026-10-23-paas-v1-runtime-design.md)，属于第一期范围而非后续选配。
 
-## 1. 现有 demo 与复用边界
+## 1. 当前架构
 
-以当前 `main` 分支为起点。检查时 HEAD 为 `0c8a183`，工作区原先无修改。本次未为设计任务运行 Go/前端产品测试或修改远程服务器。
-
-| 已验证的代码事实 | 复用方式 | 尚缺能力 |
-|---|---|---|
-| [bootstrap/control.go](../../../internal/bootstrap/control.go:20) 装配单控制面与远程连接表 | 保留业务与装配分层 | 身份、资源、构建应用服务和后台恢复循环 |
-| [bootstrap/all.go](../../../internal/bootstrap/all.go:25) 组合本地 runtime | 保留单进程开发形态 | 本地调用同样需要业务授权；构建仍在隔离执行环境运行 |
-| [agent_handler.go](../../../internal/transport/connectrpc/agent_handler.go:53) 校验证书身份、Hello 和事件来源 | 复用 mTLS 与主动回连 | 集群登记、证书生命周期和撤销检查 |
-| [worker_client.go](../../../internal/transport/connectrpc/worker_client.go:80) 建立流并回传事件 | 保留传输适配器 | 当前接收循环同步执行任务，需拆出执行管理器以接收取消/恢复消息 |
-| [control/service.go](../../../internal/control/service.go:130) 进度事件直接返回 | 保留事件推进的业务边界 | 构建日志与阶段必须持久化，不能复用当前忽略进度的实现 |
-| [commands.go](../../../internal/repository/postgres/commands.go:69) 按预期状态更新 | 延续条件更新语义 | 构建、执行记录、事件幂等和恢复状态 |
-| [bootstrap/http.go](../../../internal/bootstrap/http.go:18) 公共 API 无身份中间件，普通 HTTP 服务超时 30 秒 | 接入 Gin 和统一身份上下文，保留 Connect handler | 独立文件传输超时配置，避免上传被 30 秒截断 |
-| [README](../../../README.md:9) 仅支持 uppercase，PostgreSQL 持久化、Redis 在线状态 | 保留存储职责划分 | 不能把现有在线表和流视为可靠任务队列 |
-
-当前 Go worker 显式使用 `connect.WithGRPC()`，即通过 ConnectRPC 生成的服务使用 gRPC/HTTP2；扩展时以实现和契约测试为准，不依赖旧设计文档中关于默认协议的描述。
+控制面与 worker 分离运行，worker 使用 mTLS 和 gRPC/HTTP2 主动连接。PostgreSQL 保存业务资源、任务与审计，Redis 用于会话和在线状态。进程与代码分层见 [架构总览](../../architecture.md)。
 
 ## 2. 技术选型
 
@@ -38,14 +25,14 @@
 | 日志 | Zap + gin-contrib/zap | 统一 JSON 与字段；demo 的 slog 通过适配或逐步替换进入同一日志出口 |
 | 浏览器会话 | gin-contrib/sessions 的 Redis store | 复用会话框架；库适配层必须验证 Cookie 仅保存不透明会话标识，业务身份保存在服务端 |
 | CSRF | gorilla/csrf + 同源检查 | Cookie 会话的写请求与 Connect POST 均需防护；纯 Bearer 路径不读取浏览器 Cookie |
-| OAuth（第一版之后） | Ory Fosite，嵌入控制面 | 第一版 CLI 与本地 stdio MCP 用 PAT；之后的授权码 + PKCE、刷新、撤销使用现有 PostgreSQL 存储适配，详见 [认证方案](2026-10-23-oauth-mcp-auth-design.md) |
+| OAuth | Ory Fosite，嵌入控制面 | 授权码 + PKCE、刷新、撤销使用现有 PostgreSQL 存储适配，详见 [身份接入](../../operations.md#身份接入) |
 | 授权 | Casbin，固定角色与领域隔离 | 角色计算交给成熟策略引擎，成员归属和资源查询由业务数据库约束 |
-| 构建 | BuildKit，固定版本/镜像 digest | 不自研 Dockerfile 引擎，不通过宿主 Docker socket 构建 |
+| 构建 | BuildKit 执行，Railpack 生成纯源码构建计划 | 固定构建工具版本及镜像 digest，按[构建方式自动选择](#94-构建方式自动选择)处理 Dockerfile 和纯源码 |
 | 执行编排 | Kubernetes client-go | 构建使用 Job，应用运行使用 Deployment/Service/Ingress/配置/卷；共用现有 worker |
 | 业务入口 | k3s Traefik + ACME 或预置证书 | 单入口实例和持久证书存储；见运行方案 |
 | 运行采集 | worker 内嵌采集与日志循环 | Kubelet `/metrics/resource` + Pod 状态/日志 + 有界 PostgreSQL 历史，不新增采集进程 |
 | 源码与 worker 暂存 | 控制面持久文件卷 + worker 持久卷 | 首版单控制面，无强制 MinIO/S3 服务；以后再增加对象存储适配 |
-| Agent | Cobra CLI + 官方 Go MCP SDK | 第一版只有最小 CLI 与本地 stdio MCP，复用打包与凭证；之后的 HTTP MCP handler 嵌入控制面，不新增 MCP 服务进程 |
+| Agent | Cobra CLI + 官方 Go MCP SDK | CLI 打包和上传本地源码，HTTP MCP handler 嵌入控制面 |
 | 可观测 | OpenTelemetry + Prometheus 兼容指标 | 平台自身观测，加 worker 内嵌 Kubelet 资源采集、运行日志和访问探测；首期不建设完整 APM |
 
 采用 Gin 不要求将已有 Connect handler 改写成 Gin JSON handler。采用 GORM Gen 也不要求用 ORM 隐藏所有 SQL：领取任务、条件更新和组合唯一约束需明确表达并做 PostgreSQL 集成测试。
@@ -64,7 +51,7 @@ Gin 的会话/请求中间件把身份写入标准 request context，Connect int
 | [Sa-Token-Go](https://github.com/sa-tokens/sa-token-go) | 集成登录、会话、踢下线、角色/权限检查 | 可选；官方当前提供这些能力，但不是 Go 官方标准组件。本文不把其宣称的功能等同于本项目的隔离验证 |
 | [OpenFGA](https://openfga.dev/docs/getting-started) | 对象共享、嵌套关系、跨组织关系授权 | 暂缓；关系服务与数据同步增加首版运维和一致性成本 |
 
-推荐组合为 Gin 会话组件负责网页登录状态、Fosite 负责第一版之后的 OAuth 协议、Casbin 负责业务授权。第一版不同时引入 Sa-Token-Go 和另一套会话组件，也不部署 Casdoor/Keycloak/Hydra 等独立身份服务。可选的外部 OIDC 登录由控制面作为客户端对接；平台自身授权端点仍在控制面内。详见 [OAuth 与 MCP 方案](2026-10-23-oauth-mcp-auth-design.md)。
+推荐组合为 Gin 会话组件负责网页登录状态、Fosite 负责 OAuth 协议、Casbin 负责业务授权。第一版不同时引入 Sa-Token-Go 和另一套会话组件，也不部署 Casdoor/Keycloak/Hydra 等独立身份服务。可选的外部 OIDC 登录由控制面作为客户端对接；平台自身授权端点仍在控制面内。详见 [身份接入](../../operations.md#身份接入)。
 
 ### 3.2 Casbin 的具体用法
 
@@ -162,7 +149,7 @@ flowchart LR
   Services -->|读取 manifest 验证| Registry
 ```
 
-- 产品仅控制面与 worker 两类常驻应用进程；调度、恢复、清理以及第一版之后的 OAuth、HTTP MCP 均作为控制面内模块（图中 OAuth 与 HTTP MCP 部分属于第一版之后）。除非存在必要限制，不增加独立服务；新增进程须说明理由与代价，遵循 [AGENTS.md](../../../AGENTS.md)。
+- 产品仅控制面与 worker 两类常驻应用进程；调度、恢复、清理以及 OAuth、HTTP MCP 均作为控制面内模块。除非存在必要限制，不增加独立服务；新增进程须说明理由与代价，遵循 [AGENTS.md](../../../AGENTS.md)。
 - 首版正式拓扑为一个控制面和一个由全局管理员接入的 k3s 集群（集群内可以有多台机器），构建和应用都在这个集群中运行；不建设跨集群调度平台。
 - worker 以 Deployment 运行在集群的 `yummy-system` 命名空间，只管理带平台标签的构建 Job 与应用运行资源。集群登记记录 `kube-system` 命名空间的 UID 作为集群标识，防止换了集群仍被当作原集群；机器的加入和移除由 k3s 负责，平台只读展示。
 - 每个工作空间一个构建命名空间 `build-<空间名>` 和一个运行命名空间 `<环境>-<空间名>`（第一版为 `prod-<空间名>`），运行命名空间下发空间隔离网络策略；worker 身份按集群，不按工作空间。命名与策略见 [命名、集群与最小 CLI](2026-10-26-naming-cluster-and-minimal-cli-design.md)。未来全托管共享执行需另做隔离验证。
@@ -180,7 +167,7 @@ flowchart LR
 
 ## 5. 登录、会话与凭证
 
-第一版 CLI 与本地 stdio MCP 使用 PAT，浏览器会话只用于网页。OAuth 授权码 + PKCE S256、令牌刷新/撤销、客户端与授权连接管理放到第一版之后，届时集成在控制面内，推荐 Fosite 协议核心，HTTP MCP 使用应用资源绑定的 OAuth token。OAuth token 与 Cookie/PAT 分开校验，不接受不同 audience 的令牌混用。端点、存储、CIMD 和验收详见 [OAuth 与 MCP 方案](2026-10-23-oauth-mcp-auth-design.md)。
+CLI 使用 PAT 或浏览器 OAuth 授权，浏览器会话用于网页。HTTP MCP 使用绑定应用资源的 OAuth 令牌。端点、存储和 CIMD 见 [身份接入](../../operations.md#身份接入)。
 
 - 首位管理员通过本地 Cobra 管理命令创建，密码通过 TTY/标准输入接收；事务锁保证只初始化一次。没有匿名初始化后门。
 - 密码使用现成 Argon2id 实现；按 OWASP 建议选择参数并在目标硬件测量，不存明文，不自写散列算法。登录失败统一提示并限流。
@@ -222,7 +209,7 @@ flowchart LR
 
 `builds` 对 `(workspace_id, actor_id, idempotency_key)` 建唯一约束，保存请求指纹。相同键和相同请求返回原构建；相同键但内容不同返回冲突。重新构建产生新 ID、独立标签和新幂等键，不修改原构建。
 
-源码快照和配置快照建立后不可修改。记录 Dockerfile 内容摘要、目标平台、构建器镜像 digest、非敏感参数、密钥版本引用和镜像目的地。快照保证输入可追踪；可变基础镜像及网络依赖仍可能使重建产物不同，不承诺位级可重复构建。
+源码快照和配置快照建立后不可修改。记录构建方式、目标平台、构建器镜像 digest、非敏感参数、密钥版本引用和镜像目的地。Dockerfile 构建记录文件路径及摘要，纯源码构建记录 Railpack 版本与已生成的计划摘要。可变基础镜像及网络依赖仍可能使重建产物不同，快照用于追踪构建输入。
 
 ## 7. 本地打包与源码传输
 
@@ -230,7 +217,7 @@ flowchart LR
 
 使用 Docker 官方上下文语义及成熟的 ignore 匹配库：支持根 `.dockerignore` 和所选 Dockerfile 对应的专用 ignore 文件优先级。匹配库需通过兼容样例，不另外设计一套相似但不同的通配规则。
 
-第一版允许普通文件与目录，保留必要的可执行位，规范化所有者与时间。拒绝符号链接、硬链接、设备、FIFO、绝对路径、`..`、重复归档路径和越界文件名。所有路径以选定上下文为根，Dockerfile 必须被包含。
+第一版允许普通文件与目录，保留必要的可执行位，规范化所有者与时间。拒绝符号链接、硬链接、设备、FIFO、绝对路径、`..`、重复归档路径和越界文件名。所有路径以选定上下文为根。有效的 Dockerfile 随归档上传，纯源码归档沿用相同的路径、内容和大小校验。
 
 平台强制排除 `.git`、`.ssh`、`.env`、`.env.*`、常见私钥文件名；`.env.example` 可作为显式例外，但仍做私钥标识检查。文件清单预览列出被排除的原因。构建依赖秘密时使用构建密钥，不通过取消排除上传 `.env`。这些规则不能保证识别所有敏感内容。
 
@@ -240,7 +227,7 @@ CLI/MCP 仅可访问用户配置的本地根目录，解析真实路径并校验
 
 1. `CreateSourceUpload(application_id, size, sha256)` 完成权限与配额检查，返回上传会话 ID。
 2. 用户通过专门传输入口上传 tar.gz；流式落到随机临时文件，实际字节数和哈希由服务端计算。
-3. `CompleteSourceUpload` 进入验证：限制解压字节、条目数和类型；验证 Dockerfile、上下文与敏感文件规则。验证不运行任何脚本。
+3. `CompleteSourceUpload` 验证解压字节、条目数、文件类型、上下文和敏感文件规则。显式指定 Dockerfile 时验证归档中的对应文件。此步骤仅检查归档内容。
 4. 同一卷内原子改名并提交 READY 快照；只有 READY 可创建构建。文件先成功落盘再提交就绪状态，恢复循环清理孤儿文件。
 5. worker 获授权后创建限时、仅允许读取本快照的下载凭证，给准备容器使用；准备容器再次安全解包和验证哈希。
 
@@ -329,6 +316,20 @@ worker 报告集群内各机器的实际 OS/架构（`kubernetes.io/arch`），�
 
 Dockerfile 中硬编码其他架构、基础镜像没有目标架构、或 COPY 了本机预编译 Mach-O/ARM 二进制，仍可能导致构建或运行失败。源码上传不会自动修复这些内容；Agent 根据证据调整 Dockerfile。控制面/CLI 可以运行于 ARM Mac，不意味着构建机器也被认证为 ARM。
 
+### 9.4 构建方式自动选择
+
+Dockerfile 与 Railpack 路径均已有代码与自动测试。Railpack 在 Linux/AMD64 上的真实推送、拉取与部署仍待验收。
+
+| 已验证的构建输入 | 执行方式 |
+| --- | --- |
+| 显式指定了 Dockerfile 路径 | 校验选定上下文内的文件后交给 BuildKit。路径缺失或不合法时返回输入错误。 |
+| 未指定路径，选定上下文根目录有 `Dockerfile` | 使用这个文件交给 BuildKit。路径存在但文件不合法时返回输入错误。 |
+| 未指定路径，选定上下文根目录缺少 `Dockerfile` | 由 Railpack 识别源码并生成构建计划，再交给同一套 BuildKit 执行。 |
+
+构建预览展示选择结果，受理时以验证过的源码快照为准冻结构建方式。Dockerfile 路径的构建失败直接报告其构建错误。Railpack 无法生成计划时，报告识别阶段的失败原因并保留日志。
+
+Railpack 由现有 worker 在构建任务的隔离环境中按需调用。计划生成工具与 BuildKit 前端镜像使用配套版本，前端镜像固定 digest。两条路径共享现有镜像推送、摘要与架构验证、部署和回滚流程。 [Railpack 的平台接入方式](https://railpack.com/platforms/running-railpack-in-production)
+
 ## 10. 仓库、构建密钥与产物
 
 平台输出仓库凭证属于实例级基础设施。私有依赖构建密钥默认归属应用，不再先建立空间共享池；Build 的 secret_refs 必须校验 application_id 并固定版本，由服务端映射为 Dockerfile secret mount 使用的名称。应用配置 API 和审计不返回已有明文。应用成员授权仍由空间管理员校验，使用同一份 application_members 数据；入口在应用并不将该动作并入普通 config:write 或默认 MCP 写权限。
@@ -365,8 +366,8 @@ worker 增量读取 Pod 日志，合并为有序日志块写入自身持久卷�
 
 | 服务 | 关键操作 |
 |---|---|
-| 身份 | Login、Logout、GetCurrentUser、AcceptInvitation、ChangePassword、Create/RevokeAccessToken；第一版之后加 List/RevokeOAuthGrant |
-| OAuth / HTTP MCP（第一版之后） | 标准 HTTP 端点，挂载在同一控制面；不使用 Connect RPC 包装授权/换取令牌协议 |
+| 身份 | Login、Logout、GetCurrentUser、AcceptInvitation、ChangePassword、Create/RevokeAccessToken；OAuth 连接使用独立查询和撤销入口 |
+| OAuth / HTTP MCP | 标准 HTTP 端点，挂载在同一控制面；不使用 Connect RPC 包装授权/换取令牌协议 |
 | 资源 | 工作空间（name、display_name）/应用、成员角色、集群、环境、仓库、密钥的受限管理与读取 |
 | 源码 | CreateSourceUpload、CompleteSourceUpload、GetSourceSnapshot；文件体走传输入口 |
 | 构建 | CreateBuild、GetBuild、ListBuilds、ReadBuildLogs、CancelBuild、RetryBuild |
@@ -403,12 +404,11 @@ yummy deploy . --dry-run                         # 只预览上传文件与目�
 yummy deploy . --output json                     # 打包、上传、构建、部署并等待结果
 yummy logs --build bld_example --follow
 yummy status --output json
-yummy mcp --allow-root /path/to/source           # 本地 stdio MCP
 ```
 
 命令范围与第一版不做的内容见 [命名、集群与最小 CLI](2026-10-26-naming-cluster-and-minimal-cli-design.md#7-最小-cli)。
 
-stdio MCP 使用相同打包器、凭证与 SDK，stdout 只输出协议消息、诊断写 stderr，工具结果限制长度。取消调用和取消后台构建分开：客户端等待被取消时，后台任务默认继续，必须显式 CancelBuild 才停止。
+取消客户端等待后，后台任务继续运行；显式 CancelBuild 才申请停止构建。
 
 ## 13. worker 登记与证书
 
@@ -429,10 +429,10 @@ stdio MCP 使用相同打包器、凭证与 SDK，stdout 只输出协议消息�
 3. 真实 PostgreSQL 的幂等键、领取锁、状态条件更新与事件去重，不能只用内存仓库代替。
 4. 集群注册/吊销/轮换、断线重连、同一 attempt 重投、控制面/worker 重启和日志补传。
 5. 取消与成功竞态、仓库已推送但确认丢失、Job 消失、超时和网络分区，禁止误报停止。
-6. 三个真实 Dockerfile 的上传、AMD64 原生构建、推送、manifest 校验和受控启动冒烟。
+6. 在 AMD64 上用真实 Dockerfile 和纯源码样例验证上传、分支选择、镜像推送、manifest 校验和受控启动。另验证 Dockerfile 构建失败后保留原错误，以及 Railpack 无法识别时的失败提示。
 7. Playwright 验证登录、PAT 创建与撤销、命名校验、成员授权、创建构建、失败详情、复制镜像、权限不足及移动端主要流程。
 8. 命名规范边界用例在页面、API、CLI 中结果一致；默认地址后缀不变且唯一；应用根域名与控制台同属一个可注册域名时拒绝保存；空间隔离网络策略按 [命名、集群与最小 CLI](2026-10-26-naming-cluster-and-minimal-cli-design.md) 第 6 节验证。
-9. 第一版之后：OAuth 协议负向用例、资源/scope 绑定、刷新竞争/重用、即时撤权、CIMD 网络限制及明确版本 MCP 客户端兼容性，见认证方案。
+9. OAuth 协议负向用例、资源/scope 绑定、刷新竞争/重用、即时撤权、CIMD 网络限制及明确版本 MCP 客户端兼容性，见认证方案。
 
 以上是后续实现验收要求，本次设计任务没有执行这些后端或集群测试。
 

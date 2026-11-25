@@ -88,7 +88,7 @@
 
 ## 创建与配置边界复核（2026-10-24）
 
-设计依据：[字段归属与必填时机](../../superpowers/specs/2026-10-24-application-configuration-boundaries-design.md)。本轮未生成截图。ui-ux-pro-max 对 progressive disclosure 的两次检索未返回匹配的表单规则，因此未采用相关自动结果；字段分层依据用户目标与资源模型评审。
+设计依据：[字段归属与必填时机](../../../AGENTS.md#创建与配置边界)。本轮未生成截图。ui-ux-pro-max 对 progressive disclosure 的两次检索未返回匹配的表单规则，因此未采用相关自动结果；字段分层依据用户目标与资源模型评审。
 
 | 检查 | 实际结果 |
 |---|---|

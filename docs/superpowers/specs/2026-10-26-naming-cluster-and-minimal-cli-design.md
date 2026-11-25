@@ -1,6 +1,6 @@
 # 命名规范、集群/环境/部署与最小 CLI
 
-日期：2026-10-26。状态：负责人已确认的设计决定，尚未实现。本文是这些规则的唯一细则；[产品方案](2026-10-22-agent-first-build-product-design.md)、[技术方案](2026-10-22-agent-first-build-technical-design.md)、[首期运行方案](2026-10-23-paas-v1-runtime-design.md)、[前端方案](2026-10-22-agent-first-build-frontend-design.md)、[创建与配置边界](2026-10-24-application-configuration-boundaries-design.md)、[交付方式](2026-10-24-delivery-model-and-instance-boundaries-design.md)和 [OAuth 方案](2026-10-23-oauth-mcp-auth-design.md)的正文已同步修改。
+日期：2026-10-26。状态：命名、运行位置、集群机器清单和目录部署已接入。归档后的应用资源清理仍需实现。本文是这些规则的唯一细则；[产品方案](2026-10-22-agent-first-build-product-design.md)、[技术方案](2026-10-22-agent-first-build-technical-design.md)、[首期运行方案](2026-10-23-paas-v1-runtime-design.md)、[前端方案](2026-10-22-agent-first-build-frontend-design.md)、[创建与配置边界](../../../AGENTS.md#创建与配置边界)、[交付方式](2026-10-24-delivery-model-and-instance-boundaries-design.md)和 [身份接入](../../operations.md#身份接入)的正文已同步修改。
 
 ## 1. 决定摘要
 
@@ -11,7 +11,7 @@
 | 应用根域名 | 与控制台分属不同的可注册域名 |
 | 运行位置 | 平台管理 k3s 集群，不管理机器。第一版每个实例一个集群、一个默认环境 `prod`，每个应用一个默认部署 `default`，界面不显示环境和部署 |
 | 网络隔离 | 只隔离工作空间：运行命名空间只接受同命名空间与 Traefik 的入站流量，其他规则以后按需添加 |
-| CLI | 第一版只做最小命令，用 PAT 登录；浏览器 OAuth 与远程 HTTP MCP 放到第一版之后 |
+| CLI | CLI 用 PAT 或浏览器 OAuth 授权；应用专属 MCP 由控制面对外提供 |
 
 ## 2. 命名规范
 
@@ -32,7 +32,7 @@
 
 工作空间创建时填写空间名（必填）和显示名称（可选），由全局管理员创建；之后空间设置只能改显示名称与说明。
 
-归档的空间和应用继续占用名称。删除应用时，名称要等它的 K8s 资源和保留的卷清理完才能复用；worker 按 workspace_id、application_id 标签核对归属，不接管旧对象（见第 5 节）。
+归档的空间和应用继续占用名称。可从「应用 → 已归档应用」删除从未提交构建或部署的应用，删除后释放名称，历史数据仍按原应用 ID 保留。已有执行历史的应用需要先清理其 Kubernetes 资源和保留的卷，再释放名称。资源清理及卷删除仍需实现，遵守第 5 节的资源归属规则。
 
 ## 3. 默认访问地址
 
@@ -130,21 +130,22 @@ spec:
 
 ## 7. 最小 CLI
 
-第一版 CLI 是开发者电脑上的独立二进制，暂定名 `yummy`，不与服务端程序 `platform` 重名。它按需运行，不是常驻服务。
+CLI 是按需运行的独立二进制 `yummy`。支持目录一键部署，也可以通过 `source preview/upload`、`build` 和 `deploy` 子命令单独执行各阶段。
 
 | 命令 | 作用 |
 |---|---|
-| `yummy login --server <控制台地址>` | 粘贴在网页"访问令牌"页创建的 PAT，校验后保存到系统凭证库；无人值守时用环境变量 `YUMMY_TOKEN` 提供 |
+| `yummy auth token --server <控制台地址> --token-stdin` | 从标准输入保存网页创建的 PAT；无人值守时可用环境变量 `YUMMY_TOKEN` |
 | `yummy use <空间名>/<应用名>` | 把当前目录关联到应用；关联保存在用户配置目录，不写进项目源码，也不扩大令牌权限 |
 | `yummy deploy [目录]` | 按 `.dockerignore` 和平台排除规则打包，上传、构建、部署并等待结果；`--dry-run` 只预览文件清单和目标，`--build-only` 只构建，`--no-wait` 拿到构建 ID 后退出 |
-| `yummy status` | 当前运行版本、最近构建与发布结果、访问地址 |
-| `yummy logs` | 运行日志；`--build <构建 ID>` 看构建日志，`--follow` 持续跟随 |
-| `yummy mcp --allow-root <目录>` | 本地 stdio MCP，供 Agent 调用；复用 CLI 凭证，只读取允许的目录 |
+| `yummy status`、`yummy build list`、`yummy deploy list` | 查询当前运行版本、构建与发布记录。后两项用已有 profile 默认值或显式指定空间与应用 ID |
+| `yummy logs` | 查询运行日志；`--build <构建 ID>` 查询构建日志，`--follow` 持续读取 |
+| `yummy metrics` | 查询保留窗口内的 CPU 与内存采样 |
+| `yummy auth login --server <控制台地址>` | 通过浏览器获取受应用和动作范围约束的授权 |
 
 - 所有命令支持 `--output json`，返回稳定 ID、状态、错误码和是否可重试。
 - 通过 GitHub Releases 提供 macOS（arm64、amd64）和 Linux（amd64、arm64）二进制及校验和。
-- 第一版不做：浏览器 OAuth 登录、远程 HTTP MCP、自动更新、交互式向导。回滚、指标与发布历史在网页和本地 stdio MCP 中提供，CLI 以后按需补充。
-- OAuth 授权服务器与远程 HTTP MCP 按 [OAuth 方案](2026-10-23-oauth-mcp-auth-design.md) 放到第一版之后，届时仍集成在控制面内。
+- 自动更新与交互式向导暂缓。回滚、指标和发布历史通过控制台、CLI 和远程 MCP 使用。
+- OAuth 授权服务器与远程 HTTP MCP 集成在控制面内，见 [身份接入](../../operations.md#身份接入)。
 
 ## 8. 验收
 
@@ -152,7 +153,7 @@ spec:
 - **地址**：新应用得到 `<应用名>-<6 位后缀>`，重启或修改应用根域名后已有地址不变；后缀冲突时重新生成。应用根域名与控制台同属一个可注册域名时拒绝保存。
 - **K8s**：命名空间与 Deployment 名称符合第 5 节；同空间两个应用可复用 Namespace 与隔离策略，各自的应用资源互不接管；遇到没有平台标签或对应作用域归属不符的同名对象时报错，不覆盖；同一部署发布新版本时可更新 release/generation。
 - **网络**：第 6 节的 M0 验证项。
-- **CLI**：在 Apple Silicon 上 `yummy deploy` 完成上传、AMD64 构建与部署；`--dry-run` 不上传；Agent 通过 `yummy mcp` 完成一次部署并读取日志。
+- **CLI**：在 Apple Silicon 上 `yummy deploy` 完成上传、AMD64 构建与部署；`--dry-run` 不上传；Agent 通过远程 MCP 使用已上传的快照完成一次部署并读取日志。
 
 ## 9. 原型同步
 

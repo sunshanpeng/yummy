@@ -2,13 +2,13 @@
 
 2026-10-24 交付模型修订：基础设施由全局管理员统一管理，工作空间不能自定义；以 [交付方式与实例边界](2026-10-24-delivery-model-and-instance-boundaries-design.md) 为准。
 
-状态：待评审设计，2026-10-23。本文将第一期对外交付从“产出镜像”修订为“应用部署与日常运行的完整闭环”。配套：[产品方案](2026-10-22-agent-first-build-product-design.md)、[构建基础技术方案](2026-10-22-agent-first-build-technical-design.md)、[前端方案](2026-10-22-agent-first-build-frontend-design.md)、[OAuth 方案](2026-10-23-oauth-mcp-auth-design.md)。当前仍为方案与静态原型，未实现真实部署或监控后端。
+状态：待评审设计，2026-10-23。本文将第一期对外交付从“产出镜像”修订为“应用部署与日常运行的完整闭环”。配套：[产品方案](2026-10-22-agent-first-build-product-design.md)、[构建基础技术方案](2026-10-22-agent-first-build-technical-design.md)、[前端方案](2026-10-22-agent-first-build-frontend-design.md)、[身份接入](../../operations.md#身份接入)。已验证的部署与采集路径见[运维手册](../../operations.md#7-验证状态与限制)。
 
-2026-10-24 的创建与资源边界修订以 [创建与配置边界复核](2026-10-24-application-configuration-boundaries-design.md) 为准。2026-10-26 修订集群/环境/部署与命名，见 [命名、集群与最小 CLI](2026-10-26-naming-cluster-and-minimal-cli-design.md)。
+2026-10-24 的创建与资源边界修订以 [创建与配置边界](../../../AGENTS.md#创建与配置边界) 为准。2026-10-26 修订集群/环境/部署与命名，见 [命名、集群与最小 CLI](2026-10-26-naming-cluster-and-minimal-cli-design.md)。
 
 ## 1. 首发成功标准
 
-非作者用户能在自有服务器接入 k3s 集群和仓库，在应用中配置运行参数，通过网页或 Agent 上传本地源码与 Dockerfile，在服务器构建、部署并获得可访问的 HTTPS 地址；之后可以修改变量、查看运行日志和 CPU/内存趋势、更新版本、回滚和停止/启动应用。
+非作者用户能在自有服务器接入 k3s 集群和仓库，在应用中配置运行参数，通过网页或 Agent 上传本地源码，在服务器构建、部署并获得可访问的 HTTPS 地址。源码可以自带 Dockerfile，平台按[构建方式自动选择](2026-10-22-agent-first-build-technical-design.md#94-构建方式自动选择)处理。部署后可以修改变量、查看运行日志和 CPU/内存趋势、更新版本、回滚和停止/启动应用。
 
 首期覆盖单容器 HTTP 服务、静态站点容器、后台任务进程；后台进程不创建域名。首期每应用一个默认部署和一个运行实例，支持基础持久卷与配置文件挂载。多副本伸缩、跨集群迁移、多容器 Compose、托管数据库、完整 APM/Trace、任意 PromQL 与复杂告警后置。这里的“首期”是完整对外版本，下面的研发里程碑是内部顺序，构建功能独立完成不等于首期已可发布。
 
@@ -137,6 +137,8 @@ worker 使用 Kubernetes 日志 API 跟随当前及必要的前一次容器日�
 
 运行日志支持按当前/历史 release、实例、时间范围读取，分页游标与应用绑定；界面只对已加载结果做文本查找，并明确范围。建议默认保留 24 小时且每应用最多 50 MiB，按先达到的限制清理；截断、Pod 轮转和未恢复缺失明确标记。stdout/stderr 是应用日志入口，平台不承诺替应用收集任意磁盘文件。
 
+当前后端支持按 Pod、容器、时间和游标读取。CLI 支持跟随，控制台支持逐页加载和在已加载块中查找文本。按发布版本筛选和控制台跟随仍待实现。发布版本筛选需记录日志源 Pod 的实际发布身份，滚动发布时旧 Pod 的日志仍应归于旧版本。
+
 变量与凭证不写平台日志、审计或发布差异；应用主动把秘密打印到 stdout 时无法保证自动消除，因此敏感日志仍按应用权限隔离。没有运行实例或历史日志过期时展示真实空状态。
 
 ## 7. 权限、Agent 与接口
@@ -151,11 +153,11 @@ worker 使用 Kubernetes 日志 API 跟随当前及必要的前一次容器日�
 | 管理应用成员授权 | 是 | 否 | 否 | 否 |
 | 读取已存敏感值明文 | 否 | 否 | 否 | 否 |
 
-Casbin 增加 deployment、runtime、runtime-config、runtime-logs、runtime-metrics 动作，仍按当前用户权限 ∩ 应用范围 ∩ 令牌动作范围。第一版 PAT 使用 read/build/deploy/runtime/config 动作组；第一版之后的 OAuth 增加 `deployment:read/write`、`runtime:read/write`、`config:read/write`，`logs:read` 覆盖获授权应用的日志；默认只读，发布/运行变更和配置修改分别授权。敏感配置 read 只返回键与版本，不回明文。
+Casbin 增加 deployment、runtime、runtime-config、runtime-logs、runtime-metrics 动作，仍按当前用户权限 ∩ 应用范围 ∩ 令牌动作范围。第一版 PAT 使用 read/build/deploy/runtime/config 动作组；OAuth 支持 `deployment:read/write`、`runtime:read/write`、`config:read/write`，`logs:read` 覆盖获授权应用的日志；默认只读，发布/运行变更和配置修改分别授权。敏感配置 read 只返回键与版本，不回明文。
 
 Connect/CLI/MCP 共用应用服务：GetApplicationStatus、List/GetDeployment、CreateDeployment、RollbackDeployment、Restart/Start/StopApplication、Get/SaveRuntimeConfig、ReadRuntimeLogs、QueryRuntimeMetrics。操作返回 operation/release ID、已绑定版本、阶段、可重试性和详情 URL，不把等待中当作成功。更新带 expected_config_revision/expected_serving_release，防止 Agent 覆盖别人刚刚发布的版本。
 
-第一版 MCP 只有本地 stdio 方式，上传由 CLI/stdio 完成；第一版之后的远程 MCP 对已上传快照或已验证 artifact 操作。Skill 增加读取运行配置、预览发布差异、发布、确认可用、读运行日志/指标和回滚路径。用户要求部署时可按既有授权执行；平台不因 Agent 接入自动开放管理员或秘密读取能力。
+源码由 CLI 预览与上传。远程 HTTP MCP 对已上传快照或已验证产物操作，并沿用应用权限和 OAuth scope。
 
 第一版拟议 CLI：
 
@@ -165,7 +167,7 @@ yummy status --output json     # 当前运行版本、最近构建与发布、�
 yummy logs --follow            # 运行日志；--build <构建 ID> 查看构建日志
 ```
 
-第一版 CLI 只有最小命令；发布历史、指标与回滚在网页和本地 stdio MCP 中提供，CLI 以后按需补充。
+控制台、CLI 和远程 MCP 提供发布历史、指标与回滚操作。
 
 ## 8. 研发顺序与实际验收
 
@@ -174,9 +176,9 @@ yummy logs --follow            # 运行日志；--build <构建 ID> 查看构建
 | M0 | 固定 k3s/BuildKit、运行权限、Traefik/TLS、Kubelet 采集、持久卷与空间隔离网络策略 | 三个样例的构建/拉取/就绪/HTTPS、资源指标、卷保留与跨空间访问被拒绝的实际记录 |
 | M1 | 身份/资源/应用（命名规范）、上传构建、产物、最小 CLI（PAT）/页面 | 既有权限矩阵、命名校验与 Apple Silicon 上 `yummy deploy` → AMD64 构建 |
 | M2 | 配置/变量/文件/卷、发布、域名、健康、运行日志 | 从零部署到真实 URL；改变量不重建镜像且保存未发布不影响线上 |
-| M3 | CPU/内存历史、更新失败恢复、手动回滚、停止启动、本地 stdio MCP 完整操作 | 错误新版本保持/恢复旧版本；回滚匹配配置；查看者和越权令牌拒绝 |
+| M3 | CPU/内存历史、更新失败恢复、手动回滚、停止启动、远程 HTTP MCP 操作 | 错误新版本保持/恢复旧版本；回滚匹配配置；查看者和越权令牌拒绝 |
 | M4 | 断线重启恢复、配额/清理、团队试用与备份说明 | 重投不重复发布/重启；失联显示未知；PVC 与当前/回滚引用不会被清理 |
 
 最终验收：外部用户分别部署 Go HTTP、Node HTTP、静态站点与后台进程；HTTP 可通过真实 HTTPS 访问，worker 不伪造域名；验证首发失败、发布失败但旧版本运行、证书/DNS 待处理、采集缺失、日志轮转、修改敏感变量、回滚配置、PVC 保留和控制面/worker 重启。
 
-本轮只交付文档与可点击原型。协议库、Kubernetes 实际清单、证书签发、监控精度、运行日志持久化和故障恢复均须在实现阶段按以上标准验证，不能以示例图表或“模拟发布成功”替代。
+当前实机验证情况见[运维手册](../../operations.md#7-验证状态与限制)。表中的构建、部署和恢复验收仍以目标环境中的实际结果为准。

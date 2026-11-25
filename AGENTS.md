@@ -52,6 +52,7 @@
 ## 第一期交付范围
 
 - 第一期对外交付必须包含源码构建后的部署运行、域名/HTTPS、变量和运行配置、运行日志、基础监控、更新/回滚及启动停止；镜像产出只是内部里程碑。
+- 构建方式按选定的构建上下文自动确定。优先使用显式配置的 Dockerfile 或上下文根目录中的 `Dockerfile`，由 BuildKit 执行。未指定路径且默认 Dockerfile 缺失时，由 Railpack 生成计划并交给同一套 BuildKit 执行。显式路径校验失败或 Dockerfile 构建失败时报告原错误。细则见[构建方式自动选择](docs/superpowers/specs/2026-10-22-agent-first-build-technical-design.md#94-构建方式自动选择)。
 - 构建成功、发布结果和当前应用健康分别展示；运行配置保存与部署生效分开，不把示例数据视为真实运行结果。
 - Agent 接入为二选一：CLI（PAT 登录，唯一承担本地源码预览与上传）与远程 Streamable HTTP MCP（OAuth 登录，单应用 resource 绑定，位于 `internal/bff/mcp`）；除本地文件能力外业务能力对齐，不为 MCP 另设 stdio 工具面（原本地 stdio 桥已退役——与 CLI 能力重复，业务工具不做双份维护）。
 
