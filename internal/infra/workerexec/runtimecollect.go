@@ -32,9 +32,10 @@ import (
 // runtimeLogChunk 是待发射的运行日志块：流身份在入队时固定，发射节奏由
 // 管理循环按观察间隔节流。
 type runtimeLogChunk struct {
-	podUID   types.UID
-	restarts int32
-	content  []byte
+	podReleaseID string
+	podUID       types.UID
+	restarts     int32
+	content      []byte
 }
 
 // streamResult 报告一个跟随流的结局：drained 表示自然排空（该键不再重复跟随），
@@ -133,8 +134,8 @@ func (s *runtimeSidecar) run(ctx context.Context) {
 	}
 }
 
-// applyEvidence 依据最新证据选择旁路目标：日志跟随当前发布且存活的 app 容器，
-// 指标只记录 Ready 且非 Deleting 的发布 Pod。
+// applyEvidence 依据最新证据选择旁路目标。日志优先当前发布，可在新 Pod 出现前
+// 继续读取老 Pod；指标只记录当前发布中 Ready 且未删除的 Pod。
 func (s *runtimeSidecar) applyEvidence(ctx context.Context, evidence kube.RuntimeEvidence) {
 	logPod, metricPod := runtimeTargets(s.command, evidence)
 	target := runtimeTarget{}
@@ -190,6 +191,7 @@ func (s *runtimeSidecar) startFollower(ctx context.Context, key string, pod kube
 		Namespace:    logNS,
 		PodName:      pod.Name,
 		PodUID:       pod.UID,
+		PodReleaseID: pod.ReleaseID,
 		Container:    "app",
 		RestartCount: pod.Restarts,
 	})
@@ -217,7 +219,7 @@ func (s *runtimeSidecar) startFollower(ctx context.Context, key string, pod kube
 func (s *runtimeSidecar) followRuntimeStream(ctx context.Context, stream *kube.LogStream, podUID types.UID, restarts int32, emitter Emitter) bool {
 	defer stream.Close()
 	chunkSize := s.exec.options.LogChunkBytes
-	identity := runtimeLogChunk{podUID: podUID, restarts: restarts}
+	identity := runtimeLogChunk{podUID: podUID, podReleaseID: stream.PodReleaseID, restarts: restarts}
 	buffer := make([]byte, 0, chunkSize)
 	readBuf := make([]byte, 4096)
 	emitDirect := func(content []byte) bool {
@@ -230,6 +232,7 @@ func (s *runtimeSidecar) followRuntimeStream(ctx context.Context, stream *kube.L
 			ReleaseId:     s.command.ReleaseId,
 			Generation:    s.command.Generation,
 			PodUid:        string(identity.podUID),
+			PodReleaseId:  identity.podReleaseID,
 			Container:     "app",
 			RestartCount:  identity.restarts,
 			Seq:           0,
@@ -248,7 +251,7 @@ func (s *runtimeSidecar) followRuntimeStream(ctx context.Context, stream *kube.L
 				content := append([]byte(nil), buffer...)
 				buffer = buffer[:0]
 				select {
-				case s.chunks <- runtimeLogChunk{podUID: identity.podUID, restarts: identity.restarts, content: content}:
+				case s.chunks <- runtimeLogChunk{podUID: identity.podUID, podReleaseID: identity.podReleaseID, restarts: identity.restarts, content: content}:
 				default:
 				}
 				lastFlush = time.Now()
@@ -256,7 +259,7 @@ func (s *runtimeSidecar) followRuntimeStream(ctx context.Context, stream *kube.L
 			for len(buffer) >= chunkSize {
 				chunk := append([]byte(nil), buffer[:chunkSize]...)
 				select {
-				case s.chunks <- runtimeLogChunk{podUID: identity.podUID, restarts: identity.restarts, content: chunk}:
+				case s.chunks <- runtimeLogChunk{podUID: identity.podUID, podReleaseID: identity.podReleaseID, restarts: identity.restarts, content: chunk}:
 					buffer = buffer[chunkSize:]
 				case <-ctx.Done():
 					return false
@@ -270,7 +273,7 @@ func (s *runtimeSidecar) followRuntimeStream(ctx context.Context, stream *kube.L
 			if errors.Is(readErr, io.EOF) || errors.Is(readErr, context.Canceled) || errors.Is(readErr, context.DeadlineExceeded) {
 				if len(buffer) > 0 {
 					select {
-					case s.chunks <- runtimeLogChunk{podUID: identity.podUID, restarts: identity.restarts, content: append([]byte(nil), buffer...)}:
+					case s.chunks <- runtimeLogChunk{podUID: identity.podUID, podReleaseID: identity.podReleaseID, restarts: identity.restarts, content: append([]byte(nil), buffer...)}:
 					case <-ctx.Done():
 						emitDirect(append([]byte(nil), buffer...))
 					}
@@ -308,6 +311,7 @@ func (s *runtimeSidecar) emitLogChunk() {
 		ReleaseId:     s.command.ReleaseId,
 		Generation:    s.command.Generation,
 		PodUid:        string(chunk.podUID),
+		PodReleaseId:  chunk.podReleaseID,
 		Container:     "app",
 		RestartCount:  chunk.restarts,
 		Seq:           0,
@@ -408,13 +412,19 @@ func (s *runtimeSidecar) emitMetric(sample kube.MetricSample, previous time.Time
 // 绝不冒充其他发布的证据。
 func runtimeTargets(command *platformv1.WorkerDeploymentCommand, evidence kube.RuntimeEvidence) (*kube.PodEvidence, *kube.PodEvidence) {
 	var (
-		logPod, metricPod *kube.PodEvidence
-		fallback          kube.PodEvidence
-		hasFallback       bool
+		logPod, metricPod, priorPod *kube.PodEvidence
+		fallback                    kube.PodEvidence
+		hasFallback                 bool
 	)
 	for i := range evidence.Pods {
 		pod := &evidence.Pods[i]
-		if pod.ReleaseID != command.ReleaseId || pod.Deleting || pod.Phase == string(corev1.PodSucceeded) || pod.Phase == string(corev1.PodFailed) {
+		if pod.ReleaseID == "" || pod.Deleting || pod.Phase == string(corev1.PodSucceeded) || pod.Phase == string(corev1.PodFailed) {
+			continue
+		}
+		if pod.ReleaseID != command.ReleaseId {
+			if priorPod == nil {
+				priorPod = pod
+			}
 			continue
 		}
 		if pod.Ready {
@@ -430,8 +440,11 @@ func runtimeTargets(command *platformv1.WorkerDeploymentCommand, evidence kube.R
 			fallback, hasFallback = *pod, true
 		}
 	}
-	if logPod == nil && hasFallback {
-		logPod = &fallback
+	if logPod == nil {
+		logPod = priorPod
+		if hasFallback {
+			logPod = &fallback
+		}
 	}
 	return logPod, metricPod
 }

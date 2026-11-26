@@ -74,7 +74,7 @@ describe("正式页面权限与作用域", () => {
     await user.click(screen.getByRole("button", { name: "创建并配置" }));
     expect(submit.mock.calls[2][0].idempotencyKey).not.toBe(submit.mock.calls[0][0].idempotencyKey);
   });
-  it("只允许删除无执行历史的归档应用，并在确认后刷新结果", async () => {
+  it("可删除无执行历史的归档应用，活动构建结束前继续保留", async () => {
     let deleted = false;
     vi.spyOn(platform.transport, "unary").mockImplementation(async (method, _signal, _timeout, _header, input) => {
       const archived = method.name === "ListApplications" && "archivedOnly" in input && input.archivedOnly;
@@ -84,6 +84,7 @@ describe("正式页面权限与作用域", () => {
       }
       const values = method.name === "GetWorkspace" ? { workspace: { id: "w1", slug: "w1", name: "空间", capabilities: ["workspace:read", "workspace:write"] } }
         : method.name === "ListWorkspaces" ? { workspaces: [] }
+        : method.name === "DeleteApplication" ? { state: "DELETED" }
         : archived ? { applications: [{ id: "built", name: "built-app" }, ...(!deleted ? [{ id: "unused", name: "unused-app", revision: 2n, deletionReady: true }] : [])] }
         : { applications: [] };
       return { stream: false, service: method.parent, method, header: new Headers(), trailer: new Headers(), message: create(method.output, values) };
@@ -91,13 +92,43 @@ describe("正式页面权限与作用域", () => {
     mount("/w/w1/apps");
     const user = userEvent.setup();
     await user.click(await screen.findByRole("button", { name: "已归档应用" }));
-    expect(await screen.findByText("待清理集群资源")).toBeTruthy();
+    expect(await screen.findByText("等待应用构建结束")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "删除应用" }));
     expect(deleted).toBe(false);
     await user.click(screen.getByRole("button", { name: "确认" }));
     expect(await screen.findByText("已删除「unused-app」，可重新使用该名称。")).toBeTruthy();
     await screen.findByText("built-app");
     expect(screen.queryByRole("button", { name: "删除应用" })).toBeNull();
+  });
+  it("需要输入准确的应用名才会提交持久卷删除，并显示清理已受理", async () => {
+    let deleting = false;
+    const unary = vi.spyOn(platform.transport, "unary").mockImplementation(async (method, _signal, _timeout, _header, input) => {
+      const archived = method.name === "ListApplications" && "archivedOnly" in input && input.archivedOnly;
+      if (method.name === "DeleteApplicationVolumes") {
+        expect(input).toMatchObject({ workspaceId: "w1", applicationId: "app-id", expectedRevision: 2n, confirmation: "with-volume" });
+        deleting = true;
+      }
+      const values = method.name === "GetWorkspace" ? { workspace: { id: "w1", slug: "w1", name: "空间", capabilities: ["workspace:read", "workspace:write"] } }
+        : method.name === "ListWorkspaces" ? { workspaces: [] }
+        : method.name === "DeleteApplicationVolumes" ? { state: "PENDING" }
+        : archived ? { applications: [{ id: "app-id", name: "with-volume", revision: 2n, deletionState: deleting ? "PENDING" : "WAITING_VOLUMES", deletingVolumes: deleting }] }
+        : { applications: [] };
+      return { stream: false, service: method.parent, method, header: new Headers(), trailer: new Headers(), message: create(method.output, values) };
+    });
+    mount("/w/w1/apps");
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "已归档应用" }));
+    await user.click(await screen.findByRole("button", { name: "删除持久卷" }));
+    const confirmation = screen.getByLabelText("输入应用名称以确认");
+    const submit = screen.getByRole("button", { name: "确认" });
+    await user.type(confirmation, "wrong-name");
+    expect((submit as HTMLButtonElement).disabled).toBe(true);
+    expect(unary.mock.calls.some(([method]) => method.name === "DeleteApplicationVolumes")).toBe(false);
+    await user.clear(confirmation);
+    await user.type(confirmation, "with-volume");
+    await user.click(submit);
+    expect(await screen.findByText("已受理「with-volume」的清理请求。")).toBeTruthy();
+    expect(await screen.findByText("等待 worker 清理持久卷")).toBeTruthy();
   });
   it("未配置的平台策略由NotFound进入首次配置而不是伪造现有策略", async () => {
     vi.spyOn(platform.transport, "unary").mockImplementation(async (method) => {

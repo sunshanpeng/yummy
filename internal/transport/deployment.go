@@ -199,14 +199,14 @@ func (h *DeploymentHandler) GetRuntimeLogs(ctx context.Context, r *connect.Reque
 	if err != nil {
 		return nil, deploymentError(h.Log, err)
 	}
-	filter := deployment.RuntimeLogQuery{Limit: int(r.Msg.Limit), Cursor: r.Msg.Cursor, PodUID: r.Msg.PodUid, Container: r.Msg.Container, Since: since, Until: until}
+	filter := deployment.RuntimeLogQuery{Limit: int(r.Msg.Limit), Cursor: r.Msg.Cursor, PodUID: r.Msg.PodUid, Container: r.Msg.Container, ReleaseID: r.Msg.ReleaseId, Since: since, Until: until}
 	v, err := h.Service.ListRuntimeLogs(ctx, p, r.Msg.WorkspaceId, r.Msg.ApplicationId, filter)
 	if err != nil {
 		return nil, deploymentError(h.Log, err)
 	}
 	response := &platformv1.GetRuntimeLogsResponse{NextCursor: v.NextCursor, ResumeCursor: v.ResumeCursor}
 	for _, item := range v.Items {
-		response.Chunks = append(response.Chunks, &platformv1.RuntimeLogChunk{Id: item.ID, WorkspaceId: item.WorkspaceID, ApplicationId: item.ApplicationID, PodUid: item.PodUID, Container: item.Container, RestartCount: item.RestartCount, Seq: item.Seq, Content: item.Content, Truncated: item.Truncated, CreatedAt: timestamp(item.CreatedAt)})
+		response.Chunks = append(response.Chunks, &platformv1.RuntimeLogChunk{Id: item.ID, ReleaseId: item.ReleaseID, WorkspaceId: item.WorkspaceID, ApplicationId: item.ApplicationID, PodUid: item.PodUID, Container: item.Container, RestartCount: item.RestartCount, Seq: item.Seq, Content: item.Content, Truncated: item.Truncated, CreatedAt: timestamp(item.CreatedAt)})
 	}
 	return connect.NewResponse(response), nil
 }

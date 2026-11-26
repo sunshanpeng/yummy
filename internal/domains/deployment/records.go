@@ -105,7 +105,8 @@ func (probeRecord) TableName() string { return "deployment_probe_evidence" }
 
 // runtimeLogChunkRecord 是应用运行日志块的持久化记录；内容上限由数据库 CHECK 约束兜底。
 type runtimeLogChunkRecord struct {
-	ID                                            string `gorm:"column:id"`
+	ReleaseID                                     *string `gorm:"column:release_id"`
+	ID                                            string  `gorm:"column:id"`
 	WorkspaceID, ApplicationID, PodUID, Container string
 	RestartCount                                  int32
 	Seq                                           int64

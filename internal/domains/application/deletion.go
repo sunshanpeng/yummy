@@ -37,12 +37,26 @@ func (s *Service) ListArchived(ctx context.Context, p authorization.Principal, w
 			rows = rows[:limit]
 		}
 		for _, row := range rows {
-			ready, err := s.deletionReady(tx, ws, row.ID)
-			if err != nil {
+			value := s.view(row, "", current)
+			var job cleanupJob
+			err := tx.Where("workspace_id = ? AND application_id = ?", ws, row.ID).Take(&job).Error
+			switch {
+			case err == nil:
+				value.DeletionState = job.State
+				value.DeletionError = job.ErrorCode
+				value.DeletingVolumes = job.DeleteVolumes
+			case errors.Is(err, gorm.ErrRecordNotFound):
+				_, _, targetErr := s.cleanupTarget(tx, ws, row.ID)
+				if errors.Is(targetErr, authorization.ErrConflict) {
+					value.DeletionState = CleanupWaitingBuilds
+				} else if targetErr != nil {
+					return targetErr
+				} else {
+					value.DeletionReady = true
+				}
+			default:
 				return err
 			}
-			value := s.view(row, "", current)
-			value.DeletionReady = ready
 			result.Items = append(result.Items, value)
 		}
 		return nil
@@ -50,22 +64,42 @@ func (s *Service) ListArchived(ctx context.Context, p authorization.Principal, w
 	return result, err
 }
 
-func (s *Service) deletionReady(tx *gorm.DB, ws, id string) (bool, error) {
-	built, err := s.Builds.HasBuildHistory(tx, ws, id)
-	if built || err != nil {
-		return false, err
+func (s *Service) cleanupTarget(tx *gorm.DB, ws, id string) (string, string, error) {
+	buildNode, err := s.Builds.CleanupBuildNode(tx, ws, id)
+	if err != nil {
+		return "", "", err
 	}
-	placed, err := s.Runtimes.HasRuntimeHistory(tx, ws, id)
-	return !placed && err == nil, err
+	node, uid, err := s.Runtimes.CleanupPlacement(tx, ws, id)
+	if node != "" || err != nil {
+		return node, uid, err
+	}
+	return buildNode, "", nil
 }
 
-// Delete 释放没有执行历史的归档应用名称。保留原 ID，历史记录与新应用保持隔离。
-func (s *Service) Delete(ctx context.Context, p authorization.Principal, ws, id string, expectedRevision int64) error {
+// Delete 直接删除无需资源清理的应用，或受理保留持久卷的清理任务。
+func (s *Service) Delete(ctx context.Context, p authorization.Principal, ws, id string, expectedRevision int64) (string, error) {
+	return s.requestDeletion(ctx, p, ws, id, expectedRevision, false, "")
+}
+
+func (s *Service) DeleteVolumes(ctx context.Context, p authorization.Principal, ws, id string, expectedRevision int64, confirmation string) (string, error) {
+	return s.requestDeletion(ctx, p, ws, id, expectedRevision, true, confirmation)
+}
+
+func (s *Service) requestDeletion(ctx context.Context, p authorization.Principal, ws, id string, expectedRevision int64, volumes bool, confirmation string) (string, error) {
 	if id == "" || expectedRevision < 1 {
-		return authorization.ErrInvalid
+		return "", authorization.ErrInvalid
 	}
-	return s.Access.Do(ctx, p, true, func(tx *gorm.DB, current authorization.Principal) error {
+	var state string
+	err := s.Access.Do(ctx, p, true, func(tx *gorm.DB, current authorization.Principal) error {
 		if err := s.Access.RequireWorkspaceAdmin(tx, current, ws); err != nil {
+			return err
+		}
+		// 与空间归档在同一行上串行，防止开始清理后失去人工确认入口。
+		var space model.Workspace
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Select("id").Take(&space, "id = ? AND status = ?", ws, model.ResourceActive).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return authorization.ErrNotFound
+			}
 			return err
 		}
 		var row model.Application
@@ -75,22 +109,71 @@ func (s *Service) Delete(ctx context.Context, p authorization.Principal, ws, id 
 			}
 			return err
 		}
+		if volumes && confirmation != row.Name {
+			return fmt.Errorf("%w: 请输入准确的应用名称以确认删除持久卷", authorization.ErrInvalid)
+		}
 		if row.Status == model.ApplicationDeleted && row.Revision-1 == expectedRevision {
+			state = CleanupDeleted
 			return nil
 		}
 		if row.Status != model.ResourceArchived || row.Revision != expectedRevision {
 			return authorization.ErrConflict
 		}
-		ready, err := s.deletionReady(tx, ws, id)
+		var job cleanupJob
+		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("workspace_id = ? AND application_id = ?", ws, id).Take(&job).Error
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		if job.ID != "" {
+			state = job.State
+			if volumes {
+				if job.State == CleanupPending && job.DeleteVolumes {
+					return nil
+				}
+				if job.State != CleanupWaitingVolumes && !(job.State == CleanupFailed && job.DeleteVolumes) {
+					return authorization.ErrConflict
+				}
+			} else if job.State != CleanupFailed || job.DeleteVolumes {
+				return nil
+			}
+			state = CleanupPending
+			if err := tx.Model(&job).Updates(map[string]any{"state": CleanupPending, "delete_volumes": volumes, "requested_by": current.UserID, "error_code": "", "connection_epoch": 0, "lease_until": gorm.Expr("CURRENT_TIMESTAMP")}).Error; err != nil {
+				return err
+			}
+			return recordCleanupRequest(tx, job, current.UserID, volumes)
+		}
+		if volumes {
+			return authorization.ErrConflict
+		}
+		node, uid, err := s.cleanupTarget(tx, ws, id)
 		if err != nil {
 			return err
 		}
-		if !ready {
-			return fmt.Errorf("%w: 应用有构建或部署历史，其集群资源尚待清理", authorization.ErrConflict)
+		if node == "" {
+			state = CleanupDeleted
+			return markDeleted(tx, row, current.UserID)
 		}
-		if err := tx.Model(&row).Updates(map[string]any{"status": model.ApplicationDeleted, "revision": row.Revision + 1}).Error; err != nil {
+		job = cleanupJob{WorkspaceID: ws, ApplicationID: id, NodeID: node, ClusterNodeUID: uid, RequestedBy: current.UserID, State: CleanupPending}
+		if err := tx.Create(&job).Error; err != nil {
 			return err
 		}
-		return audit.Record(tx, current.UserID, "application.delete", "application", id, &ws, &id)
+		state = CleanupPending
+		return recordCleanupRequest(tx, job, current.UserID, false)
 	})
+	return state, err
+}
+
+func recordCleanupRequest(tx *gorm.DB, job cleanupJob, actor string, volumes bool) error {
+	action := "application.cleanup.request"
+	if volumes {
+		action = "application.cleanup.volumes.request"
+	}
+	return audit.Record(tx, actor, action, "application_cleanup_job", job.ID, &job.WorkspaceID, &job.ApplicationID)
+}
+
+func markDeleted(tx *gorm.DB, row model.Application, actor string) error {
+	if err := tx.Model(&row).Updates(map[string]any{"status": model.ApplicationDeleted, "revision": row.Revision + 1}).Error; err != nil {
+		return err
+	}
+	return audit.Record(tx, actor, "application.delete", "application", row.ID, &row.WorkspaceID, &row.ID)
 }

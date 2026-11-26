@@ -267,6 +267,7 @@ type ProbeTarget struct {
 // RuntimeLogInput 是一个容器运行日志块；Content 为 worker 上报的原始字节分片。
 // 时间不由 worker 自报，落库时间取控制面数据库时钟。
 type RuntimeLogInput struct {
+	PodReleaseID                                       string
 	WorkspaceID, ApplicationID, OperationID, ReleaseID string
 	Generation                                         int64
 	PodUID, Container                                  string
@@ -289,6 +290,7 @@ type RuntimeMetricInput struct {
 
 // RuntimeLog 是运行日志块的对外只读投影。
 type RuntimeLog struct {
+	ReleaseID                                         string
 	ID, WorkspaceID, ApplicationID, PodUID, Container string
 	RestartCount                                      int32
 	Seq                                               int64
@@ -313,7 +315,7 @@ type RuntimeLogPage struct {
 }
 
 type RuntimeLogQuery struct {
-	Limit                     int
-	Cursor, PodUID, Container string
-	Since, Until              time.Time
+	Limit                                int
+	Cursor, PodUID, Container, ReleaseID string
+	Since, Until                         time.Time
 }

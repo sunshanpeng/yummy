@@ -31,11 +31,11 @@ var namePattern = regexp.MustCompile(`^[a-z](-?[a-z0-9])*$`)
 // 应用已停止且无在途部署，应用域不直查运行状态表。
 type RuntimeGuard interface {
 	StoppedForArchive(tx *gorm.DB, workspaceID, applicationID string) (bool, error)
-	HasRuntimeHistory(tx *gorm.DB, workspaceID, applicationID string) (bool, error)
+	CleanupPlacement(tx *gorm.DB, workspaceID, applicationID string) (nodeID, clusterUID string, err error)
 }
 
 type BuildHistory interface {
-	HasBuildHistory(tx *gorm.DB, workspaceID, applicationID string) (bool, error)
+	CleanupBuildNode(tx *gorm.DB, workspaceID, applicationID string) (string, error)
 }
 
 type Service struct {

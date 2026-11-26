@@ -12,14 +12,27 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// HasBuildHistory 用于应用删除门禁。已受理的构建可能已经在集群中创建资源。
-func (s *Service) HasBuildHistory(tx *gorm.DB, ws, app string) (bool, error) {
-	var build buildRecord
-	err := tx.Select("id").Where("workspace_id = ? AND application_id = ?", ws, app).Take(&build).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return false, nil
+// CleanupBuildNode 确认构建均已收尾，返回曾执行该应用的节点。没有执行尝试则无构建资源。
+func (s *Service) CleanupBuildNode(tx *gorm.DB, ws, app string) (string, error) {
+	var pending int64
+	if err := tx.Model(&buildRecord{}).Where("workspace_id = ? AND application_id = ? AND state NOT IN ?", ws, app, []string{Succeeded, Failed, Canceled, TimedOut, Lost}).Count(&pending).Error; err != nil {
+		return "", err
 	}
-	return err == nil, err
+	if pending != 0 {
+		return "", fmt.Errorf("%w: 等待应用构建结束", authorization.ErrConflict)
+	}
+	if err := tx.Model(&attemptRecord{}).Where("workspace_id = ? AND application_id = ? AND occupied = TRUE", ws, app).Count(&pending).Error; err != nil {
+		return "", err
+	}
+	if pending != 0 {
+		return "", fmt.Errorf("%w: 等待 worker 确认构建退出", authorization.ErrConflict)
+	}
+	var attempt attemptRecord
+	err := tx.Select("node_id").Where("workspace_id = ? AND application_id = ?", ws, app).Order("created_at DESC, id DESC").Take(&attempt).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", nil
+	}
+	return attempt.NodeID, err
 }
 
 func (s *Service) Get(ctx context.Context, p authorization.Principal, ws, app, id string) (View, error) {

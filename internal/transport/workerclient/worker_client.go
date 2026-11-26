@@ -32,6 +32,7 @@ type WorkerConfig struct {
 	TLS                                                   *tls.Config
 	Journal                                               *Journal
 	Executor                                              Executor
+	Cleanup                                               func(context.Context, *platformv1.WorkerCleanupCommand, func(context.Context) error) (done, hasVolumes bool, errorCode string)
 	Heartbeat                                             func() *platformv1.WorkerHeartbeat
 	Qualification                                         func(string) *platformv1.WorkerQualification
 	HeartbeatInterval, ReconnectDelay, RetransmitInterval time.Duration
@@ -139,7 +140,7 @@ func (c *WorkerClient) runOnce(parent context.Context) error {
 			}
 		}
 	}()
-	outbound <- &platformv1.WorkerEnvelope{Payload: &platformv1.WorkerEnvelope_Hello{Hello: &platformv1.WorkerHello{NodeId: c.config.NodeID, WorkerId: c.config.WorkerID, Version: c.config.Version}}}
+	outbound <- &platformv1.WorkerEnvelope{Payload: &platformv1.WorkerEnvelope_Hello{Hello: &platformv1.WorkerHello{NodeId: c.config.NodeID, WorkerId: c.config.WorkerID, Version: c.config.Version, ApplicationCleanup: c.config.Cleanup != nil}}}
 	first, err := stream.Receive()
 	if err != nil {
 		return err
@@ -201,6 +202,11 @@ func (c *WorkerClient) runOnce(parent context.Context) error {
 				}
 			case *platformv1.ControlEnvelope_DeploymentCommand:
 				if err := c.startDeployment(parent, value.DeploymentCommand); err != nil {
+					receiveErrors <- err
+					return
+				}
+			case *platformv1.ControlEnvelope_ApplicationCleanup:
+				if err := c.startCleanup(ctx, client, welcome.ConnectionEpoch, value.ApplicationCleanup, outbound); err != nil {
 					receiveErrors <- err
 					return
 				}

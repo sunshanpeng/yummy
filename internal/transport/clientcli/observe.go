@@ -57,7 +57,7 @@ func (c *apiClient) runtimeStatus(cmd *cobra.Command, ws, app string) error {
 }
 
 func (a *clientApp) logsCommand() *cobra.Command {
-	var buildID, cursor, since, until string
+	var buildID, cursor, since, until, releaseID string
 	var limit int32
 	var follow bool
 	cmd := &cobra.Command{Use: "logs", Short: "读取当前目录关联应用的日志", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
@@ -66,8 +66,8 @@ func (a *clientApp) logsCommand() *cobra.Command {
 			return err
 		}
 		if buildID != "" {
-			if since != "" || until != "" {
-				return fail("INVALID_ARGUMENT", 2, false, "时间范围选项用于运行日志")
+			if since != "" || until != "" || releaseID != "" {
+				return fail("INVALID_ARGUMENT", 2, false, "时间与发布筛选选项用于运行日志")
 			}
 			if cursor != "" {
 				return fail("INVALID_ARGUMENT", 2, false, "--cursor 用于运行日志；按序号续读构建日志请使用 yummy build logs --after")
@@ -75,7 +75,7 @@ func (a *clientApp) logsCommand() *cobra.Command {
 			return a.buildLogs(cmd, c, ws, app, buildID, 0, limit, follow)
 		}
 		for {
-			res, err := c.deployment.GetRuntimeLogs(cmd.Context(), auth(c.token, &platformv1.GetRuntimeLogsRequest{WorkspaceId: ws, ApplicationId: app, Cursor: cursor, Limit: limit, Since: since, Until: until}))
+			res, err := c.deployment.GetRuntimeLogs(cmd.Context(), auth(c.token, &platformv1.GetRuntimeLogsRequest{WorkspaceId: ws, ApplicationId: app, Cursor: cursor, Limit: limit, Since: since, Until: until, ReleaseId: releaseID}))
 			if err != nil {
 				return rpcError(err)
 			}
@@ -104,6 +104,7 @@ func (a *clientApp) logsCommand() *cobra.Command {
 	}}
 	cmd.Flags().StringVar(&buildID, "build", "", "查看指定构建的日志")
 	cmd.Flags().StringVar(&cursor, "cursor", "", "从返回的运行日志游标继续读取")
+	cmd.Flags().StringVar(&releaseID, "release", "", "按来源发布 ID 筛选运行日志")
 	cmd.Flags().StringVar(&since, "since", "", "RFC3339 起始时间")
 	cmd.Flags().StringVar(&until, "until", "", "RFC3339 截止时间")
 	cmd.Flags().Int32Var(&limit, "limit", 100, "单次读取的日志块数")

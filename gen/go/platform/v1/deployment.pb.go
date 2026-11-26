@@ -1582,6 +1582,7 @@ type RuntimeLogChunk struct {
 	Content       []byte                 `protobuf:"bytes,8,opt,name=content,proto3" json:"content,omitempty"`
 	Truncated     bool                   `protobuf:"varint,9,opt,name=truncated,proto3" json:"truncated,omitempty"`
 	CreatedAt     string                 `protobuf:"bytes,10,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	ReleaseId     string                 `protobuf:"bytes,11,opt,name=release_id,json=releaseId,proto3" json:"release_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1686,6 +1687,13 @@ func (x *RuntimeLogChunk) GetCreatedAt() string {
 	return ""
 }
 
+func (x *RuntimeLogChunk) GetReleaseId() string {
+	if x != nil {
+		return x.ReleaseId
+	}
+	return ""
+}
+
 type GetRuntimeLogsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	WorkspaceId   string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
@@ -1697,6 +1705,7 @@ type GetRuntimeLogsRequest struct {
 	// 可选的 RFC3339 落库时间边界，包含边界时刻。
 	Since         string `protobuf:"bytes,7,opt,name=since,proto3" json:"since,omitempty"`
 	Until         string `protobuf:"bytes,8,opt,name=until,proto3" json:"until,omitempty"`
+	ReleaseId     string `protobuf:"bytes,9,opt,name=release_id,json=releaseId,proto3" json:"release_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1783,6 +1792,13 @@ func (x *GetRuntimeLogsRequest) GetSince() string {
 func (x *GetRuntimeLogsRequest) GetUntil() string {
 	if x != nil {
 		return x.Until
+	}
+	return ""
+}
+
+func (x *GetRuntimeLogsRequest) GetReleaseId() string {
+	if x != nil {
+		return x.ReleaseId
 	}
 	return ""
 }
@@ -2234,7 +2250,7 @@ const file_platform_v1_deployment_proto_rawDesc = "" +
 	"\x15ChangeRuntimeResponse\x127\n" +
 	"\n" +
 	"deployment\x18\x01 \x01(\v2\x17.platform.v1.DeploymentR\n" +
-	"deployment\"\xb0\x02\n" +
+	"deployment\"\xcf\x02\n" +
 	"\x0fRuntimeLogChunk\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12!\n" +
 	"\fworkspace_id\x18\x02 \x01(\tR\vworkspaceId\x12%\n" +
@@ -2247,7 +2263,9 @@ const file_platform_v1_deployment_proto_rawDesc = "" +
 	"\ttruncated\x18\t \x01(\bR\ttruncated\x12\x1d\n" +
 	"\n" +
 	"created_at\x18\n" +
-	" \x01(\tR\tcreatedAt\"\xf2\x01\n" +
+	" \x01(\tR\tcreatedAt\x12\x1d\n" +
+	"\n" +
+	"release_id\x18\v \x01(\tR\treleaseId\"\x91\x02\n" +
 	"\x15GetRuntimeLogsRequest\x12!\n" +
 	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x12%\n" +
 	"\x0eapplication_id\x18\x02 \x01(\tR\rapplicationId\x12\x14\n" +
@@ -2256,7 +2274,9 @@ const file_platform_v1_deployment_proto_rawDesc = "" +
 	"\apod_uid\x18\x05 \x01(\tR\x06podUid\x12\x1c\n" +
 	"\tcontainer\x18\x06 \x01(\tR\tcontainer\x12\x14\n" +
 	"\x05since\x18\a \x01(\tR\x05since\x12\x14\n" +
-	"\x05until\x18\b \x01(\tR\x05until\"\x94\x01\n" +
+	"\x05until\x18\b \x01(\tR\x05until\x12\x1d\n" +
+	"\n" +
+	"release_id\x18\t \x01(\tR\treleaseId\"\x94\x01\n" +
 	"\x16GetRuntimeLogsResponse\x124\n" +
 	"\x06chunks\x18\x01 \x03(\v2\x1c.platform.v1.RuntimeLogChunkR\x06chunks\x12\x1f\n" +
 	"\vnext_cursor\x18\x02 \x01(\tR\n" +

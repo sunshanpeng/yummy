@@ -121,7 +121,7 @@ func (s runtimeLogStream) args() []any {
 // ApplyRuntimeLog 持久化一个容器运行日志块。seq 在 (pod, container, restart) 流内连续：
 // 同键同 hash 幂等 ack，同键不同 hash 或断号/回退按 ErrSequence 拒绝；插入与配额收敛同事务。
 func (s *Service) ApplyRuntimeLog(ctx context.Context, worker WorkerIdentity, input RuntimeLogInput) (Ack, error) {
-	if input.WorkspaceID == "" || input.ApplicationID == "" || input.Generation < 1 || input.Seq < 1 || input.RestartCount < 0 || input.PodUID == "" || len(input.PodUID) > 64 || input.Container == "" || len(input.Container) > 128 || len(input.OperationID) > 128 || len(input.ReleaseID) > 128 || len(input.Content) > workerprotocol.RuntimeLogMaxChunkBytes {
+	if input.WorkspaceID == "" || input.ApplicationID == "" || input.Generation < 1 || input.Seq < 1 || input.RestartCount < 0 || input.PodUID == "" || len(input.PodUID) > 64 || input.Container == "" || len(input.Container) > 128 || len(input.OperationID) > 128 || len(input.ReleaseID) > 128 || len(input.PodReleaseID) > 128 || len(input.Content) > workerprotocol.RuntimeLogMaxChunkBytes {
 		return Ack{}, authorization.ErrInvalid
 	}
 	hash := fingerprint([]any{input.Content, input.Truncated})
@@ -141,7 +141,7 @@ func (s *Service) ApplyRuntimeLog(ctx context.Context, worker WorkerIdentity, in
 		// 本仓库工具链不接受“两个固定实参后跟切片展开”，统一改为 Where(...).Take。
 		err := tx.Where(stream.key()+" AND seq = ?", append(stream.args(), input.Seq)...).Take(&old).Error
 		if err == nil {
-			if old.PayloadHash != hash {
+			if old.PayloadHash != hash || (old.ReleaseID != nil && input.PodReleaseID != "" && *old.ReleaseID != input.PodReleaseID) {
 				return ErrSequence
 			}
 			ack = Ack{Seq: input.Seq, Duplicate: true}
@@ -150,22 +150,36 @@ func (s *Service) ApplyRuntimeLog(ctx context.Context, worker WorkerIdentity, in
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		}
-		var latest struct{ Seq int64 }
-		if err = tx.Table("runtime_log_chunks").Select("COALESCE(MAX(seq), 0) AS seq").Where(stream.key(), stream.args()...).Take(&latest).Error; err != nil {
+		var latest runtimeLogChunkRecord
+		err = tx.Select("seq", "release_id").Where(stream.key(), stream.args()...).Order("seq DESC").Take(&latest).Error
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		}
 		if input.Seq != latest.Seq+1 {
 			return ErrSequence
+		}
+		sourceRelease := latest.ReleaseID
+		if input.PodReleaseID != "" {
+			if sourceRelease != nil && *sourceRelease != input.PodReleaseID {
+				return ErrSequence
+			}
+			if input.PodReleaseID != input.ReleaseID && sourceRelease == nil {
+				if _, err := readRelease(tx, input.WorkspaceID, input.ApplicationID, input.PodReleaseID); err != nil {
+					return err
+				}
+			}
+			sourceRelease = &input.PodReleaseID
 		}
 		id, err := security.NewID("rlg")
 		if err != nil {
 			return err
 		}
 		// created_at 由数据库时钟默认值写入，不使用宿主机 time.Now()。
-		chunk := runtimeLogChunkRecord{ID: id, WorkspaceID: input.WorkspaceID, ApplicationID: input.ApplicationID, PodUID: input.PodUID, Container: input.Container, RestartCount: input.RestartCount, Seq: input.Seq, PayloadHash: hash, Content: append([]byte(nil), input.Content...), Truncated: input.Truncated}
+		chunk := runtimeLogChunkRecord{ID: id, ReleaseID: sourceRelease, WorkspaceID: input.WorkspaceID, ApplicationID: input.ApplicationID, PodUID: input.PodUID, Container: input.Container, RestartCount: input.RestartCount, Seq: input.Seq, PayloadHash: hash, Content: append([]byte(nil), input.Content...), Truncated: input.Truncated}
 		if err = tx.Create(&chunk).Error; err != nil {
 			return err
 		}
+		ack = Ack{Seq: input.Seq}
 		return convergeRuntimeLogs(tx, input.WorkspaceID, input.ApplicationID)
 	})
 	return ack, err
@@ -232,14 +246,17 @@ func (s *Service) ApplyRuntimeMetric(ctx context.Context, worker WorkerIdentity,
 	return ack, err
 }
 
-// ListRuntimeLogs 按 (created_at, id) 时间正序分页返回运行日志块，可按 pod/container 过滤。
+// ListRuntimeLogs 按 (created_at, id) 时间正序分页返回运行日志块，可按发布、Pod、容器与时间过滤。
 // 授权走 access.Do + logs:read；游标绑定查询作用域，跨应用或改参的游标无效。
 func (s *Service) ListRuntimeLogs(ctx context.Context, p authorization.Principal, ws, app string, filter RuntimeLogQuery) (RuntimeLogPage, error) {
 	result := RuntimeLogPage{Items: []RuntimeLog{}}
-	if len(filter.PodUID) > 64 || len(filter.Container) > 128 || !filter.Since.IsZero() && !filter.Until.IsZero() && filter.Until.Before(filter.Since) {
+	if len(filter.PodUID) > 64 || len(filter.Container) > 128 || len(filter.ReleaseID) > 128 || !filter.Since.IsZero() && !filter.Until.IsZero() && filter.Until.Before(filter.Since) {
 		return result, authorization.ErrInvalid
 	}
 	scope := "runtime-logs:" + ws + ":" + app + ":" + p.UserID + ":" + p.TokenID + ":" + filter.PodUID + ":" + filter.Container
+	if filter.ReleaseID != "" {
+		scope += "|release:" + filter.ReleaseID
+	}
 	if !filter.Since.IsZero() || !filter.Until.IsZero() {
 		scope += ":" + filter.Since.UTC().Format(time.RFC3339Nano) + ":" + filter.Until.UTC().Format(time.RFC3339Nano)
 	}
@@ -252,6 +269,9 @@ func (s *Service) ListRuntimeLogs(ctx context.Context, p authorization.Principal
 			return err
 		}
 		query := tx.Where("workspace_id = ? AND application_id = ?", ws, app)
+		if filter.ReleaseID != "" {
+			query = query.Where("release_id = ?", filter.ReleaseID)
+		}
 		if filter.PodUID != "" {
 			query = query.Where("pod_uid = ?", filter.PodUID)
 		}
@@ -269,7 +289,7 @@ func (s *Service) ListRuntimeLogs(ctx context.Context, p authorization.Principal
 			if !ok {
 				return authorization.ErrInvalid
 			}
-			query = query.Where("created_at > ? OR (created_at = ? AND id > ?)", stamp, stamp, id)
+			query = query.Where("(created_at > ? OR (created_at = ? AND id > ?))", stamp, stamp, id)
 		}
 		var rows []runtimeLogChunkRecord
 		if err := query.Order("created_at ASC, id ASC").Limit(limit + 1).Find(&rows).Error; err != nil {
@@ -284,7 +304,7 @@ func (s *Service) ListRuntimeLogs(ctx context.Context, p authorization.Principal
 			result.ResumeCursor = store.NextCursor(scope, runtimeLogCursor(rows[len(rows)-1]))
 		}
 		for _, row := range rows {
-			result.Items = append(result.Items, RuntimeLog{ID: row.ID, WorkspaceID: row.WorkspaceID, ApplicationID: row.ApplicationID, PodUID: row.PodUID, Container: row.Container, RestartCount: row.RestartCount, Seq: row.Seq, Content: row.Content, Truncated: row.Truncated, CreatedAt: row.CreatedAt})
+			result.Items = append(result.Items, RuntimeLog{ID: row.ID, ReleaseID: text(row.ReleaseID), WorkspaceID: row.WorkspaceID, ApplicationID: row.ApplicationID, PodUID: row.PodUID, Container: row.Container, RestartCount: row.RestartCount, Seq: row.Seq, Content: row.Content, Truncated: row.Truncated, CreatedAt: row.CreatedAt})
 		}
 		return nil
 	})

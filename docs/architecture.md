@@ -1,6 +1,6 @@
 # 架构总览
 
-两张图帮助快速建立全局认识：**部署架构**回答"进程跑在哪、怎么连"，**代码模块分层**回答"代码怎么归类、依赖朝哪流"。约定与细则见 [AGENTS.md](../AGENTS.md)，运维手册见 [operations.md](operations.md)。
+两张图帮助快速建立全局认识：**部署架构**回答"进程跑在哪、怎么连"，**代码模块分层**回答"代码怎么归类、依赖朝哪流"。约定与细则见 [技术文档](technical.md)，实际配置见 [运维手册](operations.md)。
 
 ## 一、部署架构
 
@@ -8,7 +8,7 @@
 flowchart TB
     subgraph clients["客户端"]
         browser["浏览器：React 控制台<br/>（二进制内嵌，无需单独前端部署）"]
-        agent["CLI / Agent<br/>（PAT 认证，按需启动）"]
+        agent["CLI / Agent<br/>（CLI 使用 PAT 或 OAuth；远程 MCP 使用 OAuth）"]
     end
 
     subgraph control["控制面进程 bin/yummy-server serve（模块化单体）"]
@@ -17,7 +17,7 @@ flowchart TB
         worker_listener["worker 网关 :8443<br/>mTLS 双向流长连接"]
         services["业务域服务<br/>账号 / 空间 / 应用 / 构建 / 部署 / 审计<br/>zap JSON 日志 + OTel SDK"]
         public_listener --> services
-        transfer_listener --> services
+        worker_listener --> services
     end
 
     subgraph instance_infra["实例基础设施"]
@@ -40,7 +40,7 @@ flowchart TB
     prometheus["Prometheus（可选）"]
 
     browser -->|"HTTPS"| public_listener
-    agent -->|"Connect RPC"| public_listener
+    agent -->|"Connect RPC / Streamable HTTP MCP"| public_listener
     services --> pg
     services --> redis
     services --> sourcedir
@@ -84,14 +84,14 @@ flowchart TB
     end
 
     subgraph edge["② 传输与聚合"]
-        tr["transport<br/>11 个 Connect handler"]
+        tr["transport<br/>Connect handlers"]
         wg["transport/workergateway<br/>控制面 mTLS 网关"]
         wc["transport/workerclient · transport/workercli<br/>长连接、命令装配与 journal"]
         ccli["transport/clientcli<br/>CLI 客户端"]
         mcp["bff/mcp<br/>远程 MCP（OAuth，单应用绑定）"]
     end
 
-    subgraph domains["③ 业务领域 internal/domains（15 域）"]
+    subgraph domains["③ 业务领域 internal/domains"]
         d1["账号与权限<br/>identity · session · oauth · authorization · audit"]
         d2["平台资源<br/>workspace · application · buildsecret · runtimeconfig"]
         d3["构建与执行<br/>build · deployment · source · inventory · enrollment · qualification"]

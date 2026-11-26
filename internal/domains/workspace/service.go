@@ -24,8 +24,11 @@ import (
 var slugPattern = regexp.MustCompile(`^[a-z](-?[a-z0-9])*$`)
 
 type Service struct {
-	DB     *gorm.DB
-	Access *authorization.Access
+	DB                 *gorm.DB
+	Access             *authorization.Access
+	ApplicationCleanup interface {
+		HasPendingCleanup(tx *gorm.DB, workspaceID string) (bool, error)
+	}
 }
 
 func NewService(db *gorm.DB, access *authorization.Access) *Service {
@@ -280,6 +283,15 @@ func (s *Service) Archive(ctx context.Context, p authorization.Principal, id str
 		}
 		if active > 0 {
 			return fmt.Errorf("%w: 工作空间仍有未归档的应用，请先归档全部应用", authorization.ErrConflict)
+		}
+		if s.ApplicationCleanup != nil {
+			pending, err := s.ApplicationCleanup.HasPendingCleanup(tx, id)
+			if err != nil {
+				return err
+			}
+			if pending {
+				return fmt.Errorf("%w: 请先完成空间内已受理的应用清理", authorization.ErrConflict)
+			}
 		}
 		updated := tx.Model(&model.Workspace{}).Where("id = ? AND revision = ?", id, expectedRevision).Updates(map[string]any{"status": model.ResourceArchived, "revision": gorm.Expr("revision + 1")})
 		if updated.Error != nil {

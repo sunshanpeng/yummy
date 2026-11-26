@@ -150,8 +150,6 @@ docker compose exec redis redis-cli --scan --pattern 'session:*'
 
 ## 文档
 
-- 架构总览（部署架构图 + 代码模块分层图）：[docs/architecture.md](docs/architecture.md)
-- 部署与运维：[docs/operations.md](docs/operations.md)
-- 设计文档：[docs/superpowers/specs/](docs/superpowers/specs/)
-- 首期剩余交互：[体验复评](docs/superpowers/specs/2026-10-23-paas-competitive-ux-review.md#4-首期尚需补齐的交互)
+- [产品文档](docs/product.md)涵盖交付方式、权限、源码构建、发布和运行维护。
+- [技术文档](docs/technical.md)涵盖进程、接口、数据、执行和验收，链接至架构图与运维手册。
 - 项目约定：[AGENTS.md](AGENTS.md)

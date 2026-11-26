@@ -77,6 +77,9 @@ const (
 	// ApplicationServiceDeleteApplicationProcedure is the fully-qualified name of the
 	// ApplicationService's DeleteApplication RPC.
 	ApplicationServiceDeleteApplicationProcedure = "/platform.v1.ApplicationService/DeleteApplication"
+	// ApplicationServiceDeleteApplicationVolumesProcedure is the fully-qualified name of the
+	// ApplicationService's DeleteApplicationVolumes RPC.
+	ApplicationServiceDeleteApplicationVolumesProcedure = "/platform.v1.ApplicationService/DeleteApplicationVolumes"
 	// ApplicationServiceListApplicationMembersProcedure is the fully-qualified name of the
 	// ApplicationService's ListApplicationMembers RPC.
 	ApplicationServiceListApplicationMembersProcedure = "/platform.v1.ApplicationService/ListApplicationMembers"
@@ -348,6 +351,7 @@ type ApplicationServiceClient interface {
 	UpdateApplication(context.Context, *connect.Request[v1.UpdateApplicationRequest]) (*connect.Response[v1.UpdateApplicationResponse], error)
 	ArchiveApplication(context.Context, *connect.Request[v1.ArchiveApplicationRequest]) (*connect.Response[v1.ArchiveApplicationResponse], error)
 	DeleteApplication(context.Context, *connect.Request[v1.DeleteApplicationRequest]) (*connect.Response[v1.DeleteApplicationResponse], error)
+	DeleteApplicationVolumes(context.Context, *connect.Request[v1.DeleteApplicationVolumesRequest]) (*connect.Response[v1.DeleteApplicationVolumesResponse], error)
 	ListApplicationMembers(context.Context, *connect.Request[v1.ListApplicationMembersRequest]) (*connect.Response[v1.ListApplicationMembersResponse], error)
 	SetApplicationMember(context.Context, *connect.Request[v1.SetApplicationMemberRequest]) (*connect.Response[v1.SetApplicationMemberResponse], error)
 	RemoveApplicationMember(context.Context, *connect.Request[v1.RemoveApplicationMemberRequest]) (*connect.Response[v1.RemoveApplicationMemberResponse], error)
@@ -400,6 +404,12 @@ func NewApplicationServiceClient(httpClient connect.HTTPClient, baseURL string, 
 			connect.WithSchema(applicationServiceMethods.ByName("DeleteApplication")),
 			connect.WithClientOptions(opts...),
 		),
+		deleteApplicationVolumes: connect.NewClient[v1.DeleteApplicationVolumesRequest, v1.DeleteApplicationVolumesResponse](
+			httpClient,
+			baseURL+ApplicationServiceDeleteApplicationVolumesProcedure,
+			connect.WithSchema(applicationServiceMethods.ByName("DeleteApplicationVolumes")),
+			connect.WithClientOptions(opts...),
+		),
 		listApplicationMembers: connect.NewClient[v1.ListApplicationMembersRequest, v1.ListApplicationMembersResponse](
 			httpClient,
 			baseURL+ApplicationServiceListApplicationMembersProcedure,
@@ -423,15 +433,16 @@ func NewApplicationServiceClient(httpClient connect.HTTPClient, baseURL string, 
 
 // applicationServiceClient implements ApplicationServiceClient.
 type applicationServiceClient struct {
-	listApplications        *connect.Client[v1.ListApplicationsRequest, v1.ListApplicationsResponse]
-	getApplication          *connect.Client[v1.GetApplicationRequest, v1.GetApplicationResponse]
-	createApplication       *connect.Client[v1.CreateApplicationRequest, v1.CreateApplicationResponse]
-	updateApplication       *connect.Client[v1.UpdateApplicationRequest, v1.UpdateApplicationResponse]
-	archiveApplication      *connect.Client[v1.ArchiveApplicationRequest, v1.ArchiveApplicationResponse]
-	deleteApplication       *connect.Client[v1.DeleteApplicationRequest, v1.DeleteApplicationResponse]
-	listApplicationMembers  *connect.Client[v1.ListApplicationMembersRequest, v1.ListApplicationMembersResponse]
-	setApplicationMember    *connect.Client[v1.SetApplicationMemberRequest, v1.SetApplicationMemberResponse]
-	removeApplicationMember *connect.Client[v1.RemoveApplicationMemberRequest, v1.RemoveApplicationMemberResponse]
+	listApplications         *connect.Client[v1.ListApplicationsRequest, v1.ListApplicationsResponse]
+	getApplication           *connect.Client[v1.GetApplicationRequest, v1.GetApplicationResponse]
+	createApplication        *connect.Client[v1.CreateApplicationRequest, v1.CreateApplicationResponse]
+	updateApplication        *connect.Client[v1.UpdateApplicationRequest, v1.UpdateApplicationResponse]
+	archiveApplication       *connect.Client[v1.ArchiveApplicationRequest, v1.ArchiveApplicationResponse]
+	deleteApplication        *connect.Client[v1.DeleteApplicationRequest, v1.DeleteApplicationResponse]
+	deleteApplicationVolumes *connect.Client[v1.DeleteApplicationVolumesRequest, v1.DeleteApplicationVolumesResponse]
+	listApplicationMembers   *connect.Client[v1.ListApplicationMembersRequest, v1.ListApplicationMembersResponse]
+	setApplicationMember     *connect.Client[v1.SetApplicationMemberRequest, v1.SetApplicationMemberResponse]
+	removeApplicationMember  *connect.Client[v1.RemoveApplicationMemberRequest, v1.RemoveApplicationMemberResponse]
 }
 
 // ListApplications calls platform.v1.ApplicationService.ListApplications.
@@ -464,6 +475,11 @@ func (c *applicationServiceClient) DeleteApplication(ctx context.Context, req *c
 	return c.deleteApplication.CallUnary(ctx, req)
 }
 
+// DeleteApplicationVolumes calls platform.v1.ApplicationService.DeleteApplicationVolumes.
+func (c *applicationServiceClient) DeleteApplicationVolumes(ctx context.Context, req *connect.Request[v1.DeleteApplicationVolumesRequest]) (*connect.Response[v1.DeleteApplicationVolumesResponse], error) {
+	return c.deleteApplicationVolumes.CallUnary(ctx, req)
+}
+
 // ListApplicationMembers calls platform.v1.ApplicationService.ListApplicationMembers.
 func (c *applicationServiceClient) ListApplicationMembers(ctx context.Context, req *connect.Request[v1.ListApplicationMembersRequest]) (*connect.Response[v1.ListApplicationMembersResponse], error) {
 	return c.listApplicationMembers.CallUnary(ctx, req)
@@ -487,6 +503,7 @@ type ApplicationServiceHandler interface {
 	UpdateApplication(context.Context, *connect.Request[v1.UpdateApplicationRequest]) (*connect.Response[v1.UpdateApplicationResponse], error)
 	ArchiveApplication(context.Context, *connect.Request[v1.ArchiveApplicationRequest]) (*connect.Response[v1.ArchiveApplicationResponse], error)
 	DeleteApplication(context.Context, *connect.Request[v1.DeleteApplicationRequest]) (*connect.Response[v1.DeleteApplicationResponse], error)
+	DeleteApplicationVolumes(context.Context, *connect.Request[v1.DeleteApplicationVolumesRequest]) (*connect.Response[v1.DeleteApplicationVolumesResponse], error)
 	ListApplicationMembers(context.Context, *connect.Request[v1.ListApplicationMembersRequest]) (*connect.Response[v1.ListApplicationMembersResponse], error)
 	SetApplicationMember(context.Context, *connect.Request[v1.SetApplicationMemberRequest]) (*connect.Response[v1.SetApplicationMemberResponse], error)
 	RemoveApplicationMember(context.Context, *connect.Request[v1.RemoveApplicationMemberRequest]) (*connect.Response[v1.RemoveApplicationMemberResponse], error)
@@ -535,6 +552,12 @@ func NewApplicationServiceHandler(svc ApplicationServiceHandler, opts ...connect
 		connect.WithSchema(applicationServiceMethods.ByName("DeleteApplication")),
 		connect.WithHandlerOptions(opts...),
 	)
+	applicationServiceDeleteApplicationVolumesHandler := connect.NewUnaryHandler(
+		ApplicationServiceDeleteApplicationVolumesProcedure,
+		svc.DeleteApplicationVolumes,
+		connect.WithSchema(applicationServiceMethods.ByName("DeleteApplicationVolumes")),
+		connect.WithHandlerOptions(opts...),
+	)
 	applicationServiceListApplicationMembersHandler := connect.NewUnaryHandler(
 		ApplicationServiceListApplicationMembersProcedure,
 		svc.ListApplicationMembers,
@@ -567,6 +590,8 @@ func NewApplicationServiceHandler(svc ApplicationServiceHandler, opts ...connect
 			applicationServiceArchiveApplicationHandler.ServeHTTP(w, r)
 		case ApplicationServiceDeleteApplicationProcedure:
 			applicationServiceDeleteApplicationHandler.ServeHTTP(w, r)
+		case ApplicationServiceDeleteApplicationVolumesProcedure:
+			applicationServiceDeleteApplicationVolumesHandler.ServeHTTP(w, r)
 		case ApplicationServiceListApplicationMembersProcedure:
 			applicationServiceListApplicationMembersHandler.ServeHTTP(w, r)
 		case ApplicationServiceSetApplicationMemberProcedure:
@@ -604,6 +629,10 @@ func (UnimplementedApplicationServiceHandler) ArchiveApplication(context.Context
 
 func (UnimplementedApplicationServiceHandler) DeleteApplication(context.Context, *connect.Request[v1.DeleteApplicationRequest]) (*connect.Response[v1.DeleteApplicationResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("platform.v1.ApplicationService.DeleteApplication is not implemented"))
+}
+
+func (UnimplementedApplicationServiceHandler) DeleteApplicationVolumes(context.Context, *connect.Request[v1.DeleteApplicationVolumesRequest]) (*connect.Response[v1.DeleteApplicationVolumesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("platform.v1.ApplicationService.DeleteApplicationVolumes is not implemented"))
 }
 
 func (UnimplementedApplicationServiceHandler) ListApplicationMembers(context.Context, *connect.Request[v1.ListApplicationMembersRequest]) (*connect.Response[v1.ListApplicationMembersResponse], error) {

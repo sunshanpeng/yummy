@@ -138,19 +138,22 @@ func (x *Workspace) GetUpdatedAt() string {
 }
 
 type Application struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	WorkspaceId   string                 `protobuf:"bytes,2,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
-	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
-	Description   string                 `protobuf:"bytes,4,opt,name=description,proto3" json:"description,omitempty"`
-	Status        string                 `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"`
-	Revision      int64                  `protobuf:"varint,6,opt,name=revision,proto3" json:"revision,omitempty"`
-	Capabilities  []string               `protobuf:"bytes,7,rep,name=capabilities,proto3" json:"capabilities,omitempty"`
-	CreatedAt     string                 `protobuf:"bytes,8,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	UpdatedAt     string                 `protobuf:"bytes,9,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	DeletionReady bool                   `protobuf:"varint,10,opt,name=deletion_ready,json=deletionReady,proto3" json:"deletion_ready,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Id              string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	WorkspaceId     string                 `protobuf:"bytes,2,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
+	Name            string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	Description     string                 `protobuf:"bytes,4,opt,name=description,proto3" json:"description,omitempty"`
+	Status          string                 `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"`
+	Revision        int64                  `protobuf:"varint,6,opt,name=revision,proto3" json:"revision,omitempty"`
+	Capabilities    []string               `protobuf:"bytes,7,rep,name=capabilities,proto3" json:"capabilities,omitempty"`
+	CreatedAt       string                 `protobuf:"bytes,8,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt       string                 `protobuf:"bytes,9,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	DeletionReady   bool                   `protobuf:"varint,10,opt,name=deletion_ready,json=deletionReady,proto3" json:"deletion_ready,omitempty"`
+	DeletionState   string                 `protobuf:"bytes,11,opt,name=deletion_state,json=deletionState,proto3" json:"deletion_state,omitempty"`
+	DeletionError   string                 `protobuf:"bytes,12,opt,name=deletion_error,json=deletionError,proto3" json:"deletion_error,omitempty"`
+	DeletingVolumes bool                   `protobuf:"varint,13,opt,name=deleting_volumes,json=deletingVolumes,proto3" json:"deleting_volumes,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *Application) Reset() {
@@ -249,6 +252,27 @@ func (x *Application) GetUpdatedAt() string {
 func (x *Application) GetDeletionReady() bool {
 	if x != nil {
 		return x.DeletionReady
+	}
+	return false
+}
+
+func (x *Application) GetDeletionState() string {
+	if x != nil {
+		return x.DeletionState
+	}
+	return ""
+}
+
+func (x *Application) GetDeletionError() string {
+	if x != nil {
+		return x.DeletionError
+	}
+	return ""
+}
+
+func (x *Application) GetDeletingVolumes() bool {
+	if x != nil {
+		return x.DeletingVolumes
 	}
 	return false
 }
@@ -1909,6 +1933,7 @@ func (x *DeleteApplicationRequest) GetExpectedRevision() int64 {
 
 type DeleteApplicationResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
+	State         string                 `protobuf:"bytes,1,opt,name=state,proto3" json:"state,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1943,6 +1968,125 @@ func (*DeleteApplicationResponse) Descriptor() ([]byte, []int) {
 	return file_platform_v1_resources_proto_rawDescGZIP(), []int{32}
 }
 
+func (x *DeleteApplicationResponse) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
+type DeleteApplicationVolumesRequest struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	WorkspaceId      string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
+	ApplicationId    string                 `protobuf:"bytes,2,opt,name=application_id,json=applicationId,proto3" json:"application_id,omitempty"`
+	ExpectedRevision int64                  `protobuf:"varint,3,opt,name=expected_revision,json=expectedRevision,proto3" json:"expected_revision,omitempty"`
+	Confirmation     string                 `protobuf:"bytes,4,opt,name=confirmation,proto3" json:"confirmation,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *DeleteApplicationVolumesRequest) Reset() {
+	*x = DeleteApplicationVolumesRequest{}
+	mi := &file_platform_v1_resources_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteApplicationVolumesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteApplicationVolumesRequest) ProtoMessage() {}
+
+func (x *DeleteApplicationVolumesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_platform_v1_resources_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteApplicationVolumesRequest.ProtoReflect.Descriptor instead.
+func (*DeleteApplicationVolumesRequest) Descriptor() ([]byte, []int) {
+	return file_platform_v1_resources_proto_rawDescGZIP(), []int{33}
+}
+
+func (x *DeleteApplicationVolumesRequest) GetWorkspaceId() string {
+	if x != nil {
+		return x.WorkspaceId
+	}
+	return ""
+}
+
+func (x *DeleteApplicationVolumesRequest) GetApplicationId() string {
+	if x != nil {
+		return x.ApplicationId
+	}
+	return ""
+}
+
+func (x *DeleteApplicationVolumesRequest) GetExpectedRevision() int64 {
+	if x != nil {
+		return x.ExpectedRevision
+	}
+	return 0
+}
+
+func (x *DeleteApplicationVolumesRequest) GetConfirmation() string {
+	if x != nil {
+		return x.Confirmation
+	}
+	return ""
+}
+
+type DeleteApplicationVolumesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	State         string                 `protobuf:"bytes,1,opt,name=state,proto3" json:"state,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteApplicationVolumesResponse) Reset() {
+	*x = DeleteApplicationVolumesResponse{}
+	mi := &file_platform_v1_resources_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteApplicationVolumesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteApplicationVolumesResponse) ProtoMessage() {}
+
+func (x *DeleteApplicationVolumesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_platform_v1_resources_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteApplicationVolumesResponse.ProtoReflect.Descriptor instead.
+func (*DeleteApplicationVolumesResponse) Descriptor() ([]byte, []int) {
+	return file_platform_v1_resources_proto_rawDescGZIP(), []int{34}
+}
+
+func (x *DeleteApplicationVolumesResponse) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
 type ListApplicationMembersRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	WorkspaceId   string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
@@ -1955,7 +2099,7 @@ type ListApplicationMembersRequest struct {
 
 func (x *ListApplicationMembersRequest) Reset() {
 	*x = ListApplicationMembersRequest{}
-	mi := &file_platform_v1_resources_proto_msgTypes[33]
+	mi := &file_platform_v1_resources_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1967,7 +2111,7 @@ func (x *ListApplicationMembersRequest) String() string {
 func (*ListApplicationMembersRequest) ProtoMessage() {}
 
 func (x *ListApplicationMembersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_platform_v1_resources_proto_msgTypes[33]
+	mi := &file_platform_v1_resources_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1980,7 +2124,7 @@ func (x *ListApplicationMembersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListApplicationMembersRequest.ProtoReflect.Descriptor instead.
 func (*ListApplicationMembersRequest) Descriptor() ([]byte, []int) {
-	return file_platform_v1_resources_proto_rawDescGZIP(), []int{33}
+	return file_platform_v1_resources_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *ListApplicationMembersRequest) GetWorkspaceId() string {
@@ -2021,7 +2165,7 @@ type ListApplicationMembersResponse struct {
 
 func (x *ListApplicationMembersResponse) Reset() {
 	*x = ListApplicationMembersResponse{}
-	mi := &file_platform_v1_resources_proto_msgTypes[34]
+	mi := &file_platform_v1_resources_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2033,7 +2177,7 @@ func (x *ListApplicationMembersResponse) String() string {
 func (*ListApplicationMembersResponse) ProtoMessage() {}
 
 func (x *ListApplicationMembersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_platform_v1_resources_proto_msgTypes[34]
+	mi := &file_platform_v1_resources_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2046,7 +2190,7 @@ func (x *ListApplicationMembersResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListApplicationMembersResponse.ProtoReflect.Descriptor instead.
 func (*ListApplicationMembersResponse) Descriptor() ([]byte, []int) {
-	return file_platform_v1_resources_proto_rawDescGZIP(), []int{34}
+	return file_platform_v1_resources_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *ListApplicationMembersResponse) GetMembers() []*ApplicationMember {
@@ -2075,7 +2219,7 @@ type SetApplicationMemberRequest struct {
 
 func (x *SetApplicationMemberRequest) Reset() {
 	*x = SetApplicationMemberRequest{}
-	mi := &file_platform_v1_resources_proto_msgTypes[35]
+	mi := &file_platform_v1_resources_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2087,7 +2231,7 @@ func (x *SetApplicationMemberRequest) String() string {
 func (*SetApplicationMemberRequest) ProtoMessage() {}
 
 func (x *SetApplicationMemberRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_platform_v1_resources_proto_msgTypes[35]
+	mi := &file_platform_v1_resources_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2100,7 +2244,7 @@ func (x *SetApplicationMemberRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetApplicationMemberRequest.ProtoReflect.Descriptor instead.
 func (*SetApplicationMemberRequest) Descriptor() ([]byte, []int) {
-	return file_platform_v1_resources_proto_rawDescGZIP(), []int{35}
+	return file_platform_v1_resources_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *SetApplicationMemberRequest) GetWorkspaceId() string {
@@ -2139,7 +2283,7 @@ type SetApplicationMemberResponse struct {
 
 func (x *SetApplicationMemberResponse) Reset() {
 	*x = SetApplicationMemberResponse{}
-	mi := &file_platform_v1_resources_proto_msgTypes[36]
+	mi := &file_platform_v1_resources_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2151,7 +2295,7 @@ func (x *SetApplicationMemberResponse) String() string {
 func (*SetApplicationMemberResponse) ProtoMessage() {}
 
 func (x *SetApplicationMemberResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_platform_v1_resources_proto_msgTypes[36]
+	mi := &file_platform_v1_resources_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2164,7 +2308,7 @@ func (x *SetApplicationMemberResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetApplicationMemberResponse.ProtoReflect.Descriptor instead.
 func (*SetApplicationMemberResponse) Descriptor() ([]byte, []int) {
-	return file_platform_v1_resources_proto_rawDescGZIP(), []int{36}
+	return file_platform_v1_resources_proto_rawDescGZIP(), []int{38}
 }
 
 type RemoveApplicationMemberRequest struct {
@@ -2178,7 +2322,7 @@ type RemoveApplicationMemberRequest struct {
 
 func (x *RemoveApplicationMemberRequest) Reset() {
 	*x = RemoveApplicationMemberRequest{}
-	mi := &file_platform_v1_resources_proto_msgTypes[37]
+	mi := &file_platform_v1_resources_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2190,7 +2334,7 @@ func (x *RemoveApplicationMemberRequest) String() string {
 func (*RemoveApplicationMemberRequest) ProtoMessage() {}
 
 func (x *RemoveApplicationMemberRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_platform_v1_resources_proto_msgTypes[37]
+	mi := &file_platform_v1_resources_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2203,7 +2347,7 @@ func (x *RemoveApplicationMemberRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveApplicationMemberRequest.ProtoReflect.Descriptor instead.
 func (*RemoveApplicationMemberRequest) Descriptor() ([]byte, []int) {
-	return file_platform_v1_resources_proto_rawDescGZIP(), []int{37}
+	return file_platform_v1_resources_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *RemoveApplicationMemberRequest) GetWorkspaceId() string {
@@ -2235,7 +2379,7 @@ type RemoveApplicationMemberResponse struct {
 
 func (x *RemoveApplicationMemberResponse) Reset() {
 	*x = RemoveApplicationMemberResponse{}
-	mi := &file_platform_v1_resources_proto_msgTypes[38]
+	mi := &file_platform_v1_resources_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2247,7 +2391,7 @@ func (x *RemoveApplicationMemberResponse) String() string {
 func (*RemoveApplicationMemberResponse) ProtoMessage() {}
 
 func (x *RemoveApplicationMemberResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_platform_v1_resources_proto_msgTypes[38]
+	mi := &file_platform_v1_resources_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2260,7 +2404,7 @@ func (x *RemoveApplicationMemberResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveApplicationMemberResponse.ProtoReflect.Descriptor instead.
 func (*RemoveApplicationMemberResponse) Descriptor() ([]byte, []int) {
-	return file_platform_v1_resources_proto_rawDescGZIP(), []int{38}
+	return file_platform_v1_resources_proto_rawDescGZIP(), []int{40}
 }
 
 var File_platform_v1_resources_proto protoreflect.FileDescriptor
@@ -2281,7 +2425,7 @@ const file_platform_v1_resources_proto_rawDesc = "" +
 	"created_at\x18\t \x01(\tR\tcreatedAt\x12\x1d\n" +
 	"\n" +
 	"updated_at\x18\n" +
-	" \x01(\tR\tupdatedAt\"\xb3\x02\n" +
+	" \x01(\tR\tupdatedAt\"\xac\x03\n" +
 	"\vApplication\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12!\n" +
 	"\fworkspace_id\x18\x02 \x01(\tR\vworkspaceId\x12\x12\n" +
@@ -2295,7 +2439,10 @@ const file_platform_v1_resources_proto_rawDesc = "" +
 	"\n" +
 	"updated_at\x18\t \x01(\tR\tupdatedAt\x12%\n" +
 	"\x0edeletion_ready\x18\n" +
-	" \x01(\bR\rdeletionReady\"x\n" +
+	" \x01(\bR\rdeletionReady\x12%\n" +
+	"\x0edeletion_state\x18\v \x01(\tR\rdeletionState\x12%\n" +
+	"\x0edeletion_error\x18\f \x01(\tR\rdeletionError\x12)\n" +
+	"\x10deleting_volumes\x18\r \x01(\bR\x0fdeletingVolumes\"x\n" +
 	"\x10ApplicationGrant\x12%\n" +
 	"\x0eapplication_id\x18\x01 \x01(\tR\rapplicationId\x12)\n" +
 	"\x10application_name\x18\x02 \x01(\tR\x0fapplicationName\x12\x12\n" +
@@ -2403,8 +2550,16 @@ const file_platform_v1_resources_proto_rawDesc = "" +
 	"\x18DeleteApplicationRequest\x12!\n" +
 	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x12%\n" +
 	"\x0eapplication_id\x18\x02 \x01(\tR\rapplicationId\x12+\n" +
-	"\x11expected_revision\x18\x03 \x01(\x03R\x10expectedRevision\"\x1b\n" +
-	"\x19DeleteApplicationResponse\"\x97\x01\n" +
+	"\x11expected_revision\x18\x03 \x01(\x03R\x10expectedRevision\"1\n" +
+	"\x19DeleteApplicationResponse\x12\x14\n" +
+	"\x05state\x18\x01 \x01(\tR\x05state\"\xbc\x01\n" +
+	"\x1fDeleteApplicationVolumesRequest\x12!\n" +
+	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x12%\n" +
+	"\x0eapplication_id\x18\x02 \x01(\tR\rapplicationId\x12+\n" +
+	"\x11expected_revision\x18\x03 \x01(\x03R\x10expectedRevision\x12\"\n" +
+	"\fconfirmation\x18\x04 \x01(\tR\fconfirmation\"8\n" +
+	" DeleteApplicationVolumesResponse\x12\x14\n" +
+	"\x05state\x18\x01 \x01(\tR\x05state\"\x97\x01\n" +
 	"\x1dListApplicationMembersRequest\x12!\n" +
 	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x12%\n" +
 	"\x0eapplication_id\x18\x02 \x01(\tR\rapplicationId\x12\x14\n" +
@@ -2433,14 +2588,15 @@ const file_platform_v1_resources_proto_rawDesc = "" +
 	"\x10ArchiveWorkspace\x12$.platform.v1.ArchiveWorkspaceRequest\x1a%.platform.v1.ArchiveWorkspaceResponse\x12k\n" +
 	"\x14ListWorkspaceMembers\x12(.platform.v1.ListWorkspaceMembersRequest\x1a).platform.v1.ListWorkspaceMembersResponse\x12z\n" +
 	"\x19ChangeWorkspaceMemberRole\x12-.platform.v1.ChangeWorkspaceMemberRoleRequest\x1a..platform.v1.ChangeWorkspaceMemberRoleResponse\x12n\n" +
-	"\x15RemoveWorkspaceMember\x12).platform.v1.RemoveWorkspaceMemberRequest\x1a*.platform.v1.RemoveWorkspaceMemberResponse2\xb9\a\n" +
+	"\x15RemoveWorkspaceMember\x12).platform.v1.RemoveWorkspaceMemberRequest\x1a*.platform.v1.RemoveWorkspaceMemberResponse2\xb2\b\n" +
 	"\x12ApplicationService\x12_\n" +
 	"\x10ListApplications\x12$.platform.v1.ListApplicationsRequest\x1a%.platform.v1.ListApplicationsResponse\x12Y\n" +
 	"\x0eGetApplication\x12\".platform.v1.GetApplicationRequest\x1a#.platform.v1.GetApplicationResponse\x12b\n" +
 	"\x11CreateApplication\x12%.platform.v1.CreateApplicationRequest\x1a&.platform.v1.CreateApplicationResponse\x12b\n" +
 	"\x11UpdateApplication\x12%.platform.v1.UpdateApplicationRequest\x1a&.platform.v1.UpdateApplicationResponse\x12e\n" +
 	"\x12ArchiveApplication\x12&.platform.v1.ArchiveApplicationRequest\x1a'.platform.v1.ArchiveApplicationResponse\x12b\n" +
-	"\x11DeleteApplication\x12%.platform.v1.DeleteApplicationRequest\x1a&.platform.v1.DeleteApplicationResponse\x12q\n" +
+	"\x11DeleteApplication\x12%.platform.v1.DeleteApplicationRequest\x1a&.platform.v1.DeleteApplicationResponse\x12w\n" +
+	"\x18DeleteApplicationVolumes\x12,.platform.v1.DeleteApplicationVolumesRequest\x1a-.platform.v1.DeleteApplicationVolumesResponse\x12q\n" +
 	"\x16ListApplicationMembers\x12*.platform.v1.ListApplicationMembersRequest\x1a+.platform.v1.ListApplicationMembersResponse\x12k\n" +
 	"\x14SetApplicationMember\x12(.platform.v1.SetApplicationMemberRequest\x1a).platform.v1.SetApplicationMemberResponse\x12t\n" +
 	"\x17RemoveApplicationMember\x12+.platform.v1.RemoveApplicationMemberRequest\x1a,.platform.v1.RemoveApplicationMemberResponseB<Z:github.com/sunshanpeng/yummy/gen/go/platform/v1;platformv1b\x06proto3"
@@ -2457,7 +2613,7 @@ func file_platform_v1_resources_proto_rawDescGZIP() []byte {
 	return file_platform_v1_resources_proto_rawDescData
 }
 
-var file_platform_v1_resources_proto_msgTypes = make([]protoimpl.MessageInfo, 39)
+var file_platform_v1_resources_proto_msgTypes = make([]protoimpl.MessageInfo, 41)
 var file_platform_v1_resources_proto_goTypes = []any{
 	(*Workspace)(nil),                         // 0: platform.v1.Workspace
 	(*Application)(nil),                       // 1: platform.v1.Application
@@ -2492,12 +2648,14 @@ var file_platform_v1_resources_proto_goTypes = []any{
 	(*ArchiveApplicationResponse)(nil),        // 30: platform.v1.ArchiveApplicationResponse
 	(*DeleteApplicationRequest)(nil),          // 31: platform.v1.DeleteApplicationRequest
 	(*DeleteApplicationResponse)(nil),         // 32: platform.v1.DeleteApplicationResponse
-	(*ListApplicationMembersRequest)(nil),     // 33: platform.v1.ListApplicationMembersRequest
-	(*ListApplicationMembersResponse)(nil),    // 34: platform.v1.ListApplicationMembersResponse
-	(*SetApplicationMemberRequest)(nil),       // 35: platform.v1.SetApplicationMemberRequest
-	(*SetApplicationMemberResponse)(nil),      // 36: platform.v1.SetApplicationMemberResponse
-	(*RemoveApplicationMemberRequest)(nil),    // 37: platform.v1.RemoveApplicationMemberRequest
-	(*RemoveApplicationMemberResponse)(nil),   // 38: platform.v1.RemoveApplicationMemberResponse
+	(*DeleteApplicationVolumesRequest)(nil),   // 33: platform.v1.DeleteApplicationVolumesRequest
+	(*DeleteApplicationVolumesResponse)(nil),  // 34: platform.v1.DeleteApplicationVolumesResponse
+	(*ListApplicationMembersRequest)(nil),     // 35: platform.v1.ListApplicationMembersRequest
+	(*ListApplicationMembersResponse)(nil),    // 36: platform.v1.ListApplicationMembersResponse
+	(*SetApplicationMemberRequest)(nil),       // 37: platform.v1.SetApplicationMemberRequest
+	(*SetApplicationMemberResponse)(nil),      // 38: platform.v1.SetApplicationMemberResponse
+	(*RemoveApplicationMemberRequest)(nil),    // 39: platform.v1.RemoveApplicationMemberRequest
+	(*RemoveApplicationMemberResponse)(nil),   // 40: platform.v1.RemoveApplicationMemberResponse
 }
 var file_platform_v1_resources_proto_depIdxs = []int32{
 	2,  // 0: platform.v1.WorkspaceMember.applications:type_name -> platform.v1.ApplicationGrant
@@ -2525,28 +2683,30 @@ var file_platform_v1_resources_proto_depIdxs = []int32{
 	27, // 22: platform.v1.ApplicationService.UpdateApplication:input_type -> platform.v1.UpdateApplicationRequest
 	29, // 23: platform.v1.ApplicationService.ArchiveApplication:input_type -> platform.v1.ArchiveApplicationRequest
 	31, // 24: platform.v1.ApplicationService.DeleteApplication:input_type -> platform.v1.DeleteApplicationRequest
-	33, // 25: platform.v1.ApplicationService.ListApplicationMembers:input_type -> platform.v1.ListApplicationMembersRequest
-	35, // 26: platform.v1.ApplicationService.SetApplicationMember:input_type -> platform.v1.SetApplicationMemberRequest
-	37, // 27: platform.v1.ApplicationService.RemoveApplicationMember:input_type -> platform.v1.RemoveApplicationMemberRequest
-	6,  // 28: platform.v1.WorkspaceService.ListWorkspaces:output_type -> platform.v1.ListWorkspacesResponse
-	8,  // 29: platform.v1.WorkspaceService.GetWorkspace:output_type -> platform.v1.GetWorkspaceResponse
-	10, // 30: platform.v1.WorkspaceService.CreateWorkspace:output_type -> platform.v1.CreateWorkspaceResponse
-	12, // 31: platform.v1.WorkspaceService.UpdateWorkspace:output_type -> platform.v1.UpdateWorkspaceResponse
-	14, // 32: platform.v1.WorkspaceService.ArchiveWorkspace:output_type -> platform.v1.ArchiveWorkspaceResponse
-	16, // 33: platform.v1.WorkspaceService.ListWorkspaceMembers:output_type -> platform.v1.ListWorkspaceMembersResponse
-	18, // 34: platform.v1.WorkspaceService.ChangeWorkspaceMemberRole:output_type -> platform.v1.ChangeWorkspaceMemberRoleResponse
-	20, // 35: platform.v1.WorkspaceService.RemoveWorkspaceMember:output_type -> platform.v1.RemoveWorkspaceMemberResponse
-	22, // 36: platform.v1.ApplicationService.ListApplications:output_type -> platform.v1.ListApplicationsResponse
-	24, // 37: platform.v1.ApplicationService.GetApplication:output_type -> platform.v1.GetApplicationResponse
-	26, // 38: platform.v1.ApplicationService.CreateApplication:output_type -> platform.v1.CreateApplicationResponse
-	28, // 39: platform.v1.ApplicationService.UpdateApplication:output_type -> platform.v1.UpdateApplicationResponse
-	30, // 40: platform.v1.ApplicationService.ArchiveApplication:output_type -> platform.v1.ArchiveApplicationResponse
-	32, // 41: platform.v1.ApplicationService.DeleteApplication:output_type -> platform.v1.DeleteApplicationResponse
-	34, // 42: platform.v1.ApplicationService.ListApplicationMembers:output_type -> platform.v1.ListApplicationMembersResponse
-	36, // 43: platform.v1.ApplicationService.SetApplicationMember:output_type -> platform.v1.SetApplicationMemberResponse
-	38, // 44: platform.v1.ApplicationService.RemoveApplicationMember:output_type -> platform.v1.RemoveApplicationMemberResponse
-	28, // [28:45] is the sub-list for method output_type
-	11, // [11:28] is the sub-list for method input_type
+	33, // 25: platform.v1.ApplicationService.DeleteApplicationVolumes:input_type -> platform.v1.DeleteApplicationVolumesRequest
+	35, // 26: platform.v1.ApplicationService.ListApplicationMembers:input_type -> platform.v1.ListApplicationMembersRequest
+	37, // 27: platform.v1.ApplicationService.SetApplicationMember:input_type -> platform.v1.SetApplicationMemberRequest
+	39, // 28: platform.v1.ApplicationService.RemoveApplicationMember:input_type -> platform.v1.RemoveApplicationMemberRequest
+	6,  // 29: platform.v1.WorkspaceService.ListWorkspaces:output_type -> platform.v1.ListWorkspacesResponse
+	8,  // 30: platform.v1.WorkspaceService.GetWorkspace:output_type -> platform.v1.GetWorkspaceResponse
+	10, // 31: platform.v1.WorkspaceService.CreateWorkspace:output_type -> platform.v1.CreateWorkspaceResponse
+	12, // 32: platform.v1.WorkspaceService.UpdateWorkspace:output_type -> platform.v1.UpdateWorkspaceResponse
+	14, // 33: platform.v1.WorkspaceService.ArchiveWorkspace:output_type -> platform.v1.ArchiveWorkspaceResponse
+	16, // 34: platform.v1.WorkspaceService.ListWorkspaceMembers:output_type -> platform.v1.ListWorkspaceMembersResponse
+	18, // 35: platform.v1.WorkspaceService.ChangeWorkspaceMemberRole:output_type -> platform.v1.ChangeWorkspaceMemberRoleResponse
+	20, // 36: platform.v1.WorkspaceService.RemoveWorkspaceMember:output_type -> platform.v1.RemoveWorkspaceMemberResponse
+	22, // 37: platform.v1.ApplicationService.ListApplications:output_type -> platform.v1.ListApplicationsResponse
+	24, // 38: platform.v1.ApplicationService.GetApplication:output_type -> platform.v1.GetApplicationResponse
+	26, // 39: platform.v1.ApplicationService.CreateApplication:output_type -> platform.v1.CreateApplicationResponse
+	28, // 40: platform.v1.ApplicationService.UpdateApplication:output_type -> platform.v1.UpdateApplicationResponse
+	30, // 41: platform.v1.ApplicationService.ArchiveApplication:output_type -> platform.v1.ArchiveApplicationResponse
+	32, // 42: platform.v1.ApplicationService.DeleteApplication:output_type -> platform.v1.DeleteApplicationResponse
+	34, // 43: platform.v1.ApplicationService.DeleteApplicationVolumes:output_type -> platform.v1.DeleteApplicationVolumesResponse
+	36, // 44: platform.v1.ApplicationService.ListApplicationMembers:output_type -> platform.v1.ListApplicationMembersResponse
+	38, // 45: platform.v1.ApplicationService.SetApplicationMember:output_type -> platform.v1.SetApplicationMemberResponse
+	40, // 46: platform.v1.ApplicationService.RemoveApplicationMember:output_type -> platform.v1.RemoveApplicationMemberResponse
+	29, // [29:47] is the sub-list for method output_type
+	11, // [11:29] is the sub-list for method input_type
 	11, // [11:11] is the sub-list for extension type_name
 	11, // [11:11] is the sub-list for extension extendee
 	0,  // [0:11] is the sub-list for field type_name
@@ -2563,7 +2723,7 @@ func file_platform_v1_resources_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_platform_v1_resources_proto_rawDesc), len(file_platform_v1_resources_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   39,
+			NumMessages:   41,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

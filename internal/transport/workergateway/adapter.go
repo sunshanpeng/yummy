@@ -21,6 +21,8 @@ func deploymentIdentity(value enrollment.Identity, certificate *x509.Certificate
 }
 func (g *Gateway) receive(ctx context.Context, s *session, message *platformv1.WorkerEnvelope) error {
 	switch payload := message.Payload.(type) {
+	case *platformv1.WorkerEnvelope_ApplicationCleanupResult:
+		return g.receiveCleanup(ctx, s, payload.ApplicationCleanupResult)
 	case *platformv1.WorkerEnvelope_Heartbeat:
 		return g.heartbeat(ctx, s, payload.Heartbeat)
 	case *platformv1.WorkerEnvelope_Qualification:
@@ -76,7 +78,7 @@ func (g *Gateway) receive(ctx context.Context, s *session, message *platformv1.W
 		if err != nil {
 			return err
 		}
-		ack, err := g.config.Deployments.ApplyRuntimeLog(ctx, deploymentIdentity(s.identity, s.certificate), deployment.RuntimeLogInput{WorkspaceID: value.WorkspaceId, ApplicationID: value.ApplicationId, OperationID: value.OperationId, ReleaseID: value.ReleaseId, Generation: value.Generation, PodUID: value.PodUid, Container: value.Container, RestartCount: value.RestartCount, Seq: value.Seq, Content: value.Content, Truncated: value.Truncated})
+		ack, err := g.config.Deployments.ApplyRuntimeLog(ctx, deploymentIdentity(s.identity, s.certificate), deployment.RuntimeLogInput{WorkspaceID: value.WorkspaceId, ApplicationID: value.ApplicationId, OperationID: value.OperationId, ReleaseID: value.ReleaseId, PodReleaseID: value.PodReleaseId, Generation: value.Generation, PodUID: value.PodUid, Container: value.Container, RestartCount: value.RestartCount, Seq: value.Seq, Content: value.Content, Truncated: value.Truncated})
 		if err != nil {
 			return g.reject(s, "runtime-log", id, value.Seq, err)
 		}
@@ -128,6 +130,9 @@ func (g *Gateway) schedule(ctx context.Context, s *session) error {
 		} else if !errors.Is(err, build.ErrNoCapacity) {
 			return err
 		}
+	}
+	if err := g.scheduleCleanup(ctx, s); err != nil {
+		return err
 	}
 	if g.config.Deployments != nil {
 		value, err := g.config.Deployments.ClaimPending(ctx, deploymentIdentity(s.identity, s.certificate))

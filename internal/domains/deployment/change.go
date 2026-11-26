@@ -37,14 +37,14 @@ func (s *Service) StoppedForArchive(tx *gorm.DB, ws, app string) (bool, error) {
 	return runtime.DesiredState == DesiredStop && runtime.ObservedState == Stopped && runtime.ActiveOperationID == nil, nil
 }
 
-// HasRuntimeHistory 供删除应用检查是否可能存在集群资源，包含失败的发布。
-func (s *Service) HasRuntimeHistory(tx *gorm.DB, ws, app string) (bool, error) {
+// CleanupPlacement 返回固定的运行位置，包含失败发布留下资源的情形。
+func (s *Service) CleanupPlacement(tx *gorm.DB, ws, app string) (string, string, error) {
 	var placement Placement
-	err := tx.Select("id").Where("workspace_id = ? AND application_id = ?", ws, app).Take(&placement).Error
+	err := tx.Select("node_id, cluster_node_uid").Where("workspace_id = ? AND application_id = ?", ws, app).Take(&placement).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return false, nil
+		return "", "", nil
 	}
-	return err == nil, err
+	return placement.NodeID, placement.ClusterNodeUID, err
 }
 func (s *Service) Start(ctx context.Context, p authorization.Principal, ws, app string, in ChangeInput) (Result, error) {
 	return s.change(ctx, p, ws, app, in, Start)

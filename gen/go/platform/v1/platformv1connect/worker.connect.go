@@ -38,12 +38,16 @@ const (
 	// WorkerGatewayCheckGenerationProcedure is the fully-qualified name of the WorkerGateway's
 	// CheckGeneration RPC.
 	WorkerGatewayCheckGenerationProcedure = "/platform.v1.WorkerGateway/CheckGeneration"
+	// WorkerGatewayCheckApplicationCleanupProcedure is the fully-qualified name of the WorkerGateway's
+	// CheckApplicationCleanup RPC.
+	WorkerGatewayCheckApplicationCleanupProcedure = "/platform.v1.WorkerGateway/CheckApplicationCleanup"
 )
 
 // WorkerGatewayClient is a client for the platform.v1.WorkerGateway service.
 type WorkerGatewayClient interface {
 	Connect(context.Context) *connect.BidiStreamForClient[v1.WorkerEnvelope, v1.ControlEnvelope]
 	CheckGeneration(context.Context, *connect.Request[v1.WorkerGenerationRequest]) (*connect.Response[v1.WorkerGenerationResponse], error)
+	CheckApplicationCleanup(context.Context, *connect.Request[v1.WorkerCleanupLease]) (*connect.Response[v1.WorkerGenerationResponse], error)
 }
 
 // NewWorkerGatewayClient constructs a client for the platform.v1.WorkerGateway service. By default,
@@ -69,13 +73,20 @@ func NewWorkerGatewayClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(workerGatewayMethods.ByName("CheckGeneration")),
 			connect.WithClientOptions(opts...),
 		),
+		checkApplicationCleanup: connect.NewClient[v1.WorkerCleanupLease, v1.WorkerGenerationResponse](
+			httpClient,
+			baseURL+WorkerGatewayCheckApplicationCleanupProcedure,
+			connect.WithSchema(workerGatewayMethods.ByName("CheckApplicationCleanup")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // workerGatewayClient implements WorkerGatewayClient.
 type workerGatewayClient struct {
-	connect         *connect.Client[v1.WorkerEnvelope, v1.ControlEnvelope]
-	checkGeneration *connect.Client[v1.WorkerGenerationRequest, v1.WorkerGenerationResponse]
+	connect                 *connect.Client[v1.WorkerEnvelope, v1.ControlEnvelope]
+	checkGeneration         *connect.Client[v1.WorkerGenerationRequest, v1.WorkerGenerationResponse]
+	checkApplicationCleanup *connect.Client[v1.WorkerCleanupLease, v1.WorkerGenerationResponse]
 }
 
 // Connect calls platform.v1.WorkerGateway.Connect.
@@ -88,10 +99,16 @@ func (c *workerGatewayClient) CheckGeneration(ctx context.Context, req *connect.
 	return c.checkGeneration.CallUnary(ctx, req)
 }
 
+// CheckApplicationCleanup calls platform.v1.WorkerGateway.CheckApplicationCleanup.
+func (c *workerGatewayClient) CheckApplicationCleanup(ctx context.Context, req *connect.Request[v1.WorkerCleanupLease]) (*connect.Response[v1.WorkerGenerationResponse], error) {
+	return c.checkApplicationCleanup.CallUnary(ctx, req)
+}
+
 // WorkerGatewayHandler is an implementation of the platform.v1.WorkerGateway service.
 type WorkerGatewayHandler interface {
 	Connect(context.Context, *connect.BidiStream[v1.WorkerEnvelope, v1.ControlEnvelope]) error
 	CheckGeneration(context.Context, *connect.Request[v1.WorkerGenerationRequest]) (*connect.Response[v1.WorkerGenerationResponse], error)
+	CheckApplicationCleanup(context.Context, *connect.Request[v1.WorkerCleanupLease]) (*connect.Response[v1.WorkerGenerationResponse], error)
 }
 
 // NewWorkerGatewayHandler builds an HTTP handler from the service implementation. It returns the
@@ -113,12 +130,20 @@ func NewWorkerGatewayHandler(svc WorkerGatewayHandler, opts ...connect.HandlerOp
 		connect.WithSchema(workerGatewayMethods.ByName("CheckGeneration")),
 		connect.WithHandlerOptions(opts...),
 	)
+	workerGatewayCheckApplicationCleanupHandler := connect.NewUnaryHandler(
+		WorkerGatewayCheckApplicationCleanupProcedure,
+		svc.CheckApplicationCleanup,
+		connect.WithSchema(workerGatewayMethods.ByName("CheckApplicationCleanup")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/platform.v1.WorkerGateway/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case WorkerGatewayConnectProcedure:
 			workerGatewayConnectHandler.ServeHTTP(w, r)
 		case WorkerGatewayCheckGenerationProcedure:
 			workerGatewayCheckGenerationHandler.ServeHTTP(w, r)
+		case WorkerGatewayCheckApplicationCleanupProcedure:
+			workerGatewayCheckApplicationCleanupHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -134,4 +159,8 @@ func (UnimplementedWorkerGatewayHandler) Connect(context.Context, *connect.BidiS
 
 func (UnimplementedWorkerGatewayHandler) CheckGeneration(context.Context, *connect.Request[v1.WorkerGenerationRequest]) (*connect.Response[v1.WorkerGenerationResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("platform.v1.WorkerGateway.CheckGeneration is not implemented"))
+}
+
+func (UnimplementedWorkerGatewayHandler) CheckApplicationCleanup(context.Context, *connect.Request[v1.WorkerCleanupLease]) (*connect.Response[v1.WorkerGenerationResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("platform.v1.WorkerGateway.CheckApplicationCleanup is not implemented"))
 }

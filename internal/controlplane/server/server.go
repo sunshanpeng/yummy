@@ -186,7 +186,7 @@ func openWithDatabase(ctx context.Context, db *gorm.DB, config Config, assets fs
 			_ = store.Close(db)
 			return nil, err
 		}
-		gateway, err = newWorkerGateway(workergateway.Config{DB: db, Peers: enrollmentService, Builds: buildService, BuildMaterial: materials, Deployments: deploymentService, DeploymentMaterial: materials, Guard: workerGenerationGuard{service: deploymentService}, Capabilities: qualification.NewVerifier(db), OnError: func(error) { log.Error("worker 网关调度或状态更新失败") }})
+		gateway, err = newWorkerGateway(workergateway.Config{DB: db, Peers: enrollmentService, Builds: buildService, BuildMaterial: materials, Deployments: deploymentService, DeploymentMaterial: materials, Guard: workerGenerationGuard{service: deploymentService}, ApplicationCleanup: applicationService, Capabilities: qualification.NewVerifier(db), OnError: func(error) { log.Error("worker 网关调度或状态更新失败") }})
 		if err != nil {
 			_ = sources.Close()
 			_ = sessions.Close()
@@ -208,7 +208,9 @@ func openWithDatabase(ctx context.Context, db *gorm.DB, config Config, assets fs
 		router.Any("/api"+path+"*method", gin.WrapH(http.StripPrefix("/api", handler)))
 	}
 	mount(transport.NewIdentityHandler(identityService, sessions, log, rpcOptions...))
-	mount(transport.NewWorkspaceHandler(workspace.NewService(db, access), log, rpcOptions...))
+	workspaceService := workspace.NewService(db, access)
+	workspaceService.ApplicationCleanup = applicationService
+	mount(transport.NewWorkspaceHandler(workspaceService, log, rpcOptions...))
 	mount(transport.NewApplicationHandler(applicationService, log, rpcOptions...))
 	mount(transport.NewAuditHandler(audit.NewService(access), log, rpcOptions...))
 	mount(transport.NewRuntimeConfigHandler(configService, log, rpcOptions...))

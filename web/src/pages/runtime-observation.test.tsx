@@ -7,6 +7,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { router } from "../router";
 import { platform } from "../lib/platform";
+import { decodeLogChunks } from "../lib/runtime";
 import { sessionOptions } from "../session";
 import { GetSessionResponseSchema } from "../gen/platform/v1/identity_pb";
 import { GetApplicationResponseSchema, GetWorkspaceResponseSchema, ListWorkspacesResponseSchema } from "../gen/platform/v1/resources_pb";
@@ -71,6 +72,18 @@ afterEach(() => {
 });
 
 describe("应用运行日志与基础监控", () => {
+  it("按 Pod 和容器重启次数分别解码交错的 UTF-8 日志块", () => {
+    const stamp = "2026-11-10T10:00:01Z";
+    const old = encoder.encode("旧发布");
+    const chunks = [
+      makeChunk("old-start", old.subarray(0, 4), stamp, { releaseId: "old-release" }),
+      makeChunk("new", encoder.encode("新发布"), stamp, { podUid: "pod-2", releaseId: "new-release" }),
+      makeChunk("restart", encoder.encode("重启后"), stamp, { restartCount: 1 }),
+      makeChunk("old-end", old.subarray(4), stamp, { releaseId: "old-release" }),
+    ];
+    expect(decodeLogChunks(chunks).map((block) => block.text)).toEqual(["旧", "新发布", "重启后", "发布"]);
+  });
+
   it("应用未部署时展示明确空态且不请求日志或指标", () => {
     const calls = mount({ ...baseHandlers("NOT_DEPLOYED") });
     return screen.findByText("应用当前状态为「尚未部署」，没有正在运行的实例，因此没有运行日志或监控采样。部署成功并启动后，这里展示 worker 上报的真实数据。").then(() => {
@@ -79,12 +92,36 @@ describe("应用运行日志与基础监控", () => {
     });
   });
 
-  it("已停止应用同样不拉取日志与指标", () => {
-    const calls = mount({ ...baseHandlers("STOPPED") });
-    return screen.findByText(/没有正在运行的实例/).then(() => {
-      expect(calls.GetRuntimeLogs).toBeUndefined();
+  it("已停止时可读历史日志，暂停实时跟随和指标查询", () => {
+    const calls = mount({ ...baseHandlers("STOPPED"), GetRuntimeLogs: () => ({ chunks: [makeChunk("log-1", encoder.encode("停止前的日志"), "2026-11-10T10:00:01Z")] }) });
+    return screen.findByText("停止前的日志").then(() => {
+      expect(calls.GetRuntimeLogs.length).toBe(1);
+      expect(screen.queryByRole("button", { name: "跟随日志" })).toBeNull();
       expect(calls.GetRuntimeMetrics).toBeUndefined();
     });
+  });
+
+  it("按发布筛选后从服务端续读游标跟随，保留已加载的日志", async () => {
+    const user = userEvent.setup();
+    const calls = mount({
+      ...baseHandlers("RUNNING"),
+      GetRuntimeLogs: ({ releaseId, cursor }) => {
+        if (releaseId !== "rel-1") return { chunks: [] };
+        if (!cursor) return { chunks: [makeChunk("log-first", encoder.encode("第一块日志"), "2026-11-10T10:00:01Z")], resumeCursor: "first" };
+        if (cursor === "first") return { chunks: [makeChunk("log-live", encoder.encode("跟随取得的日志"), "2026-11-10T10:00:02Z")], resumeCursor: "second" };
+        return { chunks: [], resumeCursor: "second" };
+      },
+      GetRuntimeMetrics: () => ({ samples: [] }),
+    });
+    await user.type(await screen.findByLabelText("发布 ID"), "rel-1");
+    await user.click(screen.getByRole("button", { name: "应用筛选" }));
+    expect(await screen.findByText("第一块日志")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "跟随日志" }));
+    expect(await screen.findByText("跟随取得的日志")).toBeTruthy();
+    expect(screen.getByText("第一块日志")).toBeTruthy();
+    expect(calls.GetRuntimeLogs.some(({ releaseId, cursor }) => releaseId === "rel-1" && cursor === "first")).toBe(true);
+    await user.click(screen.getByRole("button", { name: "停止跟随" }));
+    expect(screen.getByText("跟随取得的日志")).toBeTruthy();
   });
 
   it("日志读取失败显示可重试错误并成功恢复", async () => {
@@ -145,7 +182,7 @@ describe("应用运行日志与基础监控", () => {
     expect(screen.getByText("更新的日志块")).toBeTruthy();
     expect(screen.queryByText("好 第二块")).toBeNull();
     fireEvent.change(screen.getByLabelText("开始时间"), { target: { value: "2026-11-10T10:00" } });
-    await user.click(screen.getByRole("button", { name: "应用时间范围" }));
+    await user.click(screen.getByRole("button", { name: "应用筛选" }));
     await waitFor(() => expect(calls.GetRuntimeLogs.some((message) => message.cursor === "" && message.since === new Date("2026-11-10T10:00").toISOString())).toBe(true));
   });
 

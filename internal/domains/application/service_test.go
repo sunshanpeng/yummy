@@ -366,7 +366,7 @@ func TestDeleteArchivedUnusedApplicationPreservesHistoryAndReleasesName(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := service.Delete(ctx, root, ws, app.ID, 1); !errors.Is(err, authorization.ErrConflict) {
+	if _, err := service.Delete(ctx, root, ws, app.ID, 1); !errors.Is(err, authorization.ErrConflict) {
 		t.Fatalf("活动应用不能删除：%v", err)
 	}
 	if err := service.Archive(ctx, root, ws, app.ID, 1); err != nil {
@@ -379,16 +379,16 @@ func TestDeleteArchivedUnusedApplicationPreservesHistoryAndReleasesName(t *testi
 	if _, err := service.ListArchived(ctx, alice, ws, 24, ""); !errors.Is(err, authorization.ErrDenied) {
 		t.Fatalf("普通成员能枚举归档应用：%v", err)
 	}
-	if err := service.Delete(ctx, alice, ws, app.ID, 2); !errors.Is(err, authorization.ErrDenied) {
+	if _, err := service.Delete(ctx, alice, ws, app.ID, 2); !errors.Is(err, authorization.ErrDenied) {
 		t.Fatalf("普通成员能删除归档应用：%v", err)
 	}
-	if err := service.Delete(ctx, root, ws, app.ID, 1); !errors.Is(err, authorization.ErrConflict) {
+	if _, err := service.Delete(ctx, root, ws, app.ID, 1); !errors.Is(err, authorization.ErrConflict) {
 		t.Fatalf("旧版本能删除归档应用：%v", err)
 	}
-	if err := service.Delete(ctx, root, ws, app.ID, 2); err != nil {
+	if _, err := service.Delete(ctx, root, ws, app.ID, 2); err != nil {
 		t.Fatal(err)
 	}
-	if err := service.Delete(ctx, root, ws, app.ID, 2); err != nil {
+	if _, err := service.Delete(ctx, root, ws, app.ID, 2); err != nil {
 		t.Fatalf("重复删除应幂等：%v", err)
 	}
 	if page, err := service.ListArchived(ctx, root, ws, 24, ""); err != nil || len(page.Items) != 0 {

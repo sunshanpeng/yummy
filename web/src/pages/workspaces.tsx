@@ -57,29 +57,50 @@ export function ApplicationsPage() {
 function ArchivedApplications({ workspaceId }: { workspaceId: string }) {
   const [open, setOpen] = useState(false);
   const [cursor, setCursor] = useState("");
-  const [deletedName, setDeletedName] = useState("");
+  const [feedback, setFeedback] = useState("");
   const client = useQueryClient();
-  const query = useRPC(ApplicationService.method.listApplications, { workspaceId, archivedOnly: true, limit: 24, cursor }, { enabled: open });
+  const query = useRPC(ApplicationService.method.listApplications, { workspaceId, archivedOnly: true, limit: 24, cursor }, { enabled: open, refetchInterval: open ? 5000 : false });
+  const request = async (app: Application, volumes: boolean) => {
+    const input = { workspaceId, applicationId: app.id, expectedRevision: app.revision };
+    const result = volumes
+      ? await platform.applications.deleteApplicationVolumes({ ...input, confirmation: app.name })
+      : await platform.applications.deleteApplication(input);
+    setFeedback(result.state === "DELETED" ? `已删除「${app.name}」，可重新使用该名称。` : `已受理「${app.name}」的清理请求。`);
+    await invalidateMethods(client, ["ListApplications", "ListAuditEvents"]);
+  };
   return <section className="section space-y-3">
     <Button variant="outline" aria-expanded={open} aria-controls="archived-applications" onClick={() => setOpen(!open)}>已归档应用</Button>
     <div id="archived-applications" className="space-y-3" hidden={!open}>
       {open && <QueryState query={query}>
-        {deletedName && <Notice tone="success">已删除「{deletedName}」，可重新使用该名称。</Notice>}
+        {feedback && <Notice tone="success">{feedback}</Notice>}
         {query.data?.applications.length ? <DataTable rows={query.data.applications} label="已归档应用" columns={[
           { id: "name", title: "应用", cell: (app) => <span className="break-all font-medium">{app.name}</span> },
           { id: "updated", title: "归档时间", cell: (app) => formatTime(app.updatedAt) },
-          { id: "delete", title: "操作", cell: (app) => app.deletionReady
-            ? <ConfirmAction label="删除应用" destructive title={`删除「${app.name}」`} description="删除后可重新使用该名称。审计与历史数据仍关联到原应用 ID。" onConfirm={async () => {
-              await platform.applications.deleteApplication({ workspaceId, applicationId: app.id, expectedRevision: app.revision });
-              setDeletedName(app.name);
-              await invalidateMethods(client, ["ListApplications", "ListAuditEvents"]);
-            }} />
-            : <span className="text-sm text-muted-foreground">待清理集群资源</span> },
+          { id: "delete", title: "操作", cell: (app) => <ArchivedApplicationAction app={app} request={request} /> },
         ]} /> : <p className="text-sm text-muted-foreground">没有已归档应用。</p>}
         <Pager cursor={cursor} nextCursor={query.data?.nextCursor} onPage={setCursor} />
       </QueryState>}
     </div>
   </section>;
+}
+const deletionErrors: Record<string, string> = {
+  OWNERSHIP_CONFLICT: "集群资源的归属核验失败。",
+  PERMISSION_DENIED: "worker 缺少所需的 Kubernetes 权限。",
+  KUBERNETES_UNAVAILABLE: "worker 无法完成 Kubernetes 资源清理。",
+};
+function ArchivedApplicationAction({ app, request }: { app: Application; request: (app: Application, volumes: boolean) => Promise<void> }) {
+  if (app.deletionState === "PENDING") return <span className="text-sm text-muted-foreground">{app.deletingVolumes ? "等待 worker 清理持久卷" : "等待 worker 清理集群资源"}</span>;
+  const retry = app.deletionState === "FAILED";
+  const volumes = app.deletionState === "WAITING_VOLUMES" || (retry && app.deletingVolumes);
+  if (!app.deletionReady && !volumes && !retry) return <span className="text-sm text-muted-foreground">等待应用构建结束</span>;
+  return <div className="space-y-2">
+    {retry && <p className="text-sm text-destructive">{deletionErrors[app.deletionError] ?? "清理失败。"}</p>}
+    {app.deletionState === "WAITING_VOLUMES" && <p className="text-sm text-muted-foreground">应用工作负载已清理，持久卷仍保留。</p>}
+    <ConfirmAction label={volumes ? "删除持久卷" : retry ? "重试清理" : "删除应用"} destructive title={`${volumes ? "删除持久卷" : "删除应用"}「${app.name}」`}
+      confirmationText={volumes ? app.name : undefined}
+      description={volumes ? "此操作删除应用保留的卷声明，底层数据按存储类的回收策略处理。完成后释放该应用名称。" : "删除应用资源。已有持久卷会保留并等待单独确认，审计和历史记录仍关联原应用。"}
+      onConfirm={() => request(app, volumes)} />
+  </div>;
 }
 export function ApplicationLayout() {
   const workspace = useWorkspace(); const { applicationSlug } = useParams({ strict: false }) as { applicationSlug: string };
@@ -131,7 +152,7 @@ function WorkspaceSettings() {
   return <div className="stack"><section className="section max-w-3xl"><h2 className="section-title mb-6">空间资料</h2><DataForm key={workspace.revision.toString()} fields={[{ name: "name", label: "空间名称", value: workspace.name, schema: required.max(100, "名称最多 100 字符") }, { name: "slug", label: "空间标识", value: workspace.slug, readOnly: true, hint: "空间标识创建后不可修改；用于访问地址与命令行。" }, { name: "description", label: "空间说明", value: workspace.description, type: "textarea", schema: z.string().max(2000, "说明最多 2000 字符") }]} successMessage="工作空间资料已保存。" onSubmit={async (value) => { await platform.workspaces.updateWorkspace({ workspaceId: workspace.id, name: value.name, slug: value.slug, description: value.description, expectedRevision: workspace.revision }); await invalidateMethods(client, ["GetWorkspace", "ListWorkspaces"]); }} /></section>
     <section className="section max-w-3xl space-y-3">
       <h2 className="section-title">归档工作空间</h2>
-      <p className="text-sm text-muted-foreground">先归档空间中的全部应用。归档后保留原空间名称和审计记录。</p>
+      <p className="text-sm text-muted-foreground">先归档空间中的全部应用，并完成已受理的应用清理。归档后保留原空间名称和审计记录。</p>
       <ConfirmAction label="归档工作空间" destructive description={`确认归档「${workspace.name}」？归档后成员将无法进入此工作空间。`} onConfirm={async () => {
         await platform.workspaces.archiveWorkspace({ workspaceId: workspace.id, expectedRevision: workspace.revision });
         await navigate({ to: "/" });

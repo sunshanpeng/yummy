@@ -180,6 +180,9 @@ func newRoot(settings map[string]any) *cobra.Command {
 			URL: runServer, NodeID: identity.NodeID, WorkerID: identity.WorkerID, Version: workerVersion,
 			TLS:     &tls.Config{MinVersion: tls.VersionTLS12, GetClientCertificate: holder.GetClientCertificate, RootCAs: rootCAs},
 			Journal: journal, Executor: executor,
+			Cleanup: func(ctx context.Context, request *platformv1.WorkerCleanupCommand, check func(context.Context) error) (bool, bool, string) {
+				return cleanupApplication(ctx, adapter, node, request, check)
+			},
 			Heartbeat: func() *platformv1.WorkerHeartbeat {
 				probeContext, cancel := context.WithTimeout(cmd.Context(), 2*time.Second)
 				defer cancel()

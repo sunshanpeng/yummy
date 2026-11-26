@@ -9,6 +9,7 @@ import "platform/v1/inventory.proto";
 service WorkerGateway {
   rpc Connect(stream WorkerEnvelope) returns (stream ControlEnvelope);
   rpc CheckGeneration(WorkerGenerationRequest) returns (WorkerGenerationResponse);
+  rpc CheckApplicationCleanup(WorkerCleanupLease) returns (WorkerGenerationResponse);
 }
 message WorkerEnvelope {
   oneof payload {
@@ -21,6 +22,7 @@ message WorkerEnvelope {
     // 应用运行日志块与 CPU/内存采样：同一信封通道，复用现有持久化与重传机制。
     WorkerRuntimeLog runtime_log = 7;
     WorkerRuntimeMetric runtime_metric = 8;
+    WorkerCleanupResult application_cleanup_result = 9;
   }
 }
 message ControlEnvelope {
@@ -30,9 +32,10 @@ message ControlEnvelope {
     WorkerDeploymentCommand deployment_command = 3;
     WorkerAck ack = 4;
     WorkerRejection rejection = 5;
+    WorkerCleanupCommand application_cleanup = 6;
   }
 }
-message WorkerHello { string worker_id = 1; string node_id = 2; string version = 3; }
+message WorkerHello { string worker_id = 1; string node_id = 2; string version = 3; bool application_cleanup = 4; }
 message WorkerWelcome { string worker_id = 1; string node_id = 2; string server_id = 3; int64 connection_epoch = 4; string qualification_nonce = 5; }
 message WorkerHeartbeat {
   string cluster_node_uid = 1; string os = 2; string arch = 3;
@@ -90,6 +93,8 @@ message WorkerRuntimeLog {
   string workspace_id = 1; string application_id = 2; string operation_id = 3; string release_id = 4;
   int64 generation = 5; string pod_uid = 6; string container = 7; int32 restart_count = 8;
   int64 seq = 9; bytes content = 10; bool truncated = 11;
+  // 来源 Pod 的实际发布。release_id 仍表示授权操作对应的期望发布。
+  string pod_release_id = 12;
 }
 // 一次 CPU/内存采样；cpu_nano_cores 为自上次采样窗口的 CPU 纳秒消耗。
 // 幂等键是 (pod_uid, collected_unix_milli)，ack.Seq 复用 collected_unix_milli。
@@ -103,3 +108,12 @@ message WorkerAck { string channel = 1; string execution_id = 2; int64 seq = 3; 
 message WorkerRejection { string channel = 1; string execution_id = 2; int64 seq = 3; string code = 4; }
 message WorkerGenerationRequest { string workspace_id = 1; string application_id = 2; string operation_id = 3; int64 generation = 4; string release_id = 5; string cluster_node_uid = 6; }
 message WorkerGenerationResponse { bool current = 1; }
+// 清理命令绑定已登记 worker 的当前连接、租约代际和固定集群节点。
+message WorkerCleanupLease { string cleanup_id = 1; int64 revision = 2; int64 connection_epoch = 3; string cluster_node_uid = 4; }
+message WorkerCleanupCommand {
+  WorkerCleanupLease lease = 1;
+  string workspace_id = 2; string application_id = 3;
+  string space_slug = 4; string app_name = 5;
+  bool delete_volumes = 6;
+}
+message WorkerCleanupResult { WorkerCleanupLease lease = 1; bool done = 2; bool has_volumes = 3; string error_code = 4; }

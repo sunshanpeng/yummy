@@ -81,14 +81,14 @@ func registerDeploymentTools(server *sdk.Server, s scope) {
 	}
 	typedTool(server, "app_status", "读取应用当前期望状态、实际观察与正在服务的 release；缺测不会当作正常。", annotations(true, false, true, false), status)
 	typedTool(server, "runtime_status", "读取应用运行状态及已生效版本。", annotations(true, false, true, false), status)
-	typedTool(server, "runtime_logs", "按游标读取当前应用的运行日志，返回续读位置。", annotations(true, false, true, false), func(ctx context.Context, in pageInput) (any, *sdk.CallToolResult) {
+	typedTool(server, "runtime_logs", "按游标读取当前应用的运行日志，返回续读位置。", annotations(true, false, true, false), func(ctx context.Context, in runtimeLogsInput) (any, *sdk.CallToolResult) {
 		if err := s.check(authorization.LogsRead); err != nil {
 			return nil, err
 		}
-		if !validPage(in) {
+		if !validPage(in.pageInput) {
 			return nil, toolError("INVALID_ARGUMENT", "分页参数无效")
 		}
-		v, err := s.services.Deployments.ListRuntimeLogs(ctx, s.principal, s.workspaceID, s.applicationID, deployment.RuntimeLogQuery{Limit: in.Limit, Cursor: in.Cursor})
+		v, err := s.services.Deployments.ListRuntimeLogs(ctx, s.principal, s.workspaceID, s.applicationID, deployment.RuntimeLogQuery{Limit: in.Limit, Cursor: in.Cursor, ReleaseID: in.ReleaseID})
 		if err != nil {
 			return nil, failure(err)
 		}
@@ -183,4 +183,10 @@ func registerDeploymentTools(server *sdk.Server, s scope) {
 	registerChange("runtime_start", "启动当前应用服务。", authorization.RuntimeWrite, s.services.Deployments.Start)
 	registerChange("runtime_stop", "停止当前应用服务；保留配置和持久数据。", authorization.RuntimeWrite, s.services.Deployments.Stop)
 	registerChange("runtime_restart", "重启当前服务版本。", authorization.DeploymentWrite, s.services.Deployments.Restart)
+}
+
+// runtimeLogsInput 将发布筛选限定在工具绑定的应用。
+type runtimeLogsInput struct {
+	pageInput
+	ReleaseID string `json:"release_id,omitempty" jsonschema:"要读取的来源发布 ID"`
 }

@@ -33,6 +33,7 @@ type WorkerEnvelope struct {
 	//	*WorkerEnvelope_DeploymentObservation
 	//	*WorkerEnvelope_RuntimeLog
 	//	*WorkerEnvelope_RuntimeMetric
+	//	*WorkerEnvelope_ApplicationCleanupResult
 	Payload       isWorkerEnvelope_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -147,6 +148,15 @@ func (x *WorkerEnvelope) GetRuntimeMetric() *WorkerRuntimeMetric {
 	return nil
 }
 
+func (x *WorkerEnvelope) GetApplicationCleanupResult() *WorkerCleanupResult {
+	if x != nil {
+		if x, ok := x.Payload.(*WorkerEnvelope_ApplicationCleanupResult); ok {
+			return x.ApplicationCleanupResult
+		}
+	}
+	return nil
+}
+
 type isWorkerEnvelope_Payload interface {
 	isWorkerEnvelope_Payload()
 }
@@ -184,6 +194,10 @@ type WorkerEnvelope_RuntimeMetric struct {
 	RuntimeMetric *WorkerRuntimeMetric `protobuf:"bytes,8,opt,name=runtime_metric,json=runtimeMetric,proto3,oneof"`
 }
 
+type WorkerEnvelope_ApplicationCleanupResult struct {
+	ApplicationCleanupResult *WorkerCleanupResult `protobuf:"bytes,9,opt,name=application_cleanup_result,json=applicationCleanupResult,proto3,oneof"`
+}
+
 func (*WorkerEnvelope_Hello) isWorkerEnvelope_Payload() {}
 
 func (*WorkerEnvelope_Heartbeat) isWorkerEnvelope_Payload() {}
@@ -200,6 +214,8 @@ func (*WorkerEnvelope_RuntimeLog) isWorkerEnvelope_Payload() {}
 
 func (*WorkerEnvelope_RuntimeMetric) isWorkerEnvelope_Payload() {}
 
+func (*WorkerEnvelope_ApplicationCleanupResult) isWorkerEnvelope_Payload() {}
+
 type ControlEnvelope struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Payload:
@@ -209,6 +225,7 @@ type ControlEnvelope struct {
 	//	*ControlEnvelope_DeploymentCommand
 	//	*ControlEnvelope_Ack
 	//	*ControlEnvelope_Rejection
+	//	*ControlEnvelope_ApplicationCleanup
 	Payload       isControlEnvelope_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -296,6 +313,15 @@ func (x *ControlEnvelope) GetRejection() *WorkerRejection {
 	return nil
 }
 
+func (x *ControlEnvelope) GetApplicationCleanup() *WorkerCleanupCommand {
+	if x != nil {
+		if x, ok := x.Payload.(*ControlEnvelope_ApplicationCleanup); ok {
+			return x.ApplicationCleanup
+		}
+	}
+	return nil
+}
+
 type isControlEnvelope_Payload interface {
 	isControlEnvelope_Payload()
 }
@@ -320,6 +346,10 @@ type ControlEnvelope_Rejection struct {
 	Rejection *WorkerRejection `protobuf:"bytes,5,opt,name=rejection,proto3,oneof"`
 }
 
+type ControlEnvelope_ApplicationCleanup struct {
+	ApplicationCleanup *WorkerCleanupCommand `protobuf:"bytes,6,opt,name=application_cleanup,json=applicationCleanup,proto3,oneof"`
+}
+
 func (*ControlEnvelope_Welcome) isControlEnvelope_Payload() {}
 
 func (*ControlEnvelope_BuildCommand) isControlEnvelope_Payload() {}
@@ -330,13 +360,16 @@ func (*ControlEnvelope_Ack) isControlEnvelope_Payload() {}
 
 func (*ControlEnvelope_Rejection) isControlEnvelope_Payload() {}
 
+func (*ControlEnvelope_ApplicationCleanup) isControlEnvelope_Payload() {}
+
 type WorkerHello struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	WorkerId      string                 `protobuf:"bytes,1,opt,name=worker_id,json=workerId,proto3" json:"worker_id,omitempty"`
-	NodeId        string                 `protobuf:"bytes,2,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
-	Version       string                 `protobuf:"bytes,3,opt,name=version,proto3" json:"version,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	WorkerId           string                 `protobuf:"bytes,1,opt,name=worker_id,json=workerId,proto3" json:"worker_id,omitempty"`
+	NodeId             string                 `protobuf:"bytes,2,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	Version            string                 `protobuf:"bytes,3,opt,name=version,proto3" json:"version,omitempty"`
+	ApplicationCleanup bool                   `protobuf:"varint,4,opt,name=application_cleanup,json=applicationCleanup,proto3" json:"application_cleanup,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *WorkerHello) Reset() {
@@ -388,6 +421,13 @@ func (x *WorkerHello) GetVersion() string {
 		return x.Version
 	}
 	return ""
+}
+
+func (x *WorkerHello) GetApplicationCleanup() bool {
+	if x != nil {
+		return x.ApplicationCleanup
+	}
+	return false
 }
 
 type WorkerWelcome struct {
@@ -1719,6 +1759,8 @@ type WorkerRuntimeLog struct {
 	Seq           int64                  `protobuf:"varint,9,opt,name=seq,proto3" json:"seq,omitempty"`
 	Content       []byte                 `protobuf:"bytes,10,opt,name=content,proto3" json:"content,omitempty"`
 	Truncated     bool                   `protobuf:"varint,11,opt,name=truncated,proto3" json:"truncated,omitempty"`
+	// 来源 Pod 的实际发布。release_id 仍表示授权操作对应的期望发布。
+	PodReleaseId  string `protobuf:"bytes,12,opt,name=pod_release_id,json=podReleaseId,proto3" json:"pod_release_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1828,6 +1870,13 @@ func (x *WorkerRuntimeLog) GetTruncated() bool {
 		return x.Truncated
 	}
 	return false
+}
+
+func (x *WorkerRuntimeLog) GetPodReleaseId() string {
+	if x != nil {
+		return x.PodReleaseId
+	}
+	return ""
 }
 
 // 一次 CPU/内存采样；cpu_nano_cores 为自上次采样窗口的 CPU 纳秒消耗。
@@ -2212,11 +2261,232 @@ func (x *WorkerGenerationResponse) GetCurrent() bool {
 	return false
 }
 
+// 清理命令绑定已登记 worker 的当前连接、租约代际和固定集群节点。
+type WorkerCleanupLease struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	CleanupId       string                 `protobuf:"bytes,1,opt,name=cleanup_id,json=cleanupId,proto3" json:"cleanup_id,omitempty"`
+	Revision        int64                  `protobuf:"varint,2,opt,name=revision,proto3" json:"revision,omitempty"`
+	ConnectionEpoch int64                  `protobuf:"varint,3,opt,name=connection_epoch,json=connectionEpoch,proto3" json:"connection_epoch,omitempty"`
+	ClusterNodeUid  string                 `protobuf:"bytes,4,opt,name=cluster_node_uid,json=clusterNodeUid,proto3" json:"cluster_node_uid,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *WorkerCleanupLease) Reset() {
+	*x = WorkerCleanupLease{}
+	mi := &file_platform_v1_worker_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WorkerCleanupLease) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WorkerCleanupLease) ProtoMessage() {}
+
+func (x *WorkerCleanupLease) ProtoReflect() protoreflect.Message {
+	mi := &file_platform_v1_worker_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WorkerCleanupLease.ProtoReflect.Descriptor instead.
+func (*WorkerCleanupLease) Descriptor() ([]byte, []int) {
+	return file_platform_v1_worker_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *WorkerCleanupLease) GetCleanupId() string {
+	if x != nil {
+		return x.CleanupId
+	}
+	return ""
+}
+
+func (x *WorkerCleanupLease) GetRevision() int64 {
+	if x != nil {
+		return x.Revision
+	}
+	return 0
+}
+
+func (x *WorkerCleanupLease) GetConnectionEpoch() int64 {
+	if x != nil {
+		return x.ConnectionEpoch
+	}
+	return 0
+}
+
+func (x *WorkerCleanupLease) GetClusterNodeUid() string {
+	if x != nil {
+		return x.ClusterNodeUid
+	}
+	return ""
+}
+
+type WorkerCleanupCommand struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Lease         *WorkerCleanupLease    `protobuf:"bytes,1,opt,name=lease,proto3" json:"lease,omitempty"`
+	WorkspaceId   string                 `protobuf:"bytes,2,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
+	ApplicationId string                 `protobuf:"bytes,3,opt,name=application_id,json=applicationId,proto3" json:"application_id,omitempty"`
+	SpaceSlug     string                 `protobuf:"bytes,4,opt,name=space_slug,json=spaceSlug,proto3" json:"space_slug,omitempty"`
+	AppName       string                 `protobuf:"bytes,5,opt,name=app_name,json=appName,proto3" json:"app_name,omitempty"`
+	DeleteVolumes bool                   `protobuf:"varint,6,opt,name=delete_volumes,json=deleteVolumes,proto3" json:"delete_volumes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WorkerCleanupCommand) Reset() {
+	*x = WorkerCleanupCommand{}
+	mi := &file_platform_v1_worker_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WorkerCleanupCommand) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WorkerCleanupCommand) ProtoMessage() {}
+
+func (x *WorkerCleanupCommand) ProtoReflect() protoreflect.Message {
+	mi := &file_platform_v1_worker_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WorkerCleanupCommand.ProtoReflect.Descriptor instead.
+func (*WorkerCleanupCommand) Descriptor() ([]byte, []int) {
+	return file_platform_v1_worker_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *WorkerCleanupCommand) GetLease() *WorkerCleanupLease {
+	if x != nil {
+		return x.Lease
+	}
+	return nil
+}
+
+func (x *WorkerCleanupCommand) GetWorkspaceId() string {
+	if x != nil {
+		return x.WorkspaceId
+	}
+	return ""
+}
+
+func (x *WorkerCleanupCommand) GetApplicationId() string {
+	if x != nil {
+		return x.ApplicationId
+	}
+	return ""
+}
+
+func (x *WorkerCleanupCommand) GetSpaceSlug() string {
+	if x != nil {
+		return x.SpaceSlug
+	}
+	return ""
+}
+
+func (x *WorkerCleanupCommand) GetAppName() string {
+	if x != nil {
+		return x.AppName
+	}
+	return ""
+}
+
+func (x *WorkerCleanupCommand) GetDeleteVolumes() bool {
+	if x != nil {
+		return x.DeleteVolumes
+	}
+	return false
+}
+
+type WorkerCleanupResult struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Lease         *WorkerCleanupLease    `protobuf:"bytes,1,opt,name=lease,proto3" json:"lease,omitempty"`
+	Done          bool                   `protobuf:"varint,2,opt,name=done,proto3" json:"done,omitempty"`
+	HasVolumes    bool                   `protobuf:"varint,3,opt,name=has_volumes,json=hasVolumes,proto3" json:"has_volumes,omitempty"`
+	ErrorCode     string                 `protobuf:"bytes,4,opt,name=error_code,json=errorCode,proto3" json:"error_code,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WorkerCleanupResult) Reset() {
+	*x = WorkerCleanupResult{}
+	mi := &file_platform_v1_worker_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WorkerCleanupResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WorkerCleanupResult) ProtoMessage() {}
+
+func (x *WorkerCleanupResult) ProtoReflect() protoreflect.Message {
+	mi := &file_platform_v1_worker_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WorkerCleanupResult.ProtoReflect.Descriptor instead.
+func (*WorkerCleanupResult) Descriptor() ([]byte, []int) {
+	return file_platform_v1_worker_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *WorkerCleanupResult) GetLease() *WorkerCleanupLease {
+	if x != nil {
+		return x.Lease
+	}
+	return nil
+}
+
+func (x *WorkerCleanupResult) GetDone() bool {
+	if x != nil {
+		return x.Done
+	}
+	return false
+}
+
+func (x *WorkerCleanupResult) GetHasVolumes() bool {
+	if x != nil {
+		return x.HasVolumes
+	}
+	return false
+}
+
+func (x *WorkerCleanupResult) GetErrorCode() string {
+	if x != nil {
+		return x.ErrorCode
+	}
+	return ""
+}
+
 var File_platform_v1_worker_proto protoreflect.FileDescriptor
 
 const file_platform_v1_worker_proto_rawDesc = "" +
 	"\n" +
-	"\x18platform/v1/worker.proto\x12\vplatform.v1\x1a platform/v1/runtime_config.proto\x1a\x1bplatform/v1/inventory.proto\"\xc3\x04\n" +
+	"\x18platform/v1/worker.proto\x12\vplatform.v1\x1a platform/v1/runtime_config.proto\x1a\x1bplatform/v1/inventory.proto\"\xa5\x05\n" +
 	"\x0eWorkerEnvelope\x120\n" +
 	"\x05hello\x18\x01 \x01(\v2\x18.platform.v1.WorkerHelloH\x00R\x05hello\x12<\n" +
 	"\theartbeat\x18\x02 \x01(\v2\x1c.platform.v1.WorkerHeartbeatH\x00R\theartbeat\x12H\n" +
@@ -2227,19 +2497,22 @@ const file_platform_v1_worker_proto_rawDesc = "" +
 	"\x16deployment_observation\x18\x06 \x01(\v2(.platform.v1.WorkerDeploymentObservationH\x00R\x15deploymentObservation\x12@\n" +
 	"\vruntime_log\x18\a \x01(\v2\x1d.platform.v1.WorkerRuntimeLogH\x00R\n" +
 	"runtimeLog\x12I\n" +
-	"\x0eruntime_metric\x18\b \x01(\v2 .platform.v1.WorkerRuntimeMetricH\x00R\rruntimeMetricB\t\n" +
-	"\apayload\"\xdd\x02\n" +
+	"\x0eruntime_metric\x18\b \x01(\v2 .platform.v1.WorkerRuntimeMetricH\x00R\rruntimeMetric\x12`\n" +
+	"\x1aapplication_cleanup_result\x18\t \x01(\v2 .platform.v1.WorkerCleanupResultH\x00R\x18applicationCleanupResultB\t\n" +
+	"\apayload\"\xb3\x03\n" +
 	"\x0fControlEnvelope\x126\n" +
 	"\awelcome\x18\x01 \x01(\v2\x1a.platform.v1.WorkerWelcomeH\x00R\awelcome\x12F\n" +
 	"\rbuild_command\x18\x02 \x01(\v2\x1f.platform.v1.WorkerBuildCommandH\x00R\fbuildCommand\x12U\n" +
 	"\x12deployment_command\x18\x03 \x01(\v2$.platform.v1.WorkerDeploymentCommandH\x00R\x11deploymentCommand\x12*\n" +
 	"\x03ack\x18\x04 \x01(\v2\x16.platform.v1.WorkerAckH\x00R\x03ack\x12<\n" +
-	"\trejection\x18\x05 \x01(\v2\x1c.platform.v1.WorkerRejectionH\x00R\trejectionB\t\n" +
-	"\apayload\"]\n" +
+	"\trejection\x18\x05 \x01(\v2\x1c.platform.v1.WorkerRejectionH\x00R\trejection\x12T\n" +
+	"\x13application_cleanup\x18\x06 \x01(\v2!.platform.v1.WorkerCleanupCommandH\x00R\x12applicationCleanupB\t\n" +
+	"\apayload\"\x8e\x01\n" +
 	"\vWorkerHello\x12\x1b\n" +
 	"\tworker_id\x18\x01 \x01(\tR\bworkerId\x12\x17\n" +
 	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12\x18\n" +
-	"\aversion\x18\x03 \x01(\tR\aversion\"\xbe\x01\n" +
+	"\aversion\x18\x03 \x01(\tR\aversion\x12/\n" +
+	"\x13application_cleanup\x18\x04 \x01(\bR\x12applicationCleanup\"\xbe\x01\n" +
 	"\rWorkerWelcome\x12\x1b\n" +
 	"\tworker_id\x18\x01 \x01(\tR\bworkerId\x12\x17\n" +
 	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12\x1b\n" +
@@ -2395,7 +2668,7 @@ const file_platform_v1_worker_proto_rawDesc = "" +
 	"\x04kind\x18\x10 \x01(\tR\x04kind\x12\x1d\n" +
 	"\n" +
 	"error_code\x18\x11 \x01(\tR\terrorCode\x120\n" +
-	"\x14collected_unix_milli\x18\x12 \x01(\x03R\x12collectedUnixMilli\"\xe4\x02\n" +
+	"\x14collected_unix_milli\x18\x12 \x01(\x03R\x12collectedUnixMilli\"\x8a\x03\n" +
 	"\x10WorkerRuntimeLog\x12!\n" +
 	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x12%\n" +
 	"\x0eapplication_id\x18\x02 \x01(\tR\rapplicationId\x12!\n" +
@@ -2411,7 +2684,8 @@ const file_platform_v1_worker_proto_rawDesc = "" +
 	"\x03seq\x18\t \x01(\x03R\x03seq\x12\x18\n" +
 	"\acontent\x18\n" +
 	" \x01(\fR\acontent\x12\x1c\n" +
-	"\ttruncated\x18\v \x01(\bR\ttruncated\"\xf4\x02\n" +
+	"\ttruncated\x18\v \x01(\bR\ttruncated\x12$\n" +
+	"\x0epod_release_id\x18\f \x01(\tR\fpodReleaseId\"\xf4\x02\n" +
 	"\x13WorkerRuntimeMetric\x12!\n" +
 	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x12%\n" +
 	"\x0eapplication_id\x18\x02 \x01(\tR\rapplicationId\x12\x1d\n" +
@@ -2447,10 +2721,32 @@ const file_platform_v1_worker_proto_rawDesc = "" +
 	"release_id\x18\x05 \x01(\tR\treleaseId\x12(\n" +
 	"\x10cluster_node_uid\x18\x06 \x01(\tR\x0eclusterNodeUid\"4\n" +
 	"\x18WorkerGenerationResponse\x12\x18\n" +
-	"\acurrent\x18\x01 \x01(\bR\acurrent2\xb9\x01\n" +
+	"\acurrent\x18\x01 \x01(\bR\acurrent\"\xa4\x01\n" +
+	"\x12WorkerCleanupLease\x12\x1d\n" +
+	"\n" +
+	"cleanup_id\x18\x01 \x01(\tR\tcleanupId\x12\x1a\n" +
+	"\brevision\x18\x02 \x01(\x03R\brevision\x12)\n" +
+	"\x10connection_epoch\x18\x03 \x01(\x03R\x0fconnectionEpoch\x12(\n" +
+	"\x10cluster_node_uid\x18\x04 \x01(\tR\x0eclusterNodeUid\"\xf8\x01\n" +
+	"\x14WorkerCleanupCommand\x125\n" +
+	"\x05lease\x18\x01 \x01(\v2\x1f.platform.v1.WorkerCleanupLeaseR\x05lease\x12!\n" +
+	"\fworkspace_id\x18\x02 \x01(\tR\vworkspaceId\x12%\n" +
+	"\x0eapplication_id\x18\x03 \x01(\tR\rapplicationId\x12\x1d\n" +
+	"\n" +
+	"space_slug\x18\x04 \x01(\tR\tspaceSlug\x12\x19\n" +
+	"\bapp_name\x18\x05 \x01(\tR\aappName\x12%\n" +
+	"\x0edelete_volumes\x18\x06 \x01(\bR\rdeleteVolumes\"\xa0\x01\n" +
+	"\x13WorkerCleanupResult\x125\n" +
+	"\x05lease\x18\x01 \x01(\v2\x1f.platform.v1.WorkerCleanupLeaseR\x05lease\x12\x12\n" +
+	"\x04done\x18\x02 \x01(\bR\x04done\x12\x1f\n" +
+	"\vhas_volumes\x18\x03 \x01(\bR\n" +
+	"hasVolumes\x12\x1d\n" +
+	"\n" +
+	"error_code\x18\x04 \x01(\tR\terrorCode2\x9c\x02\n" +
 	"\rWorkerGateway\x12H\n" +
 	"\aConnect\x12\x1b.platform.v1.WorkerEnvelope\x1a\x1c.platform.v1.ControlEnvelope(\x010\x01\x12^\n" +
-	"\x0fCheckGeneration\x12$.platform.v1.WorkerGenerationRequest\x1a%.platform.v1.WorkerGenerationResponseB<Z:github.com/sunshanpeng/yummy/gen/go/platform/v1;platformv1b\x06proto3"
+	"\x0fCheckGeneration\x12$.platform.v1.WorkerGenerationRequest\x1a%.platform.v1.WorkerGenerationResponse\x12a\n" +
+	"\x17CheckApplicationCleanup\x12\x1f.platform.v1.WorkerCleanupLease\x1a%.platform.v1.WorkerGenerationResponseB<Z:github.com/sunshanpeng/yummy/gen/go/platform/v1;platformv1b\x06proto3"
 
 var (
 	file_platform_v1_worker_proto_rawDescOnce sync.Once
@@ -2464,7 +2760,7 @@ func file_platform_v1_worker_proto_rawDescGZIP() []byte {
 	return file_platform_v1_worker_proto_rawDescData
 }
 
-var file_platform_v1_worker_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
+var file_platform_v1_worker_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
 var file_platform_v1_worker_proto_goTypes = []any{
 	(*WorkerEnvelope)(nil),              // 0: platform.v1.WorkerEnvelope
 	(*ControlEnvelope)(nil),             // 1: platform.v1.ControlEnvelope
@@ -2487,11 +2783,14 @@ var file_platform_v1_worker_proto_goTypes = []any{
 	(*WorkerRejection)(nil),             // 18: platform.v1.WorkerRejection
 	(*WorkerGenerationRequest)(nil),     // 19: platform.v1.WorkerGenerationRequest
 	(*WorkerGenerationResponse)(nil),    // 20: platform.v1.WorkerGenerationResponse
-	nil,                                 // 21: platform.v1.WorkerBuildCommand.BuildArgsEntry
-	nil,                                 // 22: platform.v1.WorkerDeploymentCommand.MaterializedVariablesEntry
-	nil,                                 // 23: platform.v1.WorkerDeploymentCommand.MaterializedFilesEntry
-	(*ClusterMachine)(nil),              // 24: platform.v1.ClusterMachine
-	(*RuntimeConfig)(nil),               // 25: platform.v1.RuntimeConfig
+	(*WorkerCleanupLease)(nil),          // 21: platform.v1.WorkerCleanupLease
+	(*WorkerCleanupCommand)(nil),        // 22: platform.v1.WorkerCleanupCommand
+	(*WorkerCleanupResult)(nil),         // 23: platform.v1.WorkerCleanupResult
+	nil,                                 // 24: platform.v1.WorkerBuildCommand.BuildArgsEntry
+	nil,                                 // 25: platform.v1.WorkerDeploymentCommand.MaterializedVariablesEntry
+	nil,                                 // 26: platform.v1.WorkerDeploymentCommand.MaterializedFilesEntry
+	(*ClusterMachine)(nil),              // 27: platform.v1.ClusterMachine
+	(*RuntimeConfig)(nil),               // 28: platform.v1.RuntimeConfig
 }
 var file_platform_v1_worker_proto_depIdxs = []int32{
 	2,  // 0: platform.v1.WorkerEnvelope.hello:type_name -> platform.v1.WorkerHello
@@ -2502,30 +2801,36 @@ var file_platform_v1_worker_proto_depIdxs = []int32{
 	14, // 5: platform.v1.WorkerEnvelope.deployment_observation:type_name -> platform.v1.WorkerDeploymentObservation
 	15, // 6: platform.v1.WorkerEnvelope.runtime_log:type_name -> platform.v1.WorkerRuntimeLog
 	16, // 7: platform.v1.WorkerEnvelope.runtime_metric:type_name -> platform.v1.WorkerRuntimeMetric
-	3,  // 8: platform.v1.ControlEnvelope.welcome:type_name -> platform.v1.WorkerWelcome
-	10, // 9: platform.v1.ControlEnvelope.build_command:type_name -> platform.v1.WorkerBuildCommand
-	11, // 10: platform.v1.ControlEnvelope.deployment_command:type_name -> platform.v1.WorkerDeploymentCommand
-	17, // 11: platform.v1.ControlEnvelope.ack:type_name -> platform.v1.WorkerAck
-	18, // 12: platform.v1.ControlEnvelope.rejection:type_name -> platform.v1.WorkerRejection
-	5,  // 13: platform.v1.WorkerHeartbeat.cluster_machines:type_name -> platform.v1.ClusterMachinesReport
-	24, // 14: platform.v1.ClusterMachinesReport.machines:type_name -> platform.v1.ClusterMachine
-	21, // 15: platform.v1.WorkerBuildCommand.build_args:type_name -> platform.v1.WorkerBuildCommand.BuildArgsEntry
-	9,  // 16: platform.v1.WorkerBuildCommand.source_grant:type_name -> platform.v1.WorkerSourceGrant
-	7,  // 17: platform.v1.WorkerBuildCommand.registry:type_name -> platform.v1.WorkerRegistryCredential
-	8,  // 18: platform.v1.WorkerBuildCommand.secrets:type_name -> platform.v1.WorkerBuildSecret
-	25, // 19: platform.v1.WorkerDeploymentCommand.config:type_name -> platform.v1.RuntimeConfig
-	22, // 20: platform.v1.WorkerDeploymentCommand.materialized_variables:type_name -> platform.v1.WorkerDeploymentCommand.MaterializedVariablesEntry
-	23, // 21: platform.v1.WorkerDeploymentCommand.materialized_files:type_name -> platform.v1.WorkerDeploymentCommand.MaterializedFilesEntry
-	7,  // 22: platform.v1.WorkerDeploymentCommand.registry:type_name -> platform.v1.WorkerRegistryCredential
-	0,  // 23: platform.v1.WorkerGateway.Connect:input_type -> platform.v1.WorkerEnvelope
-	19, // 24: platform.v1.WorkerGateway.CheckGeneration:input_type -> platform.v1.WorkerGenerationRequest
-	1,  // 25: platform.v1.WorkerGateway.Connect:output_type -> platform.v1.ControlEnvelope
-	20, // 26: platform.v1.WorkerGateway.CheckGeneration:output_type -> platform.v1.WorkerGenerationResponse
-	25, // [25:27] is the sub-list for method output_type
-	23, // [23:25] is the sub-list for method input_type
-	23, // [23:23] is the sub-list for extension type_name
-	23, // [23:23] is the sub-list for extension extendee
-	0,  // [0:23] is the sub-list for field type_name
+	23, // 8: platform.v1.WorkerEnvelope.application_cleanup_result:type_name -> platform.v1.WorkerCleanupResult
+	3,  // 9: platform.v1.ControlEnvelope.welcome:type_name -> platform.v1.WorkerWelcome
+	10, // 10: platform.v1.ControlEnvelope.build_command:type_name -> platform.v1.WorkerBuildCommand
+	11, // 11: platform.v1.ControlEnvelope.deployment_command:type_name -> platform.v1.WorkerDeploymentCommand
+	17, // 12: platform.v1.ControlEnvelope.ack:type_name -> platform.v1.WorkerAck
+	18, // 13: platform.v1.ControlEnvelope.rejection:type_name -> platform.v1.WorkerRejection
+	22, // 14: platform.v1.ControlEnvelope.application_cleanup:type_name -> platform.v1.WorkerCleanupCommand
+	5,  // 15: platform.v1.WorkerHeartbeat.cluster_machines:type_name -> platform.v1.ClusterMachinesReport
+	27, // 16: platform.v1.ClusterMachinesReport.machines:type_name -> platform.v1.ClusterMachine
+	24, // 17: platform.v1.WorkerBuildCommand.build_args:type_name -> platform.v1.WorkerBuildCommand.BuildArgsEntry
+	9,  // 18: platform.v1.WorkerBuildCommand.source_grant:type_name -> platform.v1.WorkerSourceGrant
+	7,  // 19: platform.v1.WorkerBuildCommand.registry:type_name -> platform.v1.WorkerRegistryCredential
+	8,  // 20: platform.v1.WorkerBuildCommand.secrets:type_name -> platform.v1.WorkerBuildSecret
+	28, // 21: platform.v1.WorkerDeploymentCommand.config:type_name -> platform.v1.RuntimeConfig
+	25, // 22: platform.v1.WorkerDeploymentCommand.materialized_variables:type_name -> platform.v1.WorkerDeploymentCommand.MaterializedVariablesEntry
+	26, // 23: platform.v1.WorkerDeploymentCommand.materialized_files:type_name -> platform.v1.WorkerDeploymentCommand.MaterializedFilesEntry
+	7,  // 24: platform.v1.WorkerDeploymentCommand.registry:type_name -> platform.v1.WorkerRegistryCredential
+	21, // 25: platform.v1.WorkerCleanupCommand.lease:type_name -> platform.v1.WorkerCleanupLease
+	21, // 26: platform.v1.WorkerCleanupResult.lease:type_name -> platform.v1.WorkerCleanupLease
+	0,  // 27: platform.v1.WorkerGateway.Connect:input_type -> platform.v1.WorkerEnvelope
+	19, // 28: platform.v1.WorkerGateway.CheckGeneration:input_type -> platform.v1.WorkerGenerationRequest
+	21, // 29: platform.v1.WorkerGateway.CheckApplicationCleanup:input_type -> platform.v1.WorkerCleanupLease
+	1,  // 30: platform.v1.WorkerGateway.Connect:output_type -> platform.v1.ControlEnvelope
+	20, // 31: platform.v1.WorkerGateway.CheckGeneration:output_type -> platform.v1.WorkerGenerationResponse
+	20, // 32: platform.v1.WorkerGateway.CheckApplicationCleanup:output_type -> platform.v1.WorkerGenerationResponse
+	30, // [30:33] is the sub-list for method output_type
+	27, // [27:30] is the sub-list for method input_type
+	27, // [27:27] is the sub-list for extension type_name
+	27, // [27:27] is the sub-list for extension extendee
+	0,  // [0:27] is the sub-list for field type_name
 }
 
 func init() { file_platform_v1_worker_proto_init() }
@@ -2544,6 +2849,7 @@ func file_platform_v1_worker_proto_init() {
 		(*WorkerEnvelope_DeploymentObservation)(nil),
 		(*WorkerEnvelope_RuntimeLog)(nil),
 		(*WorkerEnvelope_RuntimeMetric)(nil),
+		(*WorkerEnvelope_ApplicationCleanupResult)(nil),
 	}
 	file_platform_v1_worker_proto_msgTypes[1].OneofWrappers = []any{
 		(*ControlEnvelope_Welcome)(nil),
@@ -2551,6 +2857,7 @@ func file_platform_v1_worker_proto_init() {
 		(*ControlEnvelope_DeploymentCommand)(nil),
 		(*ControlEnvelope_Ack)(nil),
 		(*ControlEnvelope_Rejection)(nil),
+		(*ControlEnvelope_ApplicationCleanup)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -2558,7 +2865,7 @@ func file_platform_v1_worker_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_platform_v1_worker_proto_rawDesc), len(file_platform_v1_worker_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   24,
+			NumMessages:   27,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

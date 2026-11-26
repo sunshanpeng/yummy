@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowDownToLine, LoaderCircle } from "lucide-react";
 import { useApplication } from "../pages/workspaces";
 import { errorMessage, formatTime } from "../lib/platform";
@@ -10,23 +10,31 @@ import { Empty, Loading, Notice } from "./console-kit";
 
 // 应用运行日志：服务端按 (created_at, id) 时间正序键集分页，
 // 首页为保留窗口最早块，“加载更新的日志”沿 nextCursor 向后翻页；不补零、不造数据。
-export function RuntimeLogsCard() {
+export function RuntimeLogsCard({ allowFollow }: { allowFollow: boolean }) {
   const app = useApplication();
   const [podUid, setPodUid] = useState("");
   const [container, setContainer] = useState("");
   const [showTime, setShowTime] = useState(true);
-  const [range, setRange] = useState({ since: "", until: "" });
+  const [range, setRange] = useState({ releaseId: "", since: "", until: "" });
   const [rangeError, setRangeError] = useState("");
   const [search, setSearch] = useState("");
-  const query = useRuntimeLogs({ workspaceId: app.workspaceId, applicationId: app.id, podUid, container, ...range });
+  const [follow, setFollow] = useState(false);
+  const releaseOptionsId = useId();
+  const following = allowFollow && !range.until && follow;
+  const query = useRuntimeLogs({ workspaceId: app.workspaceId, applicationId: app.id, podUid, container, ...range }, { follow: following });
   const chunks = useMemo(() => query.data?.pages.flatMap((page) => page.chunks) ?? [], [query.data]);
   const blocks = useMemo(() => decodeLogChunks(chunks), [chunks]);
   const searchTerm = search.trim().toLocaleLowerCase();
   const visibleBlocks = searchTerm ? blocks.filter((block) => block.text.toLocaleLowerCase().includes(searchTerm)) : blocks;
   const podOptions = useMemo(() => [...new Set(chunks.map((chunk) => chunk.podUid).filter(Boolean))], [chunks]);
   const containerOptions = useMemo(() => [...new Set(chunks.map((chunk) => chunk.container).filter(Boolean))], [chunks]);
+  const releaseOptions = useMemo(() => [...new Set(chunks.map((chunk) => chunk.releaseId).filter(Boolean))], [chunks]);
   const viewport = useRef<HTMLDivElement>(null);
   const reduced = usePrefersReducedMotion();
+  const lastBlock = visibleBlocks.at(-1)?.id;
+  useEffect(() => {
+    if (following && viewport.current) viewport.current.scrollTop = viewport.current.scrollHeight;
+  }, [following, lastBlock]);
 
   function scrollToBottom() {
     const el = viewport.current;
@@ -42,9 +50,12 @@ export function RuntimeLogsCard() {
           <h3 className="section-title">运行日志</h3>
           <p className="mt-1 text-sm text-muted-foreground">来自 worker 的真实日志块，按时间正序拼接；控制面不做任何补齐或示例填充。</p>
         </div>
-        <label className="flex shrink-0 items-center gap-2 text-xs">
-          <input type="checkbox" checked={showTime} onChange={(event) => setShowTime(event.target.checked)} />显示时间戳
-        </label>
+        <div className="flex flex-wrap items-center gap-3">
+          {allowFollow && !range.until && <Button variant="outline" size="sm" onClick={() => setFollow(!follow)}>{following ? "停止跟随" : "跟随日志"}</Button>}
+          <label className="flex shrink-0 items-center gap-2 text-xs">
+            <input type="checkbox" checked={showTime} onChange={(event) => setShowTime(event.target.checked)} />显示时间戳
+          </label>
+        </div>
       </div>
       {(podOptions.length > 0 || containerOptions.length > 0) && (
         <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -65,6 +76,7 @@ export function RuntimeLogsCard() {
       <form className="mt-4 flex flex-wrap items-end gap-3" onSubmit={(event) => {
         event.preventDefault();
         const values = new FormData(event.currentTarget);
+        const releaseId = String(values.get("releaseId") ?? "").trim();
         const sinceValue = String(values.get("since") ?? "");
         const untilValue = String(values.get("until") ?? "");
         if (sinceValue && untilValue && sinceValue > untilValue) {
@@ -72,13 +84,17 @@ export function RuntimeLogsCard() {
           return;
         }
         setRangeError("");
-        setRange({ since: sinceValue ? new Date(sinceValue).toISOString() : "", until: untilValue ? new Date(untilValue).toISOString() : "" });
+        if (untilValue) setFollow(false);
+        setRange({ releaseId, since: sinceValue ? new Date(sinceValue).toISOString() : "", until: untilValue ? new Date(untilValue).toISOString() : "" });
       }}>
+        <label className="space-y-1 text-xs">发布 ID<Input name="releaseId" list={releaseOptionsId} maxLength={128} placeholder="全部发布" /></label>
+        <datalist id={releaseOptionsId}>{releaseOptions.map((id) => <option key={id} value={id} />)}</datalist>
         <label className="space-y-1 text-xs">开始时间<Input type="datetime-local" name="since" /></label>
         <label className="space-y-1 text-xs">结束时间<Input type="datetime-local" name="until" /></label>
-        <Button variant="outline" size="sm" type="submit">应用时间范围</Button>
+        <Button variant="outline" size="sm" type="submit">应用筛选</Button>
       </form>
       {rangeError && <div className="mt-2"><Notice tone="error">{rangeError}</Notice></div>}
+      {query.followError && <div className="mt-2"><Notice tone="error">暂时无法跟随日志，系统将继续尝试。</Notice></div>}
       <div className="mt-4">
         {query.isPending ? (
           <Loading label="正在加载运行日志…" />
@@ -88,7 +104,7 @@ export function RuntimeLogsCard() {
             <Button variant="outline" onClick={() => void query.refetch()}>重新加载</Button>
           </div>
         ) : blocks.length === 0 ? (
-          <Empty title="暂无运行日志" description={range.since || range.until ? "所选时间范围内没有已上报的日志。" : "应用在运行中，等待 worker 上报日志。"} />
+          <Empty title="暂无运行日志" description={range.releaseId || range.since || range.until || podUid || container ? "当前筛选条件下没有已上报的日志。" : "此应用没有已保留的运行日志。"} />
         ) : (
           <>
             <label className="mb-3 block max-w-sm space-y-1 text-xs">查找已加载日志<Input type="search" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
@@ -119,7 +135,7 @@ export function RuntimeLogsCard() {
                 <Button variant="outline" size="sm" aria-label="滚动到日志底部" onClick={scrollToBottom}>
                   <ArrowDownToLine />滚动到底部
                 </Button>
-                {query.hasNextPage && (
+                {query.hasNextPage && !following && (
                   <Button variant="outline" size="sm" disabled={query.isFetchingNextPage} onClick={() => void query.fetchNextPage()}>
                     {query.isFetchingNextPage ? <><LoaderCircle className="animate-spin" />正在加载…</> : <><ArrowDown />加载更新的日志</>}
                   </Button>

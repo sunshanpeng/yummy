@@ -1,6 +1,6 @@
 # Yummy 第一期运维手册
 
-面向自部署与独立托管实例的安装、配置、升级与限制说明。产品只含控制面（`yummy-server serve`）与 worker（`yummy-worker run`）两类常驻进程；CLI 为按需启动的客户端。PostgreSQL、Redis、Kubernetes（k3s）、镜像仓库为既有基础设施，本产品不额外引入服务。
+面向自部署与独立托管实例的安装、配置、升级与限制说明。产品只含控制面（`yummy-server serve`）与 worker（`yummy-worker run`）两类常驻进程；CLI 为按需启动的客户端。PostgreSQL、Redis、Kubernetes（k3s）、镜像仓库为既有基础设施，本产品不额外引入服务。使用路径见 [产品文档](product.md)，实现及验证边界见 [技术文档](technical.md)。
 
 ## 1. 构建与依赖
 
@@ -45,7 +45,7 @@ OAuth、worker TLS、可观测性），键名与命令行 flag 一致，完整�
 - 网页默认使用本地账号密码。启用团队登录时，配置 `oauth-key`、`oidc-issuer`、`oidc-client-id` 和 `oidc-client-secret`，并在身份提供方注册准确的回调地址 `https://<控制台域名>/auth/oidc/callback`。全局管理员在「全局管理 → 用户」为已有用户绑定身份提供方返回的 `sub`。绑定以 issuer 和 `sub` 为键，邮箱变化不影响绑定；账号创建与空间成员资格仍由 Yummy 管理。
 - CLI 可在个人「访问令牌」页创建限定应用、权限和有效期的 PAT，随后用 `yummy auth token --server <控制台地址> --token-stdin` 保存。启用 `oauth-key` 后也可执行 `yummy auth login --server <控制台地址>`，通过浏览器确认授权。个人「Agent 接入」可查询和撤销已有连接。
 - 在本地项目目录执行 `yummy use <空间名>/<应用名>`。确认运行配置后，`yummy deploy --dry-run` 预览文件与目标，`yummy deploy` 上传、构建、部署并等待结果。`--build-only` 停在构建阶段，`--no-wait` 返回构建 ID。两者可组合，异步且只构建。未加 `--build-only` 的异步发布由控制面在构建成功后受理，配置或运行版本在此期间发生变化时会拒绝覆盖。用 `--timeout` 调整本地等待时限。
-- 已关联的目录可用 `yummy status` 查看当前运行状态、`yummy logs --follow` 追踪运行日志、`yummy logs --build <构建 ID>` 查询构建日志、`yummy metrics` 查询 CPU 与内存采样。日志读取使用 `logs:read`，状态与指标使用 `runtime:read`。远程 MCP 提供 `runtime_status`、`runtime_logs` 和 `runtime_metrics`。
+- 已关联的目录可用 `yummy status` 查看运行状态、`yummy logs --follow` 追踪运行日志、`yummy logs --release <发布 ID>` 筛选来源发布、`yummy logs --build <构建 ID>` 查询构建日志，`yummy metrics` 查询 CPU 与内存采样。日志读取使用 `logs:read`，状态与指标使用 `runtime:read`。远程 MCP 提供 `runtime_status`、`runtime_logs`（可选 `release_id`）和 `runtime_metrics`。
 - 远程 MCP 地址为 `https://<控制台域名>/mcp/apps/<应用 ID>`，可从个人「Agent 接入」复制。授权绑定单个应用和已授予的权限，成员权限变更后以当前权限为准。CLI 负责本地源码上传，MCP 可使用已有快照。
 - OAuth 端点包括 `/.well-known/oauth-authorization-server`、`/oauth/authorize`、`/oauth/token` 和 `/oauth/revoke`。应用 MCP 发布 `/.well-known/oauth-protected-resource/mcp/apps/<应用 ID>`，支持受管客户端与 CIMD。依赖匿名动态注册的客户端需要预先确认兼容性。真实外部身份提供方与目标 MCP 客户端的兼容性仍需逐一验收。
 
@@ -72,9 +72,9 @@ OAuth、worker TLS、可观测性），键名与命令行 flag 一致，完整�
 
 - 登录频控：20 次/15 分钟/账号与来源 IP（Redis `yummy:login:*`）。自动化测试连续全量运行前需清理该前缀键或等待窗口。
 - 源码保留：快照与上传各自有到期时间；控制面后台循环每 10 分钟清理过期上传与无引用快照；被构建引用的快照仅删文件保留墓碑行；在途构建的文件绝不删除。
-- 运行日志：每应用 ≤4MiB 且 ≤2000 块；指标采样保留 24h。写入时收敛，无独立清理服务。
+- 运行日志每应用最多 4 MiB、2,000 块，指标采样保留 24 小时，均在写入时收敛。升级前缺少来源发布标识的日志仍可按应用读取；按发布筛选需要升级后的控制面与 worker。
 - 构建日志：单构建 ≤20MiB（协议/journal 分块 16KiB）。
-- 空间管理员可在「应用 → 已归档应用」删除没有构建或部署记录的应用。删除会释放名称，原应用 ID 与审计、历史数据的关联继续保留。有执行历史的应用会继续保留名称，等待集群资源和持久卷清理功能。
+- 空间管理员可在「应用 → 已归档应用」发起删除。平台等待正在执行的构建结束，再由 worker 清理集群资源。若仍有持久卷，需输入应用名单独确认。删除 PVC 前按存储回收策略核对备份和底层数据影响。清理需要更新后的 worker 和对应 RBAC，worker 离线或版本未更新时任务等待。完成后释放名称，原应用 ID 与审计、历史数据的关联继续保留。
 
 ## 6. 升级与备份
 
@@ -109,7 +109,8 @@ OAuth、worker TLS、可观测性），键名与命令行 flag 一致，完整�
 
 - 已在真实环境验证：PostgreSQL/Redis 集成测试全绿；真实控制面浏览器 e2e（登录/OAuth 全协议/上传/邀请权限/管理页）；worker mTLS 登记真实链路；`make smoke`。
 - 历史 Linux/AMD64 实机验收覆盖 Dockerfile 构建推拉、公网 HTTPS、运行日志、Kubelet CPU/内存、worker 断线重传、Pod 重建后 PVC 数据保留，以及跨命名空间入站隔离。示例应用见 [部署示例](../examples/README.md)。
-- 仍需验收 Railpack 纯源码构建到 HTTPS 的完整流程，并补做 k3s 工作负载、运行日志和应用卷的恢复演练。规划器固定为官方 Railpack v0.43.0，前端镜像用 `--railpack-frontend-image` 指定同版本 digest，宿主构建另需 `--railpack-path` 指向该版本二进制。Pod 模式目前通过日志查看规划阶段，任务失败对外仍使用通用构建失败码。
+- 仍需验收 Railpack 纯源码构建到 HTTPS 的完整流程，并补做 k3s 工作负载、运行日志和应用卷的恢复演练，以及真实集群确认删卷和名称释放的验证。规划器固定为官方 Railpack v0.43.0，前端镜像用 `--railpack-frontend-image` 指定同版本 digest，宿主构建另需 `--railpack-path` 指向该版本二进制。Pod 模式目前通过日志查看规划阶段，任务失败对外仍使用通用构建失败码。
+- 发版时需用目标远程 MCP 客户端完成登录和实际应用操作，并补验控制台读屏和 WCAG AA。已有协议及浏览器自动化证据见 [技术验证清单](technical.md#8-测试与实机验收)。
 - 第一期不含：多副本、跨节点自动迁移、Git 自动部署、多容器编排、托管数据库、复杂告警/APM/Trace、计费、跨实例自动迁移。
 - rootless BuildKit 不构成对任意陌生租户代码的强隔离承诺；节点权限最小 RBAC 与 NetworkPolicy 是否生效取决于安装侧 CNI，需专项验证。
 - 已知权衡：e2e 连续全量运行需管理登录频控窗口。

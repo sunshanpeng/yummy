@@ -7,6 +7,7 @@ import (
 	"time"
 
 	platformv1 "github.com/sunshanpeng/yummy/gen/go/platform/v1"
+	"github.com/sunshanpeng/yummy/internal/domains/application"
 	"github.com/sunshanpeng/yummy/internal/domains/build"
 	"github.com/sunshanpeng/yummy/internal/domains/deployment"
 	"github.com/sunshanpeng/yummy/internal/domains/enrollment"
@@ -36,6 +37,12 @@ type GenerationCheck struct {
 type GenerationChecker interface {
 	Check(context.Context, deployment.WorkerIdentity, GenerationCheck) error
 }
+
+type ApplicationCleanupBackend interface {
+	ClaimCleanup(context.Context, application.CleanupWorker) (application.CleanupDispatch, error)
+	CheckCleanup(context.Context, application.CleanupWorker, application.CleanupLease) error
+	CompleteCleanup(context.Context, application.CleanupWorker, application.CleanupLease, application.CleanupResult) error
+}
 type BuildMaterial struct {
 	Source   *platformv1.WorkerSourceGrant
 	Registry *platformv1.WorkerRegistryCredential
@@ -54,6 +61,7 @@ type Config struct {
 	Builds             BuildBackend
 	Deployments        DeploymentBackend
 	Guard              GenerationChecker
+	ApplicationCleanup ApplicationCleanupBackend
 	Capabilities       qualification.CapabilityVerifier
 	BuildMaterial      BuildMaterializer
 	DeploymentMaterial DeploymentMaterializer

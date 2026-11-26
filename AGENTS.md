@@ -6,6 +6,11 @@
 - 直接在当前分支工作；如需隔离开发，先与负责人确认，不自行创建 worktree。
 - 修改保持最小范围，不顺手重构无关代码；实现前说明假设、权衡和验证目标。
 
+## 产品与技术文档
+
+- [产品文档](docs/product.md)和[技术文档](docs/technical.md)是项目的主文档。每次修改代码、接口、界面、配置、数据或部署时，在同一变更更新两份主文档的对应章节，核对文档与实现及测试一致。若改动只影响内部实现，在产品文档记录受影响的使用路径及验证，避免把内部调整描述成功能变化。
+- 详细资料可以放在 `docs/` 的子文档中，从主文档链接，公共契约以主文档为准。明确区分当前行为、后续范围和待实机验证的项目。完成的临时实施方案在吸收有效内容后删除，移除或迁移时一并更新引用。
+
 ## 进程与架构边界
 
 - 当前产品只区分控制面和 worker 两类常驻应用进程，优先保持模块化单体。按职责独立分发 `yummy-server`（含 Web 控制台）、`yummy-worker` 和按需运行的 `yummy` CLI。
@@ -52,9 +57,9 @@
 ## 第一期交付范围
 
 - 第一期对外交付必须包含源码构建后的部署运行、域名/HTTPS、变量和运行配置、运行日志、基础监控、更新/回滚及启动停止；镜像产出只是内部里程碑。
-- 构建方式按选定的构建上下文自动确定。优先使用显式配置的 Dockerfile 或上下文根目录中的 `Dockerfile`，由 BuildKit 执行。未指定路径且默认 Dockerfile 缺失时，由 Railpack 生成计划并交给同一套 BuildKit 执行。显式路径校验失败或 Dockerfile 构建失败时报告原错误。细则见[构建方式自动选择](docs/superpowers/specs/2026-10-22-agent-first-build-technical-design.md#94-构建方式自动选择)。
+- 构建方式按选定的构建上下文自动确定。优先使用显式配置的 Dockerfile 或上下文根目录中的 `Dockerfile`，由 BuildKit 执行。未指定路径且默认 Dockerfile 缺失时，由 Railpack 生成计划并交给同一套 BuildKit 执行。显式路径校验失败或 Dockerfile 构建失败时报告原错误。细则见[构建方式自动选择](docs/technical.md#构建方式自动选择)。
 - 构建成功、发布结果和当前应用健康分别展示；运行配置保存与部署生效分开，不把示例数据视为真实运行结果。
-- Agent 接入为二选一：CLI（PAT 登录，唯一承担本地源码预览与上传）与远程 Streamable HTTP MCP（OAuth 登录，单应用 resource 绑定，位于 `internal/bff/mcp`）；除本地文件能力外业务能力对齐，不为 MCP 另设 stdio 工具面（原本地 stdio 桥已退役——与 CLI 能力重复，业务工具不做双份维护）。
+- Agent 接入为二选一：CLI（PAT 或浏览器 OAuth 登录，唯一承担本地源码预览与上传）与远程 Streamable HTTP MCP（OAuth 登录，单应用 resource 绑定，位于 `internal/bff/mcp`）；除本地文件能力外业务能力对齐，不为 MCP 另设 stdio 工具面（原本地 stdio 桥已退役——与 CLI 能力重复，业务工具不做双份维护）。
 
 ## 视觉方向
 
@@ -67,7 +72,7 @@
 - 样式固定使用 Tailwind CSS 4（官方 Vite 插件）+ CSS 语义变量，不写入硬编码色值；主题切换通过替换变量实现。
 - 组件使用 shadcn/ui（Radix 系 primitive），按需引入、源码入库；图标统一 Lucide React，图表用 shadcn Chart + Recharts，不自研图表引擎。
 - 路由 / 服务端状态 / 表格 / 表单分别用 TanStack Router、Query（+ Connect 适配）、Table、Form + Zod；不并装 React Hook Form，不引入 Redux/Zustand。
-- 验证保留 Vitest/Testing Library，并用 Playwright 覆盖跨页流程与响应式。完整表格、版本锁定与边界说明见 [前端设计](docs/superpowers/specs/2026-10-22-agent-first-build-frontend-design.md#6-前端技术选型)。
+- 验证保留 Vitest/Testing Library，并用 Playwright 覆盖跨页流程与响应式。完整表格、版本锁定与边界说明见 [前端设计](docs/technical.md#7-前端技术选型)。
 - 现状：`web/` 已按上述选型落地（Tailwind 4 + shadcn 组件源码在 `web/src/components/ui/`），正式入口为 `web/index.html`；新增 UI 继续按选型实施，组件优先从 shadcn registry 取源码。
 
 ## 页面制作
@@ -95,7 +100,7 @@
 - 平台管理 k3s 集群，不管理单台机器。第一版每个实例一个集群、一个默认环境 prod，每个应用一个默认部署 default，界面不显示环境和部署；环境和部署描述应用运行在哪里，不是组织层级。
 - 运行命名空间为 `<环境>-<空间名>`，构建命名空间为 `build-<空间名>`，Deployment 为 `<应用名>-<部署名>`；worker 不接管没有平台标签或归属不符的同名对象。
 - 运行命名空间只放行同命名空间与 Traefik 的入站流量；出站限制、Pod 安全等级、资源配额等规则有需要再加，不预先添加。
-- 细则见 [命名、集群与最小 CLI](docs/superpowers/specs/2026-10-26-naming-cluster-and-minimal-cli-design.md)。
+- 细则见 [命名、集群与最小 CLI](docs/technical.md#4-运行发布与资源回收)。
 
 ## 交付方式与权限
 

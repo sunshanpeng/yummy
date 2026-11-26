@@ -146,6 +146,21 @@ func runtimeLogCounts(logs []*platformv1.WorkerRuntimeLog) map[int32]int {
 	return counts
 }
 
+func TestRuntimeLogFallsBackToPreviousPodWithoutMixingMetrics(t *testing.T) {
+	command := &platformv1.WorkerDeploymentCommand{ReleaseId: "new-release"}
+	previous := kube.PodEvidence{Name: "old-pod", ReleaseID: "old-release", Ready: true}
+	evidence := kube.RuntimeEvidence{Pods: []kube.PodEvidence{previous}}
+	log, metrics := runtimeTargets(command, evidence)
+	if log == nil || log.ReleaseID != previous.ReleaseID || metrics != nil {
+		t.Fatalf("旧 Pod 只用于读取其日志：%+v %+v", log, metrics)
+	}
+	evidence.Pods = append(evidence.Pods, kube.PodEvidence{Name: "new-pod", ReleaseID: "new-release"})
+	log, metrics = runtimeTargets(command, evidence)
+	if log == nil || log.ReleaseID != command.ReleaseId || metrics != nil {
+		t.Fatalf("新 Pod 出现后优先跟随其日志：%+v %+v", log, metrics)
+	}
+}
+
 func TestRuntimeLogFollowsChunksAndRestarts(t *testing.T) {
 	executor, client, _, emitter := sidecarExecutor(t, nil)
 	command := deployCommand("DEPLOY", "operation-1", 1, false)
@@ -181,7 +196,7 @@ func TestRuntimeLogFollowsChunksAndRestarts(t *testing.T) {
 		if value.WorkspaceId != testWorkspace || value.ApplicationId != testApplication || value.OperationId != "operation-1" || value.ReleaseId != "release-1" || value.Generation != 1 {
 			t.Fatalf("身份字段必须取当前命令: %+v", value)
 		}
-		if value.PodUid != "uid-pod-1" || value.Container != "app" || value.Truncated {
+		if value.PodUid != "uid-pod-1" || value.PodReleaseId != "release-1" || value.Container != "app" || value.Truncated {
 			t.Fatalf("流身份必须来自运行证据且未自造截断: %+v", value)
 		}
 		if len(value.Content) == 0 || len(value.Content) > 4 {

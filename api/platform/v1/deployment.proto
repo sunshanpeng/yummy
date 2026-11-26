@@ -58,12 +58,13 @@ message ChangeRuntimeResponse { Deployment deployment = 1; }
 // 运行日志块：内容是 worker 上报的字节分块，时间为控制面数据库落库时间。
 message RuntimeLogChunk {
   string id = 1; string workspace_id = 2; string application_id = 3; string pod_uid = 4;
-  string container = 5; int32 restart_count = 6; int64 seq = 7; bytes content = 8; bool truncated = 9; string created_at = 10;
+  string container = 5; int32 restart_count = 6; int64 seq = 7; bytes content = 8; bool truncated = 9; string created_at = 10; string release_id = 11;
 }
 message GetRuntimeLogsRequest {
   string workspace_id = 1; string application_id = 2; int32 limit = 3; string cursor = 4; string pod_uid = 5; string container = 6;
   // 可选的 RFC3339 落库时间边界，包含边界时刻。
   string since = 7; string until = 8;
+  string release_id = 9;
 }
 message GetRuntimeLogsResponse {
   repeated RuntimeLogChunk chunks = 1; string next_cursor = 2;

@@ -19,6 +19,7 @@ service ApplicationService {
   rpc UpdateApplication(UpdateApplicationRequest) returns (UpdateApplicationResponse);
   rpc ArchiveApplication(ArchiveApplicationRequest) returns (ArchiveApplicationResponse);
   rpc DeleteApplication(DeleteApplicationRequest) returns (DeleteApplicationResponse);
+  rpc DeleteApplicationVolumes(DeleteApplicationVolumesRequest) returns (DeleteApplicationVolumesResponse);
   rpc ListApplicationMembers(ListApplicationMembersRequest) returns (ListApplicationMembersResponse);
   rpc SetApplicationMember(SetApplicationMemberRequest) returns (SetApplicationMemberResponse);
   rpc RemoveApplicationMember(RemoveApplicationMemberRequest) returns (RemoveApplicationMemberResponse);
@@ -33,6 +34,9 @@ message Application {
   string status = 5; int64 revision = 6; repeated string capabilities = 7;
   string created_at = 8; string updated_at = 9;
   bool deletion_ready = 10;
+  string deletion_state = 11;
+  string deletion_error = 12;
+  bool deleting_volumes = 13;
 }
 message ApplicationGrant { string application_id = 1; string application_name = 2; string role = 3; }
 message WorkspaceMember {
@@ -78,7 +82,12 @@ message UpdateApplicationResponse { Application application = 1; }
 message ArchiveApplicationRequest { string workspace_id = 1; string application_id = 2; int64 expected_revision = 3; }
 message ArchiveApplicationResponse {}
 message DeleteApplicationRequest { string workspace_id = 1; string application_id = 2; int64 expected_revision = 3; }
-message DeleteApplicationResponse {}
+message DeleteApplicationResponse { string state = 1; }
+message DeleteApplicationVolumesRequest {
+  string workspace_id = 1; string application_id = 2; int64 expected_revision = 3;
+  string confirmation = 4;
+}
+message DeleteApplicationVolumesResponse { string state = 1; }
 message ListApplicationMembersRequest { string workspace_id = 1; string application_id = 2; int32 limit = 3; string cursor = 4; }
 message ListApplicationMembersResponse { repeated ApplicationMember members = 1; string next_cursor = 2; }
 message SetApplicationMemberRequest { string workspace_id = 1; string application_id = 2; string user_id = 3; string role = 4; }

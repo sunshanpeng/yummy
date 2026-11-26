@@ -7,11 +7,17 @@ import { RuntimeLogsCard } from "./runtime-logs";
 import { RuntimeMetricsCard } from "./runtime-metrics";
 
 // 应用详情页“部署与运行”内的运行观察区块：日志查看 + 基础监控，全部来自真实 RPC；
-// 未部署 / 已停止时给出明确空态，不渲染任何示例数据。
+// 已停止的应用仍可查询保留期内的日志。
 export function RuntimeObservation({ status, statusPending }: { status?: RuntimeStatus; statusPending?: boolean }) {
   const app = useApplication();
   if (!can(app, "runtime:read")) return null;
   if (statusPending && !status) return <Loading label="正在读取运行状态…" />;
+  if (status?.observedState === "STOPPED" || status?.observedState === "STOPPING") {
+    return <div className="stack">
+      <p className="text-sm text-muted-foreground">应用{runtimeStateLabel(status)}，暂停实时跟随与监控采样。</p>
+      {can(app, "logs:read") && <RuntimeLogsCard allowFollow={false} />}
+    </div>;
+  }
   if (!isRuntimeActive(status)) {
     return (
       <section className="section" aria-label="运行日志与基础监控">
@@ -22,7 +28,7 @@ export function RuntimeObservation({ status, statusPending }: { status?: Runtime
   }
   return (
     <div className="stack">
-      {can(app, "logs:read") && <RuntimeLogsCard />}
+      {can(app, "logs:read") && <RuntimeLogsCard allowFollow />}
       <RuntimeMetricsCard />
     </div>
   );

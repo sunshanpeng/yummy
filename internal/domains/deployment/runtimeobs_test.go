@@ -75,8 +75,17 @@ func TestApplyRuntimeLogIdempotencySequenceAndAccess(t *testing.T) {
 	e := setup(t)
 	ctx := context.Background()
 	r := create(t, e, "runtime-log")
-	if _, err := e.service.ApplyRuntimeLog(ctx, e.worker, runtimeLogInput(r, "app_one", "pod-1", 1, "first")); err != nil {
-		t.Fatal(err)
+	first := runtimeLogInput(r, "app_one", "pod-1", 1, "first")
+	first.PodReleaseID = r.Release.ID
+	if ack, err := e.service.ApplyRuntimeLog(ctx, e.worker, first); err != nil || ack.Seq != first.Seq {
+		t.Fatalf("首次落库的确认应携带当前块序号：%+v %v", ack, err)
+	}
+	filtered, err := e.service.ListRuntimeLogs(ctx, e.root, "space", "app_one", RuntimeLogQuery{ReleaseID: r.Release.ID})
+	if err != nil || len(filtered.Items) != 1 || filtered.Items[0].ReleaseID != r.Release.ID {
+		t.Fatalf("按发布筛选日志：%+v %v", filtered, err)
+	}
+	if _, err := e.service.ListRuntimeLogs(ctx, e.root, "space", "app_one", RuntimeLogQuery{Cursor: filtered.ResumeCursor}); !errors.Is(err, authorization.ErrInvalid) {
+		t.Fatalf("跨版本筛选使用游标：%v", err)
 	}
 	ack, err := e.service.ApplyRuntimeLog(ctx, e.worker, runtimeLogInput(r, "app_one", "pod-1", 1, "first"))
 	if err != nil || !ack.Duplicate || ack.Seq != 1 {
@@ -114,6 +123,40 @@ func TestApplyRuntimeLogIdempotencySequenceAndAccess(t *testing.T) {
 	}
 	if _, err := e.service.ApplyRuntimeLog(ctx, WorkerIdentity{NodeID: e.node.ID, WorkerID: e.node.WorkerID, CertificateSerial: "ghost", CertificateSHA256: strings.Repeat("1", 64)}, runtimeLogInput(r, "app_one", "pod-1", 3, "ghost")); !errors.Is(err, authorization.ErrUnauthenticated) {
 		t.Fatalf("未知证书应拒绝: %v", err)
+	}
+}
+
+func TestRuntimeLogsKeepSourceReleaseDuringRollout(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	old := create(t, e, "old-release")
+	finishHTTP(t, e, old)
+	input := createInput("new-release")
+	input.Expected = expected(status(t, e), 1)
+	current, err := e.service.CreateDeployment(ctx, e.root, "space", "app_one", input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldPod := runtimeLogInput(current, "app_one", "old-pod", 1, "旧版本仍在运行")
+	oldPod.PodReleaseID = old.Release.ID
+	if _, err := e.service.ApplyRuntimeLog(ctx, e.worker, oldPod); err != nil {
+		t.Fatalf("接受当前操作代次中的旧 Pod 日志：%v", err)
+	}
+	newPod := runtimeLogInput(current, "app_one", "new-pod", 1, "新版本正在启动")
+	newPod.PodReleaseID = current.Release.ID
+	if _, err := e.service.ApplyRuntimeLog(ctx, e.worker, newPod); err != nil {
+		t.Fatal(err)
+	}
+	for _, log := range []RuntimeLogInput{oldPod, newPod} {
+		page, err := e.service.ListRuntimeLogs(ctx, e.root, "space", "app_one", RuntimeLogQuery{ReleaseID: log.PodReleaseID})
+		if err != nil || len(page.Items) != 1 || page.Items[0].PodUID != log.PodUID {
+			t.Fatalf("按来源发布筛选 %s：%+v %v", log.PodReleaseID, page, err)
+		}
+	}
+	oldPod.Seq++
+	oldPod.PodReleaseID = current.Release.ID
+	if _, err := e.service.ApplyRuntimeLog(ctx, e.worker, oldPod); !errors.Is(err, ErrSequence) {
+		t.Fatalf("拒绝改变同一日志流的发布归属：%v", err)
 	}
 }
 

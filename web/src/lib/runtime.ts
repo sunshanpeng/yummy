@@ -1,7 +1,7 @@
 import { createQueryOptions } from "@connectrpc/connect-query";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { useContext, useEffect, useState } from "react";
-import { DeploymentService, type RuntimeLogChunk, type RuntimeMetricSample, type RuntimeStatus } from "../gen/platform/v1/deployment_pb";
+import { DeploymentService, type GetRuntimeLogsResponse, type RuntimeLogChunk, type RuntimeMetricSample, type RuntimeStatus } from "../gen/platform/v1/deployment_pb";
 import { platform } from "./platform";
 import { ScopeContext, useUser } from "./queries";
 
@@ -17,22 +17,24 @@ export const metricWindows = [
   { minutes: 1440, label: "24 小时" },
 ] as const;
 
-// GetRuntimeLogs 无限分页：podUid/container 变化会改变查询键，游标自动归零。
+// 筛选项变化时查询键改变，游标自动归零。
 // 游标与服务端查询作用域绑定，跨过滤条件的游标会被服务端拒绝，因此过滤条件必须进查询键。
 export function useRuntimeLogs(
-  input: { workspaceId: string; applicationId: string; podUid: string; container: string; since: string; until: string },
-  options?: { enabled?: boolean },
+  input: { workspaceId: string; applicationId: string; podUid: string; container: string; releaseId: string; since: string; until: string },
+  options?: { enabled?: boolean; follow?: boolean },
 ) {
   const user = useUser();
   const scope = useContext(ScopeContext);
+  const client = useQueryClient();
   const request = { ...input, limit: runtimeLogPageSize };
   const descriptor = createQueryOptions(
     DeploymentService.method.getRuntimeLogs,
     { ...request, cursor: "" },
     { transport: platform.transport },
   );
-  return useInfiniteQuery({
-    queryKey: ["scope", user.id, user.authVersion.toString(), scope, ...descriptor.queryKey],
+  const queryKey = ["scope", user.id, user.authVersion.toString(), scope, ...descriptor.queryKey];
+  const pages = useInfiniteQuery({
+    queryKey,
     queryFn: async ({ pageParam, signal }) => {
       const response = await platform.deployments.getRuntimeLogs(
         { ...request, cursor: pageParam },
@@ -45,6 +47,28 @@ export function useRuntimeLogs(
     enabled: options?.enabled,
     retry: false,
   });
+  const lastPage = pages.data?.pages.at(-1);
+  const cursor = lastPage?.resumeCursor || lastPage?.nextCursor || "";
+  const following = options?.follow === true && pages.isSuccess && !pages.isFetching;
+  // 单独续读尾部。没有新日志时保留游标和已加载结果，避免反复下载全部历史页。
+  const tail = useQuery({
+    queryKey: [...queryKey, "follow", cursor],
+    queryFn: ({ signal }) => platform.deployments.getRuntimeLogs({ ...request, cursor }, { signal }),
+    enabled: following,
+    refetchInterval: 2000,
+    staleTime: 0,
+    retry: false,
+  });
+  useEffect(() => {
+    const next = tail.data;
+    if (!following || !next?.chunks.length || !next.resumeCursor || next.resumeCursor === cursor) return;
+    client.setQueryData<InfiniteData<GetRuntimeLogsResponse, string>>(queryKey, (current) => {
+      const last = current?.pages.at(-1);
+      if (!current || !last || (last.resumeCursor || last.nextCursor || "") !== cursor) return current;
+      return { pages: [...current.pages, next].slice(-100), pageParams: [...current.pageParams, cursor].slice(-100) };
+    });
+  }, [client, cursor, following, queryKey, tail.data]);
+  return { ...pages, followError: following ? tail.error : null };
 }
 
 // GetRuntimeMetrics：since 在取数时按窗口计算 RFC3339，查询键只含窗口档位，
@@ -82,14 +106,20 @@ export type RuntimeLogBlock = {
   createdAt: string;
 };
 
-// 逐块流式 UTF-8 解码：共享同一个 TextDecoder（stream: true），
-// 跨块被切开的 UTF-8 序列会归入下一块文本；最后 flush 补齐末尾不完整序列。
+// 同一容器实例连续解码；其他 Pod 或重启后的日志不会接续它的 UTF-8 字节。
 export function decodeLogChunks(chunks: readonly RuntimeLogChunk[]): RuntimeLogBlock[] {
-  const decoder = new TextDecoder("utf-8");
-  const decoded = chunks.map((chunk) => ({ chunk, text: decoder.decode(chunk.content, { stream: true }) }));
-  const tail = decoder.decode();
-  const last = decoded.at(-1);
-  if (tail && last) last.text += tail;
+  const streams = new Map<string, { decoder: TextDecoder; last: number }>();
+  const decoded = chunks.map((chunk, index) => {
+    const key = JSON.stringify([chunk.podUid, chunk.container, chunk.restartCount]);
+    let stream = streams.get(key);
+    if (!stream) {
+      stream = { decoder: new TextDecoder("utf-8"), last: index };
+      streams.set(key, stream);
+    }
+    stream.last = index;
+    return { chunk, text: stream.decoder.decode(chunk.content, { stream: true }) };
+  });
+  for (const { decoder, last } of streams.values()) decoded[last].text += decoder.decode();
   // 空内容块不渲染。
   return decoded.filter((item) => item.text !== "").map(({ chunk, text }) => ({
     id: chunk.id,

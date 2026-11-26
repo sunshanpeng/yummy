@@ -34,6 +34,7 @@ type session struct {
 	queue              chan *platformv1.ControlEnvelope
 	clusterMachines    *platformv1.ClusterMachinesReport
 	machinesObservedAt time.Time
+	applicationCleanup bool
 }
 type Gateway struct {
 	config   Config
@@ -230,7 +231,7 @@ func (g *Gateway) Connect(ctx context.Context, stream *connect.BidiStream[platfo
 	if err != nil {
 		return err
 	}
-	s := &session{identity: identity, certificate: certificate, owner: owner, nonce: nonce, ctx: connectionCtx, cancel: cancel, queue: make(chan *platformv1.ControlEnvelope, g.config.QueueSize)}
+	s := &session{identity: identity, certificate: certificate, owner: owner, nonce: nonce, ctx: connectionCtx, cancel: cancel, queue: make(chan *platformv1.ControlEnvelope, g.config.QueueSize), applicationCleanup: hello.GetApplicationCleanup()}
 	g.mu.Lock()
 	if g.closed {
 		g.mu.Unlock()

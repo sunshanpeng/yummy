@@ -270,6 +270,7 @@ func (r *Runtime) Observe(ctx context.Context, c RuntimeChange, http bool) (Runt
 }
 
 type LogRequest struct {
+	PodReleaseID       string
 	Namespace, PodName string
 	PodUID             types.UID
 	Container          string
@@ -281,6 +282,7 @@ type LogRequest struct {
 
 // LogStream 必须由调用者Close；PodUID/container/restart是持久日志去重身份的一部分。
 type LogStream struct {
+	PodReleaseID string
 	io.ReadCloser
 	PodUID       types.UID
 	Container    string
@@ -314,7 +316,7 @@ func (a *Adapter) followPodLogs(ctx context.Context, p *corev1.Pod, request LogR
 			}
 		}
 	}
-	if err != nil || after.UID != p.UID || !validRestart {
+	if err != nil || after.UID != p.UID || after.Labels[LabelRelease] != p.Labels[LabelRelease] || !validRestart {
 		_ = stream.Close()
 		if err != nil {
 			return nil, err
@@ -325,7 +327,7 @@ func (a *Adapter) followPodLogs(ctx context.Context, p *corev1.Pod, request LogR
 	if request.Previous {
 		count--
 	}
-	return &LogStream{ReadCloser: stream, PodUID: p.UID, Container: request.Container, RestartCount: count, Previous: request.Previous}, nil
+	return &LogStream{ReadCloser: stream, PodUID: p.UID, PodReleaseID: p.Labels[LabelRelease], Container: request.Container, RestartCount: count, Previous: request.Previous}, nil
 }
 func (a *Adapter) FollowLogs(ctx context.Context, t BuildTask, request LogRequest) (*LogStream, error) {
 	if err := t.validate(); err != nil {
@@ -365,7 +367,11 @@ func (r *Runtime) FollowLogs(ctx context.Context, c RuntimeChange, request LogRe
 	if err := owns(p, labelsFor(c.Release.WorkspaceID, c.Release.ApplicationID, c.Release.Placement.UID), request.PodUID); err != nil {
 		return nil, err
 	}
-	if p.Labels[LabelRelease] != c.Release.ID || p.Spec.NodeName != c.Release.Placement.Name {
+	expectedRelease := request.PodReleaseID
+	if expectedRelease == "" {
+		expectedRelease = c.Release.ID
+	}
+	if p.Labels[LabelRelease] != expectedRelease || p.Spec.NodeName != c.Release.Placement.Name {
 		return nil, ErrOwnership
 	}
 	return a.followPodLogs(ctx, p, request)
