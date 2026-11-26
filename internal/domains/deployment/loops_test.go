@@ -595,10 +595,11 @@ func TestAutoPublishDisablesArtifactInvalidCandidates(t *testing.T) {
 func TestAutoPublishProcessesNewerCandidateBehindDeferredOldest(t *testing.T) {
 	e := setup(t)
 	ctx := context.Background()
-	// 最老候选（setup 先创建的 app_two 构建）核验失败进入退避；limit=1 的
-	// 下一轮必须把名额让给新候选（超取过滤），而不是被死候选占满。
+	// 最老候选 app_two 核验失败进入退避；limit=1 的下一轮应处理新候选。
 	markAutoDeploy(t, e, "app_two", "")
 	artifact := insertAutoDeployBuild(t, e, "app_one", "")
+	// 两个候选使用数据库时钟排序，避免 GORM 写入时间与数据库时钟偏差。
+	mustExec(t, e.db, "UPDATE builds SET created_at = NOW() - INTERVAL '1 minute' WHERE application_id = 'app_two'")
 	e.service.verifier = verifierFunc(func(_ context.Context, in ArtifactSnapshot) error {
 		if in.ID == "artifact_app_two" {
 			return errors.New("registry unavailable")
